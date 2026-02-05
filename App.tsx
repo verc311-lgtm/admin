@@ -329,7 +329,7 @@ const App: React.FC = () => {
           />
         )}
 
-        {activeView === 'Payments Made' && <PaymentsMade payments={payments} />}
+        {activeView === 'Payments Made' && <PaymentsMade payments={payments} projects={projects} />}
 
         {activeView === 'User Management' && (
           <UserManagement

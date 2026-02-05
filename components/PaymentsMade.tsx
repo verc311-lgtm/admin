@@ -1,13 +1,120 @@
-
 import React from 'react';
-import { ArrowUpCircle, Calendar, Hash, Waves, Download } from 'lucide-react';
-import { Payment } from '../types';
+import { ArrowUpCircle, Calendar, Download } from 'lucide-react';
+import { Payment, Project } from '../types';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface PaymentsMadeProps {
   payments: Payment[];
+  projects: Project[];
 }
 
-const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments }) => {
+const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
+
+  const generateReceiptPDF = (payment: Payment) => {
+    const project = projects.find(p => p.id === payment.projectId) || { name: payment.projectName, client: 'N/A', totalAmount: 0, paidAmount: 0 } as Project;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // 1. Header
+    doc.setFillColor(10, 25, 47); // Navy Blue
+    doc.rect(0, 0, pageWidth, 40, 'F');
+
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text("COASTAL VA MARINE CONSTRUCTION", pageWidth / 2, 20, { align: 'center' });
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(73, 204, 249);
+    doc.text("Payment Receipt", pageWidth / 2, 28, { align: 'center' });
+
+    // 2. Receipt Details
+    doc.setTextColor(0);
+    doc.setFontSize(30);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(200, 200, 200);
+    doc.text("RECEIPT", pageWidth - 14, 60, { align: 'right' });
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    const receiptNum = `RCPT-${payment.date.replace(/-/g, '')}-${payment.amount.toFixed(0)}`;
+    doc.text(`Receipt #: ${receiptNum}`, pageWidth - 14, 70, { align: 'right' });
+    doc.text(`Date: ${payment.date}`, pageWidth - 14, 75, { align: 'right' });
+    doc.text(`Method: ${payment.method}`, pageWidth - 14, 80, { align: 'right' });
+
+    // 3. Client Info
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(10, 25, 47);
+    doc.text("Received From:", 14, 60);
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "normal");
+    doc.text(project.client || 'Valued Client', 14, 68);
+
+    doc.setFontSize(10);
+    doc.setTextColor(150);
+    doc.text(`Project: ${project.name}`, 14, 75);
+
+    // 4. Payment Table
+    autoTable(doc, {
+      startY: 90,
+      head: [['Description', 'Amount']],
+      body: [
+        [`Payment Received - ${project.name}\nRef: ${payment.reference || 'N/A'}`, `$${payment.amount.toLocaleString()}`]
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 'auto' },
+        1: { halign: 'right', fontStyle: 'bold', cellWidth: 50 }
+      },
+      styles: { cellPadding: 5 },
+      margin: { left: 14, right: 14 }
+    });
+
+    // 5. Balance Summary
+    const finalY = (doc as any).lastAutoTable.finalY + 15;
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(100);
+    doc.text("Contract Balance Summary", 14, finalY);
+
+    doc.setDrawColor(200);
+    doc.line(14, finalY + 2, pageWidth - 14, finalY + 2);
+
+    const balanceY = finalY + 10;
+
+    // Contract Total
+    doc.text("Total Contract:", 14, balanceY);
+    doc.text(`$${project.totalAmount.toLocaleString()}`, 60, balanceY, { align: 'right' });
+
+    // Total Paid (Calculated currently)
+    // Note: project.paidAmount includes this payment if data is fresh, but we can verify.
+    // Assuming 'project' passed props is up to date.
+    doc.text("Total Paid:", 14, balanceY + 6);
+    doc.text(`$${project.paidAmount.toLocaleString()}`, 60, balanceY + 6, { align: 'right' });
+
+    // Pending
+    const pending = project.totalAmount - project.paidAmount;
+    doc.setFontSize(12);
+    doc.setTextColor(10, 25, 47);
+    doc.text("Remaining Balance:", 14, balanceY + 14);
+    doc.text(`$${pending.toLocaleString()}`, 60, balanceY + 14, { align: 'right' });
+
+    // 6. Footer
+    doc.setFontSize(9);
+    doc.setTextColor(150);
+    doc.setFont("helvetica", "italic");
+    const footerY = doc.internal.pageSize.getHeight() - 20;
+    doc.text("Thank you for your payment.", pageWidth / 2, footerY, { align: 'center' });
+
+    doc.save(`Receipt_${receiptNum}.pdf`);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
@@ -31,6 +138,7 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments }) => {
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Method</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Reference</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
+                <th className="px-8 py-5"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -49,9 +157,14 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments }) => {
                   <td className="px-8 py-6"><span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase">{payment.method}</span></td>
                   <td className="px-8 py-6 text-xs font-mono font-bold text-slate-400 uppercase">{payment.reference || 'N/A'}</td>
                   <td className="px-8 py-6 text-right font-black text-emerald-600 text-lg">${payment.amount.toLocaleString()}</td>
+                  <td className="px-8 py-6 text-right">
+                    <button onClick={() => generateReceiptPDF(payment)} className="p-2 text-slate-400 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100" title="Download Receipt">
+                      <Download className="w-4 h-4" />
+                    </button>
+                  </td>
                 </tr>
               )) : (
-                <tr><td colSpan={5} className="py-24 text-center text-slate-300 uppercase tracking-widest font-black">No payments recorded yet</td></tr>
+                <tr><td colSpan={6} className="py-24 text-center text-slate-300 uppercase tracking-widest font-black">No payments recorded yet</td></tr>
               )}
             </tbody>
           </table>
