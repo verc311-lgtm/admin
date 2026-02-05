@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FileText, ArrowLeft, Printer, Anchor, X, FileDown, Loader2, Save, CheckCircle2, Search, DollarSign, Clock, AlertCircle } from 'lucide-react';
 import { Project, Invoice } from '../types';
-import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface InvoiceViewProps {
   projects: Project[];
@@ -83,29 +83,100 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
   };
 
   const downloadPDF = async () => {
-    if (!invoiceRef.current) return;
+    // Auto-save if not already saved to ensure tracking (except if just previewing before saving)
+    // Note: User can "Export PDF" without saving if they want a draft, but typically we want a record.
+    // However, keeping logic simple: If it has an ID/Number, use it. If not, mark as "DRAFT".
 
-    // Auto-save if not already saved to ensure tracking
-    if (!isSaved && !historicalInvoice) {
-      handleSaveInvoice();
-    }
+    // We don't force save here to allow printing drafts, but we'll use the current state.
+    const isDraft = !historicalInvoice && !isSaved;
+    const invNumber = historicalInvoice?.invoiceNumber || (isSaved ? invoiceRef.current?.innerText.match(/CVA-\d+/) || 'REGISTERED' : 'DRAFT');
 
     setIsGeneratingPDF(true);
-    // Brief delay to allow React to update the "DRAFT" label to "REGISTERED" if just saved
-    await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
-      const element = invoiceRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 3, useCORS: true, backgroundColor: "#ffffff", logging: false, width: 800
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const project = selectedProject || { name: 'Unknown Project', client: 'Unknown Client' } as Project;
+
+      // 1. Header (Company Info)
+      doc.setFillColor(10, 25, 47); // Navy Blue Header
+      doc.rect(0, 0, pageWidth, 40, 'F');
+
+      doc.setFontSize(22);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(255, 255, 255);
+      doc.text("COASTAL VA MARINE CONSTRUCTION", pageWidth / 2, 20, { align: 'center' });
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(73, 204, 249); // Cyan accent
+      doc.text("Marine Operations & Engineering", pageWidth / 2, 28, { align: 'center' });
+
+      // 2. Invoice Details
+      doc.setTextColor(0);
+      doc.setFontSize(30);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(200, 200, 200);
+      doc.text("INVOICE", pageWidth - 14, 60, { align: 'right' });
+
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(`Invoice #: ${invNumber}`, pageWidth - 14, 70, { align: 'right' });
+      doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - 14, 75, { align: 'right' });
+      doc.text(`Status: ${isDraft ? 'Draft' : 'Sent'}`, pageWidth - 14, 80, { align: 'right' });
+
+      // 3. Bill To
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(10, 25, 47);
+      doc.text("Bill To:", 14, 60);
+
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "normal");
+      doc.text(project.client, 14, 68);
+
+      doc.setFontSize(10);
+      doc.setTextColor(150);
+      doc.text(`Project: ${project.name}`, 14, 75);
+
+      // 4. Line Items
+      autoTable(doc, {
+        startY: 90,
+        head: [['Description', 'Amount']],
+        body: [
+          [`Marine Construction Services - ${project.name}\n(Progress Payment / Contract Services)\n\nInfrastructure installation, marine labor, and material procurement.\nProfessional implementation adhering to marine safety standards.`, `$${invoiceAmount.toLocaleString()}`]
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 'auto' },
+          1: { halign: 'right', fontStyle: 'bold', cellWidth: 50 }
+        },
+        styles: { cellPadding: 5 },
+        margin: { left: 14, right: 14 }
       });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter' });
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`CoastalVA_Invoice_${historicalInvoice?.invoiceNumber || 'NEW'}.pdf`);
+
+      // 5. Total
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      doc.setFillColor(248, 250, 252); // slate-50
+      doc.rect(pageWidth - 80, finalY, 66, 20, 'F');
+
+      doc.setFontSize(12);
+      doc.setTextColor(10, 25, 47);
+      doc.text("Total Due:", pageWidth - 75, finalY + 13);
+
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text(`$${invoiceAmount.toLocaleString()}`, pageWidth - 20, finalY + 13, { align: 'right' });
+
+      // 6. Footer
+      doc.setFontSize(9);
+      doc.setTextColor(150);
+      doc.setFont("helvetica", "italic");
+      const footerY = doc.internal.pageSize.getHeight() - 20;
+      doc.text("Thank you for your business. Please make checks payable to Coastal VA Marine Construction.", pageWidth / 2, footerY, { align: 'center' });
+
+      doc.save(`CoastalVA_Invoice_${invNumber}.pdf`);
     } catch (error) {
       alert("Error generating PDF.");
     } finally {
