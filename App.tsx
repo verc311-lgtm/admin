@@ -33,7 +33,7 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
 
   // API Configuration
-  const API_URL = import.meta.env.PROD ? '/api.php' : 'http://localhost:8000/api.php';
+  const API_URL = '/api.php';
 
   // 1. Fetch Data on Load
   useEffect(() => {
