@@ -174,6 +174,92 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
     doc.save(`Report_${project.name.replace(/\s+/g, '_')}.pdf`);
   };
 
+  const handleGenerateInvoicePDF = (invoice: Invoice) => {
+    const project = projects.find(p => p.id === invoice.projectId) || { name: invoice.projectName, client: 'N/A' } as Project;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // 1. Header (Company Info)
+    doc.setFillColor(10, 25, 47); // Navy Blue Header
+    doc.rect(0, 0, pageWidth, 40, 'F');
+
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text("COASTAL VA MARINE CONSTRUCTION", pageWidth / 2, 20, { align: 'center' });
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(73, 204, 249); // Cyan accent
+    doc.text("Marine Operations & Engineering", pageWidth / 2, 28, { align: 'center' });
+
+    // 2. Invoice Details (Right Side)
+    doc.setTextColor(0);
+    doc.setFontSize(30);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(200, 200, 200);
+    doc.text("INVOICE", pageWidth - 14, 60, { align: 'right' });
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Invoice #: ${invoice.invoiceNumber}`, pageWidth - 14, 70, { align: 'right' });
+    doc.text(`Date: ${invoice.date}`, pageWidth - 14, 75, { align: 'right' });
+    doc.text(`Status: ${invoice.status}`, pageWidth - 14, 80, { align: 'right' });
+
+    // 3. Bill To (Left Side)
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(10, 25, 47);
+    doc.text("Bill To:", 14, 60);
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "normal");
+    doc.text(project.client, 14, 68);
+
+    doc.setFontSize(10);
+    doc.setTextColor(150);
+    doc.text(`Project: ${project.name}`, 14, 75);
+
+    // 4. Line Items Table
+    autoTable(doc, {
+      startY: 90,
+      head: [['Description', 'Amount']],
+      body: [
+        [`Marine Construction Services - ${project.name}\n(Progress Payment / Contract Services)`, `$${invoice.amount.toLocaleString()}`]
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 'auto' },
+        1: { halign: 'right', fontStyle: 'bold', cellWidth: 50 }
+      },
+      styles: { cellPadding: 5 },
+      margin: { left: 14, right: 14 }
+    });
+
+    // 5. Total
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.rect(pageWidth - 80, finalY, 66, 20, 'F');
+
+    doc.setFontSize(12);
+    doc.setTextColor(10, 25, 47);
+    doc.text("Total Due:", pageWidth - 75, finalY + 13);
+
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(`$${invoice.amount.toLocaleString()}`, pageWidth - 20, finalY + 13, { align: 'right' });
+
+    // 6. Footer
+    doc.setFontSize(9);
+    doc.setTextColor(150);
+    doc.setFont("helvetica", "italic");
+    const footerY = doc.internal.pageSize.getHeight() - 20;
+    doc.text("Thank you for your business. Please make checks payable to Coastal VA Marine Construction.", pageWidth / 2, footerY, { align: 'center' });
+
+    doc.save(`Invoice_${invoice.invoiceNumber}.pdf`);
+  };
+
   const expenseCategories: ExpenseCategory[] = ['Staff Hour', 'Insurance', 'Gas/Fuel', 'Tools', 'Transportation', 'Machines', 'Materials', 'Miscellaneous'];
 
   return (
@@ -292,7 +378,7 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
                         <td className="px-8 py-6 font-black text-[#0a192f]">{inv.invoiceNumber}</td>
                         <td className="px-8 py-6 font-black text-blue-600">${inv.amount.toLocaleString()}</td>
                         <td className="px-8 py-6 text-right flex justify-end gap-3">
-                          <button onClick={() => onPrintInvoice(inv)} className="p-3 text-slate-400 hover:text-cyan-600 bg-white rounded-xl shadow-sm border"><Printer className="w-4 h-4" /></button>
+                          <button onClick={() => handleGenerateInvoicePDF(inv)} className="p-3 text-slate-400 hover:text-cyan-600 bg-white rounded-xl shadow-sm border"><Download className="w-4 h-4" /></button>
                           {inv.status !== 'Paid' && <button onClick={() => { setDetailsModal({ show: false, project: null }); onAddPayment(inv.projectId, inv.id); }} className="bg-cyan-600 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-cyan-600/20">Pay</button>}
                         </td>
                       </tr>
