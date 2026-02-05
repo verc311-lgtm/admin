@@ -1,0 +1,35 @@
+# CoastalVA Marine - Hostinger Subdomain Config
+DirectoryIndex index.html
+Options -MultiViews
+
+# Tipos MIME para React/TSX
+AddType application/javascript .tsx
+AddType application/javascript .ts
+AddType application/json .json
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # Si el archivo api.php es solicitado, dejarlo pasar directamente
+  RewriteRule ^api\.php$ - [L]
+
+  # No aplicar reescritura si el archivo existe físicamente
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # EXCEPCIÓN CRÍTICA: No redirigir peticiones que parezcan archivos de código
+  RewriteCond %{REQUEST_URI} \.(tsx|ts|js|json|css|php|png|jpg|svg)$ [NC]
+  RewriteRule ^ - [L]
+
+  # Todo lo demás (rutas de la app) a index.html
+  RewriteRule . index.html [L]
+</IfModule>
+
+# Prevención de caché agresiva en archivos de datos
+<FilesMatch "\.(json|php|tsx|ts)$">
+    Header set Cache-Control "max-age=0, no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "Wed, 11 Jan 1984 05:00:00 GMT"
+</FilesMatch>

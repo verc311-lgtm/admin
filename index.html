@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoastalVA Marine - Control Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/index.css">
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <div id="initial-loader">
+        <div class="spinner"></div>
+        <div
+            style="margin-top: 20px; font-size: 10px; font-weight: 900; letter-spacing: 0.3em; text-transform: uppercase; color: #22d3ee;">
+            CoastalVA Marine System</div>
+        <div id="error-display"></div>
+        <button id="retry-btn" onclick="location.reload()">Forzar Reintento</button>
+    </div>
+
+    <script>
+        // Capturador de errores globales
+        window.onerror = function (msg, url, line) {
+            const err = document.getElementById('error-display');
+            const btn = document.getElementById('retry-btn');
+            if (err) {
+                err.style.display = 'block';
+                err.innerHTML = 'Error de carga: ' + msg + '\n(Refresque la página si el error persiste)';
+            }
+            if (btn) btn.style.display = 'block';
+        };
+
+        // Timeout preventivo
+        setTimeout(() => {
+            const loader = document.getElementById('initial-loader');
+            if (loader && loader.style.display !== 'none') {
+                const btn = document.getElementById('retry-btn');
+                const err = document.getElementById('error-display');
+                if (btn) btn.style.display = 'block';
+                if (err && err.style.display !== 'block') {
+                    err.style.display = 'block';
+                    err.innerHTML = 'El servidor está tardando más de lo esperado.';
+                }
+            }
+        }, 15000);
+    </script>
+    <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>
