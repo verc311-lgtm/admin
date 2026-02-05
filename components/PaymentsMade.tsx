@@ -92,18 +92,16 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
     doc.text("Total Contract:", 14, balanceY);
     doc.text(`$${project.totalAmount.toLocaleString()}`, 60, balanceY, { align: 'right' });
 
-    // Total Paid (Calculated currently)
-    // Note: project.paidAmount includes this payment if data is fresh, but we can verify.
-    // Assuming 'project' passed props is up to date.
-    doc.text("Total Paid:", 14, balanceY + 6);
-    doc.text(`$${project.paidAmount.toLocaleString()}`, 60, balanceY + 6, { align: 'right' });
+    // Total Paid
+    doc.text("Total Paid:", 14, balanceY + 8); // Increased from +6
+    doc.text(`$${project.paidAmount.toLocaleString()}`, 60, balanceY + 8, { align: 'right' });
 
     // Pending
     const pending = project.totalAmount - project.paidAmount;
     doc.setFontSize(12);
     doc.setTextColor(10, 25, 47);
-    doc.text("Remaining Balance:", 14, balanceY + 14);
-    doc.text(`$${pending.toLocaleString()}`, 60, balanceY + 14, { align: 'right' });
+    doc.text("Remaining Balance:", 14, balanceY + 20); // Increased from +14
+    doc.text(`$${pending.toLocaleString()}`, 60, balanceY + 20, { align: 'right' });
 
     // 6. Footer
     doc.setFontSize(9);
