@@ -42,10 +42,12 @@ const QuoteGenerator: React.FC = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [scopeOfWork, setScopeOfWork] = useState('');
     const [estimatedTotal, setEstimatedTotal] = useState<number>(0);
+    const [errorMsg, setErrorMsg] = useState('');
 
     const handleSaveKey = () => {
         localStorage.setItem('gemini_api_key', apiKey);
         setShowSettings(false);
+        setErrorMsg('');
     };
 
     const toggleMaterial = (mat: string) => {
@@ -57,13 +59,14 @@ const QuoteGenerator: React.FC = () => {
     };
 
     const handleGenerateQuote = async () => {
+        setErrorMsg('');
         if (!apiKey) {
-            alert("Please enter your Google Gemini API Key in settings.");
+            setErrorMsg("Please enter your Google Gemini API Key in settings.");
             setShowSettings(true);
             return;
         }
         if (!dimensions) {
-            alert("Please enter the dimensions (e.g. 100 LF).");
+            setErrorMsg("Please enter the dimensions (e.g. 100 LF).");
             return;
         }
 
@@ -95,23 +98,43 @@ const QuoteGenerator: React.FC = () => {
 
         try {
             const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            const text = response.text();
+            // Try models in order of preference (Flash is fastest/cheapest, Pro is backing)
+            const modelsToTry = ["gemini-1.5-flash", "gemini-pro", "gemini-1.0-pro"];
+            let content = null;
+            let lastError = null;
 
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            for (const modelName of modelsToTry) {
+                try {
+                    console.log(`Attempting with model: ${modelName}`);
+                    const model = genAI.getGenerativeModel({ model: modelName });
+                    const result = await model.generateContent(prompt);
+                    const response = await result.response;
+                    content = response.text();
+                    if (content) break; // Success
+                } catch (e: any) {
+                    console.warn(`Model ${modelName} failed:`, e);
+                    lastError = e;
+                    continue;
+                }
+            }
+
+            if (!content) {
+                throw lastError || new Error("All Gemini models failed to respond.");
+            }
+
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
                 setScopeOfWork(parsed.scopeOfWork);
                 setEstimatedTotal(parsed.totalPrice);
             } else {
-                throw new Error("Failed to parse Gemini response");
+                throw new Error("Failed to parse AI response JSON.");
             }
 
         } catch (error: any) {
-            alert(`Error: ${error.message}`);
+            console.error("Gemini Error:", error);
+            setErrorMsg(`Error: ${error.message || "Unknown error occurred"}`);
         } finally {
             setIsGenerating(false);
         }
@@ -245,6 +268,12 @@ const QuoteGenerator: React.FC = () => {
                             ))}
                         </div>
                     </div>
+
+                    {errorMsg && (
+                        <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl text-xs font-bold">
+                            {errorMsg}
+                        </div>
+                    )}
 
                     <button onClick={handleGenerateQuote} disabled={isGenerating || !apiKey} className="w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 shadow-xl mt-4">
                         {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5 text-cyan-400" />}
