@@ -29,7 +29,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const QuoteGenerator: React.FC = () => {
     // API Key State
-    const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || 'AIzaSyDlT3AAVoMytcbO6lN5rdLlpX_ASLagiPg');
+    const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || 'AIzaSyBd1T3EifJosKFB_mwXaGmURUCLCv1akeY');
     const [showSettings, setShowSettings] = useState(false);
 
     // Form Inputs
