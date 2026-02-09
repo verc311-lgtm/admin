@@ -25,10 +25,12 @@ const COMMON_MATERIALS = [
     "Jet Ski Lift"
 ];
 
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
 const QuoteGenerator: React.FC = () => {
     // API Key State
-    const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
-    const [showSettings, setShowSettings] = useState(!localStorage.getItem('openai_api_key'));
+    const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || 'AIzaSyDlT3AAVoMytcbO6lN5rdLlpX_ASLagiPg');
+    const [showSettings, setShowSettings] = useState(false);
 
     // Form Inputs
     const [clientName, setClientName] = useState('');
@@ -42,7 +44,7 @@ const QuoteGenerator: React.FC = () => {
     const [estimatedTotal, setEstimatedTotal] = useState<number>(0);
 
     const handleSaveKey = () => {
-        localStorage.setItem('openai_api_key', apiKey);
+        localStorage.setItem('gemini_api_key', apiKey);
         setShowSettings(false);
     };
 
@@ -56,7 +58,7 @@ const QuoteGenerator: React.FC = () => {
 
     const handleGenerateQuote = async () => {
         if (!apiKey) {
-            alert("Please enter your OpenAI API Key in settings.");
+            alert("Please enter your Google Gemini API Key in settings.");
             setShowSettings(true);
             return;
         }
@@ -92,33 +94,20 @@ const QuoteGenerator: React.FC = () => {
     `;
 
         try {
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    model: "gpt-4o",
-                    messages: [
-                        { role: "system", content: "You are a helpful construction estimator. Output JSON only." },
-                        { role: "user", content: prompt }
-                    ],
-                    temperature: 0.3
-                })
-            });
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-            const data = await response.json();
-            if (data.error) throw new Error(data.error.message);
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            const text = response.text();
 
-            const content = data.choices[0].message.content;
-            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
                 setScopeOfWork(parsed.scopeOfWork);
                 setEstimatedTotal(parsed.totalPrice);
             } else {
-                alert("Failed to generate estimate. Please try again.");
+                throw new Error("Failed to parse Gemini response");
             }
 
         } catch (error: any) {
@@ -208,13 +197,13 @@ const QuoteGenerator: React.FC = () => {
             {showSettings && (
                 <div className="bg-slate-800 text-white p-8 rounded-[2rem] shadow-xl animate-in slide-in-from-top-4">
                     <h3 className="font-bold uppercase tracking-widest mb-4 flex items-center gap-2"><Settings className="w-4 h-4" /> AI Configuration</h3>
-                    <p className="text-slate-400 text-sm mb-4">Enter your OpenAI API Key to enable automatic estimating.</p>
+                    <p className="text-slate-400 text-sm mb-4">Enter your Google Gemini API Key (Free) to enable automatic estimating.</p>
                     <div className="flex gap-4">
                         <input
                             type="password"
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
-                            placeholder="sk-..."
+                            placeholder="AIza..."
                             className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-cyan-400 font-mono"
                         />
                         <button onClick={handleSaveKey} className="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl font-bold uppercase text-xs">Save Key</button>
