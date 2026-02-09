@@ -100,7 +100,7 @@ const QuoteGenerator: React.FC = () => {
             const genAI = new GoogleGenerativeAI(apiKey);
 
             // Try models in order of preference (Flash is fastest/cheapest, Pro is backing)
-            const modelsToTry = ["gemini-1.5-flash", "gemini-pro", "gemini-1.0-pro"];
+            const modelsToTry = ["gemini-1.5-flash", "gemini-2.0-flash-exp"];
             let content = null;
             let lastError = null;
 
