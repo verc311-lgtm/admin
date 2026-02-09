@@ -1,37 +1,57 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2 } from 'lucide-react';
+import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square } from 'lucide-react';
 import { PRICING_CONTEXT } from '../data/pricing_data';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
-interface QuoteItem {
-    description: string;
-    quantity: number;
-    unit: string;
-    unitPrice: number;
-    total: number;
-}
+const PROJECT_TYPES = [
+    "Vinyl Bulkhead",
+    "Wood Bulkhead",
+    "Fixed Pier / Dock",
+    "Floating Dock",
+    "Boat Lift Installation",
+    "Jet Ski Lift Installation",
+    "Rip-Rap / Erosion Control"
+];
 
-interface Quote {
-    clientName: string;
-    projectDescription: string;
-    items: QuoteItem[];
-    total: number;
-    date: string;
-}
+const COMMON_MATERIALS = [
+    "Vinyl Sheet Piling",
+    "Pressure Treated Wood (2.5 CCA)",
+    "Composite Decking (Waredeck)",
+    "Marine Guard Piles",
+    "Stainless Steel Hardware",
+    "Galvanized Hardware",
+    "Boat Lift (10k)",
+    "Boat Lift (12k)",
+    "Jet Ski Lift"
+];
 
 const QuoteGenerator: React.FC = () => {
+    // API Key State
     const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
     const [showSettings, setShowSettings] = useState(!localStorage.getItem('openai_api_key'));
+
+    // Form Inputs
     const [clientName, setClientName] = useState('');
-    const [description, setDescription] = useState('');
+    const [projectType, setProjectType] = useState(PROJECT_TYPES[0]);
+    const [dimensions, setDimensions] = useState('');
+    const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
+
+    // AI Results
     const [isGenerating, setIsGenerating] = useState(false);
-    const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
-    const [aiResponseText, setAiResponseText] = useState('');
+    const [scopeOfWork, setScopeOfWork] = useState('');
+    const [estimatedTotal, setEstimatedTotal] = useState<number>(0);
 
     const handleSaveKey = () => {
         localStorage.setItem('openai_api_key', apiKey);
         setShowSettings(false);
+    };
+
+    const toggleMaterial = (mat: string) => {
+        if (selectedMaterials.includes(mat)) {
+            setSelectedMaterials(selectedMaterials.filter(m => m !== mat));
+        } else {
+            setSelectedMaterials([...selectedMaterials, mat]);
+        }
     };
 
     const handleGenerateQuote = async () => {
@@ -40,34 +60,35 @@ const QuoteGenerator: React.FC = () => {
             setShowSettings(true);
             return;
         }
-        if (!description) {
-            alert("Please describe the project.");
+        if (!dimensions) {
+            alert("Please enter the dimensions (e.g. 100 LF).");
             return;
         }
 
         setIsGenerating(true);
-        setQuoteItems([]);
 
         const prompt = `
       Role: You are an expert Marine Construction Estimator for "Coastal VA Marine Construction".
-      Task: Generate a detailed cost estimate (quote) based on the user's project description and the provided PRICING_CONTEXT.
       
-      User Description: "${description}"
+      Task: Create a "Rapid Estimate" for a client.
       
-      Instructions:
-      1. Analyze the description to identify necessary materials, labor, and equipment (piles, lumber, hardware, mobilization, etc.).
-      2. Use the exact prices from the PRICING_CONTEXT where available. If a price is missing, estimate it reasonably and mark as "(Est)".
-      3. Always include "Mobilization" if it seems like a new site project.
-      4. Output strictly in JSON format with this structure:
-      {
-        "items": [
-          { "description": "Item Name", "quantity": 1, "unit": "each/LF/SQF", "unitPrice": 100.00, "total": 100.00 }
-        ],
-        "summary": "Brief explanation of the estimation logic."
-      }
+      Project Details:
+      - Type: ${projectType}
+      - Size/Dimensions: ${dimensions}
+      - Materials Requested: ${selectedMaterials.join(', ')}
       
-      PRICING_CONTEXT:
+      Pricing Context (Use this for accuracy):
       ${PRICING_CONTEXT}
+      
+      Output Requirements:
+      1. **Scope of Work**: Write a professional, detailed paragraph describing exactly what will be done. Use industry standard language (e.g. "Install 10ft on center piles", "Backfill with clean sand", "Install whalers and tie rods").
+      2. **Total Price**: Calculate a SINGLE total estimated price for the entire project. Do NOT break it down. Round to the nearest $100.
+      
+      Return JSON ONLY:
+      {
+        "scopeOfWork": "The detailed description...",
+        "totalPrice": 15000
+      }
     `;
 
         try {
@@ -78,7 +99,7 @@ const QuoteGenerator: React.FC = () => {
                     'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    model: "gpt-4o", // or gpt-3.5-turbo if preferred
+                    model: "gpt-4o",
                     messages: [
                         { role: "system", content: "You are a helpful construction estimator. Output JSON only." },
                         { role: "user", content: prompt }
@@ -88,32 +109,29 @@ const QuoteGenerator: React.FC = () => {
             });
 
             const data = await response.json();
-            if (data.error) {
-                throw new Error(data.error.message);
-            }
+            if (data.error) throw new Error(data.error.message);
 
             const content = data.choices[0].message.content;
-            const jsonMatch = content.match(/\{[\s\S]*\}/); // Find JSON object
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
-                setQuoteItems(parsed.items);
-                setAiResponseText(parsed.summary || "Estimate generated based on pricing list.");
+                setScopeOfWork(parsed.scopeOfWork);
+                setEstimatedTotal(parsed.totalPrice);
             } else {
-                setAiResponseText("Failed to parse AI response. Please try again.");
+                alert("Failed to generate estimate. Please try again.");
             }
 
         } catch (error: any) {
-            alert(`Error generating quote: ${error.message}`);
+            alert(`Error: ${error.message}`);
         } finally {
             setIsGenerating(false);
         }
     };
 
-    const calculateTotal = () => quoteItems.reduce((sum, item) => sum + item.total, 0);
-
     const generatePDF = () => {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
 
         // Header
         doc.setFillColor(10, 25, 47);
@@ -125,85 +143,61 @@ const QuoteGenerator: React.FC = () => {
         doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(73, 204, 249);
-        doc.text("Project Estimate / Quote", pageWidth / 2, 28, { align: 'center' });
+        doc.text("Rapid Project Estimate", pageWidth / 2, 28, { align: 'center' });
 
-        // Client Info
+        // Client & Date
         doc.setTextColor(0);
         doc.setFontSize(12);
         doc.text(`Client: ${clientName || 'Valued Client'}`, 14, 50);
         doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - 14, 50, { align: 'right' });
+        doc.text(`Project Type: ${projectType}`, 14, 58);
+        doc.text(`Dimensions: ${dimensions}`, 14, 66);
 
-        doc.setFontSize(10);
-        doc.text("Project Description:", 14, 60);
-        doc.setFont("helvetica", "italic");
-        const splitDesc = doc.splitTextToSize(description, pageWidth - 28);
-        doc.text(splitDesc, 14, 65);
-
-        // Table
-        const startY = 65 + (splitDesc.length * 5) + 5;
-
-        autoTable(doc, {
-            startY: startY,
-            head: [['Description', 'Qty', 'Unit', 'Price', 'Total']],
-            body: quoteItems.map(item => [
-                item.description,
-                item.quantity,
-                item.unit,
-                `$${item.unitPrice.toLocaleString()}`,
-                `$${item.total.toLocaleString()}`
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [10, 25, 47] },
-            columnStyles: {
-                0: { cellWidth: 'auto' },
-                1: { halign: 'center' },
-                3: { halign: 'right' },
-                4: { halign: 'right', fontStyle: 'bold' }
-            }
-        });
-
-        // Total
-        const finalY = (doc as any).lastAutoTable.finalY + 10;
+        // Scope of Work
         doc.setFontSize(14);
         doc.setFont("helvetica", "bold");
-        doc.text(`Estimated Total: $${calculateTotal().toLocaleString()}`, pageWidth - 14, finalY, { align: 'right' });
+        doc.text("Scope of Work", 14, 85);
 
-        // Footer
-        doc.setFontSize(8);
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(50);
+        const splitScope = doc.splitTextToSize(scopeOfWork, pageWidth - 28);
+        doc.text(splitScope, 14, 95);
+
+        // Total Price
+        const priceY = 95 + (splitScope.length * 6) + 20;
+        doc.setFillColor(240, 248, 255);
+        doc.setDrawColor(73, 204, 249);
+        doc.roundedRect(14, priceY, pageWidth - 28, 40, 3, 3, 'FD');
+
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(10, 25, 47);
+        doc.text("Total Estimated Investment", pageWidth / 2, priceY + 15, { align: 'center' });
+
+        doc.setFontSize(24);
+        doc.setTextColor(0, 100, 0); // Green
+        doc.text(`$${estimatedTotal.toLocaleString()}`, pageWidth / 2, priceY + 30, { align: 'center' });
+
+        // Disclaimer
+        doc.setFontSize(9);
+        doc.setTextColor(100);
         doc.setFont("helvetica", "italic");
-        doc.setTextColor(150);
-        doc.text("This is an estimate based on current material costs. Final price subject to site inspection.", pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+        doc.text("DISCLAIMER: This is a RAPID ESTIMATE based on regional averages and provided dimensions.", pageWidth / 2, pageHeight - 20, { align: 'center' });
+        doc.text("Final price is subject to detailed site inspection and material market fluctuation.", pageWidth / 2, pageHeight - 15, { align: 'center' });
 
-        doc.save(`Quote_${clientName || 'Draft'}.pdf`);
-    };
-
-    const handleItemChange = (index: number, field: keyof QuoteItem, value: any) => {
-        const newItems = [...quoteItems];
-        (newItems[index] as any)[field] = value;
-        if (field === 'quantity' || field === 'unitPrice') {
-            newItems[index].total = newItems[index].quantity * newItems[index].unitPrice;
-        }
-        setQuoteItems(newItems);
-    };
-
-    const deleteItem = (index: number) => {
-        setQuoteItems(quoteItems.filter((_, i) => i !== index));
-    };
-
-    const addItem = () => {
-        setQuoteItems([...quoteItems, { description: 'New Item', quantity: 1, unit: 'ea', unitPrice: 0, total: 0 }]);
+        doc.save(`Estimate_${clientName || 'Project'}.pdf`);
     };
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
-
             {/* Header & Settings */}
             <div className="flex justify-between items-center bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
                 <div className="flex items-center gap-5">
                     <div className="bg-[#0a192f] p-4 rounded-2xl text-cyan-400"><Bot className="w-8 h-8" /></div>
                     <div>
-                        <h2 className="text-3xl font-black text-[#0a192f] uppercase italic tracking-tighter">AI Estimator</h2>
-                        <p className="text-slate-400 font-bold uppercase tracking-widest text-xs mt-1">Powered by Coastal VA Pricing Data</p>
+                        <h2 className="text-3xl font-black text-[#0a192f] uppercase italic tracking-tighter">AI Rapid Estimator</h2>
+                        <p className="text-slate-400 font-bold uppercase tracking-widest text-xs mt-1">Instant Quotes • No Breakdown</p>
                     </div>
                 </div>
                 <button onClick={() => setShowSettings(!showSettings)} className="p-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-500 transition-colors">
@@ -228,98 +222,78 @@ const QuoteGenerator: React.FC = () => {
                 </div>
             )}
 
-            {/* Input Section */}
-            <div className="grid md:grid-cols-3 gap-8">
-                <div className="md:col-span-1 space-y-6">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 h-full">
-                        <h3 className="font-black text-[#0a192f] uppercase tracking-widest text-sm mb-6">Project Details</h3>
+            <div className="grid md:grid-cols-2 gap-8">
+                {/* INPUTS */}
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+                    <h3 className="font-black text-[#0a192f] uppercase tracking-widest text-sm mb-4">Project Parameters</h3>
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Client Name</label>
-                                <input
-                                    value={clientName}
-                                    onChange={(e) => setClientName(e.target.value)}
-                                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-700 outline-none focus:border-cyan-400"
-                                    placeholder="e.g. John Doe"
-                                />
-                            </div>
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Client Name</label>
+                        <input value={clientName} onChange={(e) => setClientName(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="Client Name" />
+                    </div>
 
-                            <div>
-                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Description / Requirements</label>
-                                <textarea
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    className="w-full h-64 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-700 outline-none focus:border-cyan-400 resize-none"
-                                    placeholder="Describe the project in detail... e.g. Build a 20x20 floating dock with pine decking, requiring 10 piles and a boat lift."
-                                />
-                            </div>
-
-                            <button
-                                onClick={handleGenerateQuote}
-                                disabled={isGenerating || !apiKey}
-                                className="w-full py-5 bg-[#0a192f] text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 shadow-xl"
-                            >
-                                {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5 text-cyan-400" />}
-                                {isGenerating ? 'Analyzing Cost Data...' : 'Generate Estimate'}
-                            </button>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Project Type</label>
+                            <select value={projectType} onChange={(e) => setProjectType(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400">
+                                {PROJECT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Dimensions (LF/SQF)</label>
+                            <input value={dimensions} onChange={(e) => setDimensions(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 100 LF" />
                         </div>
                     </div>
+
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 mb-2 block">Materials / Inclusions</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {COMMON_MATERIALS.map(mat => (
+                                <div key={mat} onClick={() => toggleMaterial(mat)} className={`cursor-pointer p-3 rounded-xl flex items-center gap-3 transition-all ${selectedMaterials.includes(mat) ? 'bg-cyan-100 text-cyan-800 border-cyan-200' : 'bg-slate-50 text-slate-500 border-transparent'} border-2`}>
+                                    {selectedMaterials.includes(mat) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                                    <span className="text-xs font-bold leading-tight">{mat}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <button onClick={handleGenerateQuote} disabled={isGenerating || !apiKey} className="w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 shadow-xl mt-4">
+                        {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5 text-cyan-400" />}
+                        {isGenerating ? 'Calculating...' : 'Generate Estimate'}
+                    </button>
                 </div>
 
-                {/* Results Section */}
-                <div className="md:col-span-2">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 min-h-[600px] flex flex-col">
-                        <div className="flex justify-between items-center mb-6">
-                            <div>
-                                <h3 className="font-black text-[#0a192f] uppercase tracking-widest text-sm">Estimated Items</h3>
-                                <p className="text-xs text-slate-400 font-bold mt-1 max-w-md truncate">{aiResponseText}</p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={addItem} className="p-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 transition-colors"><Plus className="w-5 h-5" /></button>
-                                <button onClick={generatePDF} disabled={quoteItems.length === 0} className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 shadow-lg disabled:opacity-50">
-                                    <Download className="w-4 h-4" /> Export PDF
-                                </button>
-                            </div>
+                {/* OUTPUTS */}
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col h-full">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-black text-[#0a192f] uppercase tracking-widest text-sm">Estimate Results</h3>
+                        <button onClick={generatePDF} disabled={!scopeOfWork} className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 shadow-lg disabled:opacity-50">
+                            <Download className="w-4 h-4" /> Export PDF
+                        </button>
+                    </div>
+
+                    <div className="flex-1 space-y-6">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Scope of Work (AI Generated)</label>
+                            <textarea
+                                value={scopeOfWork}
+                                onChange={(e) => setScopeOfWork(e.target.value)}
+                                className="w-full h-64 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-medium text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed"
+                                placeholder="Generated scope will appear here..."
+                            />
                         </div>
 
-                        <div className="flex-1 overflow-auto bg-slate-50 rounded-2xl border border-slate-100 mb-6">
-                            {quoteItems.length > 0 ? (
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="bg-[#0a192f] text-white sticky top-0">
-                                        <tr>
-                                            <th className="p-4 text-[10px] uppercase tracking-widest font-black">Description</th>
-                                            <th className="p-4 text-[10px] uppercase tracking-widest font-black w-20">Qty</th>
-                                            <th className="p-4 text-[10px] uppercase tracking-widest font-black w-20">Unit</th>
-                                            <th className="p-4 text-[10px] uppercase tracking-widest font-black w-32 text-right">Price</th>
-                                            <th className="p-4 text-[10px] uppercase tracking-widest font-black w-32 text-right">Total</th>
-                                            <th className="p-4 w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-200">
-                                        {quoteItems.map((item, idx) => (
-                                            <tr key={idx} className="hover:bg-white">
-                                                <td className="p-2"><input value={item.description} onChange={e => handleItemChange(idx, 'description', e.target.value)} className="w-full bg-transparent outline-none font-bold text-slate-700" /></td>
-                                                <td className="p-2"><input type="number" value={item.quantity} onChange={e => handleItemChange(idx, 'quantity', parseFloat(e.target.value))} className="w-full bg-transparent outline-none font-bold text-slate-700 text-center" /></td>
-                                                <td className="p-2"><input value={item.unit} onChange={e => handleItemChange(idx, 'unit', e.target.value)} className="w-full bg-transparent outline-none font-bold text-slate-700 text-center" /></td>
-                                                <td className="p-2"><input type="number" value={item.unitPrice} onChange={e => handleItemChange(idx, 'unitPrice', parseFloat(e.target.value))} className="w-full bg-transparent outline-none font-bold text-slate-700 text-right" /></td>
-                                                <td className="p-4 text-right font-black text-[#0a192f]">${item.total.toLocaleString()}</td>
-                                                <td className="p-2 text-center"><button onClick={() => deleteItem(idx)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button></td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                                    <Bot className="w-12 h-12 mb-4 opacity-20" />
-                                    <p className="font-bold text-sm uppercase tracking-widest">Ready to generate</p>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex justify-end items-center gap-4 p-4 bg-[#0a192f] text-white rounded-2xl">
-                            <span className="text-xs font-black uppercase tracking-widest text-cyan-400">Total Estimate</span>
-                            <span className="text-4xl font-black italic tracking-tighter">${calculateTotal().toLocaleString()}</span>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Estimated Total Price</label>
+                            <div className="relative">
+                                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                                <input
+                                    type="number"
+                                    value={estimatedTotal}
+                                    onChange={(e) => setEstimatedTotal(parseFloat(e.target.value))}
+                                    className="w-full bg-green-50/50 border-2 border-green-100 rounded-2xl pl-10 pr-5 py-4 font-black text-3xl text-green-700 outline-none focus:border-green-400"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
