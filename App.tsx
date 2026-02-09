@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard.tsx';
 import ProjectSearch from './components/ProjectSearch.tsx';
 import NewContract from './components/NewContract.tsx';
 import PaymentsMade from './components/PaymentsMade.tsx';
+import QuoteGenerator from './components/QuoteGenerator';
 import UserManagement from './components/UserManagement.tsx';
 import InvoiceView from './components/InvoiceView.tsx';
 import PaymentForm from './components/PaymentForm.tsx';
@@ -330,6 +331,8 @@ const App: React.FC = () => {
         )}
 
         {activeView === 'Payments Made' && <PaymentsMade payments={payments} projects={projects} />}
+
+        {activeView === 'Quotes' && <QuoteGenerator />}
 
         {activeView === 'User Management' && (
           <UserManagement

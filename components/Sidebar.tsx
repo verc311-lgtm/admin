@@ -26,7 +26,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, userName, isOpen, onClose }) => {
   const menuItems = [
     { id: 'Home', label: 'Dashboard', icon: Home },
-    { id: 'Quotes', label: 'Quotes', icon: Calculator },
+    { id: 'Quotes', label: 'AI Estimator', icon: Calculator },
     { id: 'Invoices', label: 'Invoices', icon: FileText },
     { id: 'Payments Made', label: 'Payment History', icon: ArrowUpCircle },
   ];
@@ -82,8 +82,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, u
               key={item.id}
               onClick={() => { onViewChange(item.id); onClose(); }}
               className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 ${activeView === item.id
-                  ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/20'
-                  : 'text-gray-400 hover:bg-white/5 hover:text-cyan-400'
+                ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/20'
+                : 'text-gray-400 hover:bg-white/5 hover:text-cyan-400'
                 }`}
             >
               <item.icon className={`w-5 h-5 ${activeView === item.id ? 'text-white' : 'text-gray-400'}`} />
@@ -98,8 +98,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, u
                 key={item.id}
                 onClick={() => { onViewChange(item.id); onClose(); }}
                 className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 ${activeView === item.id
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                    : 'text-gray-400 hover:bg-white/5 hover:text-blue-400'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                  : 'text-gray-400 hover:bg-white/5 hover:text-blue-400'
                   }`}
               >
                 <item.icon className={`w-5 h-5 ${activeView === item.id ? 'text-white' : 'text-gray-400'}`} />
