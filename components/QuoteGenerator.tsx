@@ -25,12 +25,10 @@ const COMMON_MATERIALS = [
     "Jet Ski Lift"
 ];
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 const QuoteGenerator: React.FC = () => {
     // API Key State
-    const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || 'AIzaSyBd1T3EifJosKFB_mwXaGmURUCLCv1akeY');
-    const [showSettings, setShowSettings] = useState(false);
+    const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
+    const [showSettings, setShowSettings] = useState(!localStorage.getItem('openai_api_key'));
 
     // Form Inputs
     const [clientName, setClientName] = useState('');
@@ -45,7 +43,7 @@ const QuoteGenerator: React.FC = () => {
     const [errorMsg, setErrorMsg] = useState('');
 
     const handleSaveKey = () => {
-        localStorage.setItem('gemini_api_key', apiKey);
+        localStorage.setItem('openai_api_key', apiKey);
         setShowSettings(false);
         setErrorMsg('');
     };
@@ -61,7 +59,7 @@ const QuoteGenerator: React.FC = () => {
     const handleGenerateQuote = async () => {
         setErrorMsg('');
         if (!apiKey) {
-            setErrorMsg("Please enter your Google Gemini API Key in settings.");
+            setErrorMsg("Please enter your OpenAI API Key in settings.");
             setShowSettings(true);
             return;
         }
@@ -97,32 +95,26 @@ const QuoteGenerator: React.FC = () => {
     `;
 
         try {
-            const genAI = new GoogleGenerativeAI(apiKey);
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: "gpt-4o",
+                    messages: [
+                        { role: "system", content: "You are a helpful construction estimator. Output JSON only." },
+                        { role: "user", content: prompt }
+                    ],
+                    temperature: 0.3
+                })
+            });
 
-            // Try models in order of preference (Flash is fastest/cheapest, Pro is backing)
-            const modelsToTry = ["gemini-1.5-flash", "gemini-2.0-flash-exp"];
-            let content = null;
-            let lastError = null;
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
 
-            for (const modelName of modelsToTry) {
-                try {
-                    console.log(`Attempting with model: ${modelName}`);
-                    const model = genAI.getGenerativeModel({ model: modelName });
-                    const result = await model.generateContent(prompt);
-                    const response = await result.response;
-                    content = response.text();
-                    if (content) break; // Success
-                } catch (e: any) {
-                    console.warn(`Model ${modelName} failed:`, e);
-                    lastError = e;
-                    continue;
-                }
-            }
-
-            if (!content) {
-                throw lastError || new Error("All Gemini models failed to respond.");
-            }
-
+            const content = data.choices[0].message.content;
             const jsonMatch = content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
@@ -133,7 +125,7 @@ const QuoteGenerator: React.FC = () => {
             }
 
         } catch (error: any) {
-            console.error("Gemini Error:", error);
+            console.error("OpenAI Error:", error);
             setErrorMsg(`Error: ${error.message || "Unknown error occurred"}`);
         } finally {
             setIsGenerating(false);
@@ -220,13 +212,13 @@ const QuoteGenerator: React.FC = () => {
             {showSettings && (
                 <div className="bg-slate-800 text-white p-8 rounded-[2rem] shadow-xl animate-in slide-in-from-top-4">
                     <h3 className="font-bold uppercase tracking-widest mb-4 flex items-center gap-2"><Settings className="w-4 h-4" /> AI Configuration</h3>
-                    <p className="text-slate-400 text-sm mb-4">Enter your Google Gemini API Key (Free) to enable automatic estimating.</p>
+                    <p className="text-slate-400 text-sm mb-4">Enter your OpenAI API Key to enable automatic estimating.</p>
                     <div className="flex gap-4">
                         <input
                             type="password"
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
-                            placeholder="AIza..."
+                            placeholder="sk-..."
                             className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-cyan-400 font-mono"
                         />
                         <button onClick={handleSaveKey} className="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl font-bold uppercase text-xs">Save Key</button>
