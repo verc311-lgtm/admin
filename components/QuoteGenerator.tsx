@@ -2,27 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square } from 'lucide-react';
 import { PRICING_CONTEXT } from '../data/pricing_data';
 import { jsPDF } from 'jspdf';
+import { DOCK_ITEMS, DECKING_OPTIONS, calculateInteractiveDockPrice } from '../utils/pricingCalculator';
 
 const PROJECT_TYPES = [
-    "Vinyl Bulkhead",
-    "Wood Bulkhead",
-    "Fixed Pier / Dock",
-    "Floating Dock",
-    "Boat Lift Installation",
-    "Jet Ski Lift Installation",
-    "Rip-Rap / Erosion Control"
-];
-
-const COMMON_MATERIALS = [
-    "Vinyl Sheet Piling",
-    "Pressure Treated Wood (2.5 CCA)",
-    "Composite Decking (Waredeck)",
-    "Marine Guard Piles",
-    "Stainless Steel Hardware",
-    "Galvanized Hardware",
-    "Boat Lift (10k)",
-    "Boat Lift (12k)",
-    "Jet Ski Lift"
+    "Pier / Dock"
 ];
 
 const QuoteGenerator: React.FC = () => {
@@ -34,7 +17,10 @@ const QuoteGenerator: React.FC = () => {
     const [clientName, setClientName] = useState('');
     const [projectType, setProjectType] = useState(PROJECT_TYPES[0]);
     const [dimensions, setDimensions] = useState('');
-    const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
+
+    // Interactive Dock State
+    const [deckingType, setDeckingType] = useState(DECKING_OPTIONS[0].id);
+    const [selectedDockItems, setSelectedDockItems] = useState<string[]>(DOCK_ITEMS.filter(i => i.isDefault).map(i => i.id));
 
     // AI Results
     const [isGenerating, setIsGenerating] = useState(false);
@@ -48,13 +34,25 @@ const QuoteGenerator: React.FC = () => {
         setErrorMsg('');
     };
 
-    const toggleMaterial = (mat: string) => {
-        if (selectedMaterials.includes(mat)) {
-            setSelectedMaterials(selectedMaterials.filter(m => m !== mat));
+    const toggleDockItem = (id: string) => {
+        if (selectedDockItems.includes(id)) {
+            setSelectedDockItems(selectedDockItems.filter(i => i !== id));
         } else {
-            setSelectedMaterials([...selectedMaterials, mat]);
+            setSelectedDockItems([...selectedDockItems, id]);
         }
     };
+
+    // Auto-calculate for display
+    const currentCalculatedTotal = !isNaN(parseFloat(dimensions))
+        ? calculateInteractiveDockPrice(parseFloat(dimensions), selectedDockItems, deckingType)
+        : 0;
+
+    useEffect(() => {
+        // Update estimated total in UI in real-time if not generating
+        if (!isGenerating) {
+            setEstimatedTotal(currentCalculatedTotal);
+        }
+    }, [dimensions, selectedDockItems, deckingType]);
 
     const handleGenerateQuote = async () => {
         setErrorMsg('');
@@ -64,37 +62,52 @@ const QuoteGenerator: React.FC = () => {
             return;
         }
         if (!dimensions) {
-            setErrorMsg("Please enter the dimensions (e.g. 100 LF).");
+            setErrorMsg("Please enter the dimensions (e.g. 100 SQF).");
             return;
         }
 
         setIsGenerating(true);
-
-        const prompt = `
-      Role: You are an expert Marine Construction Estimator for "Coastal VA Marine Construction".
-      
-      Task: Create a "Rapid Estimate" for a client.
-      
-      Project Details:
-      - Type: ${projectType}
-      - Size/Dimensions: ${dimensions}
-      - Materials Requested: ${selectedMaterials.join(', ')}
-      
-      Pricing Context (Use this for accuracy):
-      ${PRICING_CONTEXT}
-      
-      Output Requirements:
-      1. **Scope of Work**: Write a professional, detailed paragraph describing exactly what will be done. Use industry standard language (e.g. "Install 10ft on center piles", "Backfill with clean sand", "Install whalers and tie rods").
-      2. **Total Price**: Calculate a SINGLE total estimated price for the entire project. Do NOT break it down. Round to the nearest $100.
-      
-      Return JSON ONLY:
-      {
-        "scopeOfWork": "The detailed description...",
-        "totalPrice": 15000
-      }
-    `;
+        let finalPrice = 0;
+        let finalMaterials: string[] = [];
 
         try {
+            const sqf = parseFloat(dimensions);
+            if (isNaN(sqf)) {
+                throw new Error("Dimensions must be a valid number.");
+            }
+            finalPrice = calculateInteractiveDockPrice(sqf, selectedDockItems, deckingType);
+
+            // Gather names of selected items for AI context
+            finalMaterials = DOCK_ITEMS
+                .filter(i => selectedDockItems.includes(i.id))
+                .map(i => i.label);
+
+            // Add Decking Name
+            const deckName = DECKING_OPTIONS.find(d => d.id === deckingType)?.label;
+            if (deckName) finalMaterials.push(deckName);
+
+            const prompt = `
+          Role: You are an expert Marine Construction Estimator for "Coastal VA Marine Construction".
+          
+          Task: Create a "Rapid Estimate" scope of work description.
+          
+          Project Details:
+          - Type: ${projectType}
+          - Size/Dimensions: ${dimensions} SQF
+          - Materials Included: ${finalMaterials.join(', ')}
+          - Note: Price is verified as $${finalPrice.toLocaleString()}.
+          
+          Output Requirements:
+          1. **Scope of Work**: Write a professional, detailed paragraph describing exactly what will be done based ONLY on the included materials. Use industry standard language. 
+          2. **Total Price**: Use the provided calculated price of $${finalPrice}.
+          
+          Return JSON ONLY:
+          {
+            "scopeOfWork": "The detailed description...",
+            "totalPrice": ${finalPrice}
+          }
+        `;
+
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -119,7 +132,7 @@ const QuoteGenerator: React.FC = () => {
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
                 setScopeOfWork(parsed.scopeOfWork);
-                setEstimatedTotal(parsed.totalPrice);
+                setEstimatedTotal(finalPrice);
             } else {
                 throw new Error("Failed to parse AI response JSON.");
             }
@@ -155,7 +168,7 @@ const QuoteGenerator: React.FC = () => {
         doc.text(`Client: ${clientName || 'Valued Client'}`, 14, 50);
         doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - 14, 50, { align: 'right' });
         doc.text(`Project Type: ${projectType}`, 14, 58);
-        doc.text(`Dimensions: ${dimensions}`, 14, 66);
+        doc.text(`Dimensions: ${dimensions} SQF`, 14, 66);
 
         // Scope of Work
         doc.setFontSize(14);
@@ -201,7 +214,9 @@ const QuoteGenerator: React.FC = () => {
                     <div className="bg-[#0a192f] p-4 rounded-2xl text-cyan-400"><Bot className="w-8 h-8" /></div>
                     <div>
                         <h2 className="text-3xl font-black text-[#0a192f] uppercase italic tracking-tighter">AI Rapid Estimator</h2>
-                        <p className="text-slate-400 font-bold uppercase tracking-widest text-xs mt-1">Instant Quotes • No Breakdown</p>
+                        <p className="text-slate-400 font-bold uppercase tracking-widest text-xs mt-1">
+                            Verified Interactive Pricing
+                        </p>
                     </div>
                 </div>
                 <button onClick={() => setShowSettings(!showSettings)} className="p-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-500 transition-colors">
@@ -244,20 +259,74 @@ const QuoteGenerator: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Dimensions (LF/SQF)</label>
-                            <input value={dimensions} onChange={(e) => setDimensions(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 100 LF" />
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Dimensions (SQF)</label>
+                            <input value={dimensions} onChange={(e) => setDimensions(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 500" />
                         </div>
                     </div>
 
                     <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 mb-2 block">Materials / Inclusions</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            {COMMON_MATERIALS.map(mat => (
-                                <div key={mat} onClick={() => toggleMaterial(mat)} className={`cursor-pointer p-3 rounded-xl flex items-center gap-3 transition-all ${selectedMaterials.includes(mat) ? 'bg-cyan-100 text-cyan-800 border-cyan-200' : 'bg-slate-50 text-slate-500 border-transparent'} border-2`}>
-                                    {selectedMaterials.includes(mat) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
-                                    <span className="text-xs font-bold leading-tight">{mat}</span>
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 mb-2 block">
+                            Itemized Costs / Inclusions
+                        </label>
+
+                        <div className="space-y-4">
+                            {/* Decking Selector */}
+                            <div className="space-y-2">
+                                <h4 className="text-[10px] uppercase font-bold text-slate-400">Decking Material</h4>
+                                <div className="space-y-2">
+                                    {DECKING_OPTIONS.map(dt => (
+                                        <div
+                                            key={dt.id}
+                                            onClick={() => setDeckingType(dt.id)}
+                                            className={`cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border-2 transition-all ${deckingType === dt.id ? 'bg-cyan-50 border-cyan-400' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${deckingType === dt.id ? 'border-cyan-500' : 'border-slate-300'}`}>
+                                                    {deckingType === dt.id && <div className="w-2 h-2 rounded-full bg-cyan-500" />}
+                                                </div>
+                                                <span className="text-xs font-bold text-slate-700">{dt.label}</span>
+                                            </div>
+                                            <span className="text-[10px] font-mono text-slate-400 font-bold">+${dt.price}/sqf</span>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
+                            </div>
+
+                            {/* Item List */}
+                            <div className="space-y-2">
+                                <h4 className="text-[10px] uppercase font-bold text-slate-400">Construction Items</h4>
+                                <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
+                                    {DOCK_ITEMS.map(item => {
+                                        const isSelected = selectedDockItems.includes(item.id);
+                                        const sqfVal = parseFloat(dimensions) || 0;
+                                        const lineTotal = item.unit === 'fixed' ? item.price : item.price * sqfVal;
+
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                onClick={() => toggleDockItem(item.id)}
+                                                className={`cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border transition-all ${isSelected ? 'bg-white border-cyan-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60'}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-4 h-4 rounded flex items-center justify-center border ${isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-slate-300 bg-white'}`}>
+                                                        {isSelected && <CheckSquare className="w-3 h-3 text-white" />}
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-xs font-bold text-slate-700">{item.label}</div>
+                                                        <div className="text-[10px] text-slate-400">${item.price.toLocaleString()}{item.unit === 'sqf' ? '/sqf' : ''}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-xs font-mono font-bold text-slate-600">${lineTotal.toLocaleString()}</div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-slate-900 rounded-xl flex justify-between items-center text-white">
+                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Estimated Total</span>
+                                <span className="text-xl font-black text-cyan-400">${currentCalculatedTotal.toLocaleString()}</span>
+                            </div>
                         </div>
                     </div>
 
@@ -269,7 +338,7 @@ const QuoteGenerator: React.FC = () => {
 
                     <button onClick={handleGenerateQuote} disabled={isGenerating || !apiKey} className="w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 shadow-xl mt-4">
                         {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5 text-cyan-400" />}
-                        {isGenerating ? 'Calculating...' : 'Generate Estimate'}
+                        {isGenerating ? 'Calculating...' : 'Confirm & Generate Scope'}
                     </button>
                 </div>
 
@@ -294,16 +363,17 @@ const QuoteGenerator: React.FC = () => {
                         </div>
 
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Estimated Total Price</label>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Verified Total Price</label>
                             <div className="relative">
                                 <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
                                 <input
                                     type="number"
                                     value={estimatedTotal}
                                     onChange={(e) => setEstimatedTotal(parseFloat(e.target.value))}
-                                    className="w-full bg-green-50/50 border-2 border-green-100 rounded-2xl pl-10 pr-5 py-4 font-black text-3xl text-green-700 outline-none focus:border-green-400"
+                                    className="w-full bg-cyan-50/50 border-2 border-cyan-100 text-cyan-700 border-2 rounded-2xl pl-10 pr-5 py-4 font-black text-3xl outline-none focus:border-cyan-400"
                                 />
                             </div>
+                            <p className="text-[10px] text-slate-400 font-bold mt-2 ml-2">Based on current selection + labor + equipment.</p>
                         </div>
                     </div>
                 </div>
