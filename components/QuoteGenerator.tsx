@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square } from 'lucide-react';
-import { PRICING_CONTEXT } from '../data/pricing_data';
 import { jsPDF } from 'jspdf';
-import { DOCK_ITEMS, DECKING_OPTIONS, calculateInteractiveDockPrice } from '../utils/pricingCalculator';
+import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
 
 const PROJECT_TYPES = [
-    "Pier / Dock"
+    "Pier / Dock",
+    "Rip-Rap / Erosion Control"
 ];
 
 const QuoteGenerator: React.FC = () => {
@@ -18,9 +18,10 @@ const QuoteGenerator: React.FC = () => {
     const [projectType, setProjectType] = useState(PROJECT_TYPES[0]);
     const [dimensions, setDimensions] = useState('');
 
-    // Interactive Dock State
+    // Interactive State
     const [deckingType, setDeckingType] = useState(DECKING_OPTIONS[0].id);
     const [selectedDockItems, setSelectedDockItems] = useState<string[]>(DOCK_ITEMS.filter(i => i.isDefault).map(i => i.id));
+    const [selectedRipRapItems, setSelectedRipRapItems] = useState<string[]>(RIP_RAP_ITEMS.filter(i => i.isDefault).map(i => i.id));
 
     // AI Results
     const [isGenerating, setIsGenerating] = useState(false);
@@ -34,24 +35,40 @@ const QuoteGenerator: React.FC = () => {
         setErrorMsg('');
     };
 
-    const toggleDockItem = (id: string) => {
-        if (selectedDockItems.includes(id)) {
-            setSelectedDockItems(selectedDockItems.filter(i => i !== id));
+    const toggleItem = (id: string, type: 'dock' | 'riprap') => {
+        if (type === 'dock') {
+            if (selectedDockItems.includes(id)) {
+                setSelectedDockItems(selectedDockItems.filter(i => i !== id));
+            } else {
+                setSelectedDockItems([...selectedDockItems, id]);
+            }
         } else {
-            setSelectedDockItems([...selectedDockItems, id]);
+            if (selectedRipRapItems.includes(id)) {
+                setSelectedRipRapItems(selectedRipRapItems.filter(i => i !== id));
+            } else {
+                setSelectedRipRapItems([...selectedRipRapItems, id]);
+            }
         }
     };
 
     // Auto-calculate for display
-    const currentCalculatedTotal = !isNaN(parseFloat(dimensions))
-        ? calculateInteractiveDockPrice(parseFloat(dimensions), selectedDockItems, deckingType)
+    const isDock = projectType === "Pier / Dock";
+    const qty = parseFloat(dimensions);
+
+    const currentCalculatedTotal = !isNaN(qty)
+        ? calculateInteractivePrice(
+            isDock ? 'dock' : 'riprap',
+            qty,
+            isDock ? selectedDockItems : selectedRipRapItems,
+            isDock ? deckingType : undefined
+        )
         : 0;
 
     useEffect(() => {
         if (!isGenerating) {
             setEstimatedTotal(currentCalculatedTotal);
         }
-    }, [dimensions, selectedDockItems, deckingType]);
+    }, [dimensions, selectedDockItems, selectedRipRapItems, deckingType, projectType]);
 
     const handleGenerateQuote = async () => {
         setErrorMsg('');
@@ -61,7 +78,7 @@ const QuoteGenerator: React.FC = () => {
             return;
         }
         if (!dimensions) {
-            setErrorMsg("Please enter the dimensions (e.g. 100 SQF).");
+            setErrorMsg("Please enter the dimensions.");
             return;
         }
 
@@ -70,20 +87,24 @@ const QuoteGenerator: React.FC = () => {
         let finalMaterials: string[] = [];
 
         try {
-            const sqf = parseFloat(dimensions);
-            if (isNaN(sqf)) {
+            const qty = parseFloat(dimensions);
+            if (isNaN(qty)) {
                 throw new Error("Dimensions must be a valid number.");
             }
-            finalPrice = calculateInteractiveDockPrice(sqf, selectedDockItems, deckingType);
 
-            // Gather names of selected items for AI context
-            finalMaterials = DOCK_ITEMS
-                .filter(i => selectedDockItems.includes(i.id))
-                .map(i => i.label);
+            finalPrice = currentCalculatedTotal;
 
-            // Add Decking Name
-            const deckName = DECKING_OPTIONS.find(d => d.id === deckingType)?.label;
-            if (deckName) finalMaterials.push(deckName);
+            if (isDock) {
+                finalMaterials = DOCK_ITEMS
+                    .filter(i => selectedDockItems.includes(i.id))
+                    .map(i => i.label);
+                const deckName = DECKING_OPTIONS.find(d => d.id === deckingType)?.label;
+                if (deckName) finalMaterials.push(deckName);
+            } else {
+                finalMaterials = RIP_RAP_ITEMS
+                    .filter(i => selectedRipRapItems.includes(i.id))
+                    .map(i => i.label);
+            }
 
             const prompt = `
           Role: You are a Senior Estimator for "Coastal VA Marine Construction". Write a formal "Preliminary Construction Proposal".
@@ -91,7 +112,7 @@ const QuoteGenerator: React.FC = () => {
           Project Details:
           - Client: ${clientName || 'Valued Client'}
           - Type: ${projectType}
-          - Size: ${dimensions} SQF
+          - Size: ${dimensions} ${isDock ? 'SQF' : 'Linear Feet'}
           - Materials Included: ${finalMaterials.join(', ')}
           
           Directives:
@@ -167,7 +188,7 @@ const QuoteGenerator: React.FC = () => {
         doc.text(`Client: ${clientName || 'Valued Client'}`, 14, 50);
         doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - 14, 50, { align: 'right' });
         doc.text(`Project Type: ${projectType}`, 14, 58);
-        doc.text(`Dimensions: ${dimensions} SQF`, 14, 66);
+        doc.text(`Dimensions: ${dimensions} ${isDock ? 'SQF' : 'Linear Feet'}`, 14, 66);
 
         // Scope of Work
         doc.setFontSize(14);
@@ -258,8 +279,8 @@ const QuoteGenerator: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Dimensions (SQF)</label>
-                            <input value={dimensions} onChange={(e) => setDimensions(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 500" />
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">{isDock ? 'Dimensions (SQF)' : 'Dimensions (Lif. Ft.)'}</label>
+                            <input value={dimensions} onChange={(e) => setDimensions(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 100" />
                         </div>
                     </div>
 
@@ -269,41 +290,45 @@ const QuoteGenerator: React.FC = () => {
                         </label>
 
                         <div className="space-y-4">
-                            {/* Decking Selector */}
-                            <div className="space-y-2">
-                                <h4 className="text-[10px] uppercase font-bold text-slate-400">Decking Material</h4>
+                            {/* Decking Selector - Only for Docks */}
+                            {isDock && (
                                 <div className="space-y-2">
-                                    {DECKING_OPTIONS.map(dt => (
-                                        <div
-                                            key={dt.id}
-                                            onClick={() => setDeckingType(dt.id)}
-                                            className={`cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border-2 transition-all ${deckingType === dt.id ? 'bg-cyan-50 border-cyan-400' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${deckingType === dt.id ? 'border-cyan-500' : 'border-slate-300'}`}>
-                                                    {deckingType === dt.id && <div className="w-2 h-2 rounded-full bg-cyan-500" />}
+                                    <h4 className="text-[10px] uppercase font-bold text-slate-400">Decking Material</h4>
+                                    <div className="space-y-2">
+                                        {DECKING_OPTIONS.map(dt => (
+                                            <div
+                                                key={dt.id}
+                                                onClick={() => setDeckingType(dt.id)}
+                                                className={`cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border-2 transition-all ${deckingType === dt.id ? 'bg-cyan-50 border-cyan-400' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${deckingType === dt.id ? 'border-cyan-500' : 'border-slate-300'}`}>
+                                                        {deckingType === dt.id && <div className="w-2 h-2 rounded-full bg-cyan-500" />}
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-700">{dt.label}</span>
                                                 </div>
-                                                <span className="text-xs font-bold text-slate-700">{dt.label}</span>
+                                                <span className="text-[10px] font-mono text-slate-400 font-bold">+${dt.price}/sqf</span>
                                             </div>
-                                            <span className="text-[10px] font-mono text-slate-400 font-bold">+${dt.price}/sqf</span>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             {/* Item List */}
                             <div className="space-y-2">
                                 <h4 className="text-[10px] uppercase font-bold text-slate-400">Construction Items</h4>
                                 <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
-                                    {DOCK_ITEMS.map(item => {
-                                        const isSelected = selectedDockItems.includes(item.id);
-                                        const sqfVal = parseFloat(dimensions) || 0;
-                                        const lineTotal = item.unit === 'fixed' ? item.price : item.price * sqfVal;
+                                    {(isDock ? DOCK_ITEMS : RIP_RAP_ITEMS).map(item => {
+                                        const isSelected = isDock
+                                            ? selectedDockItems.includes(item.id)
+                                            : selectedRipRapItems.includes(item.id);
+                                        const quantity = parseFloat(dimensions) || 0;
+                                        const lineTotal = item.unit === 'fixed' ? item.price : item.price * quantity;
 
                                         return (
                                             <div
                                                 key={item.id}
-                                                onClick={() => toggleDockItem(item.id)}
+                                                onClick={() => toggleItem(item.id, isDock ? 'dock' : 'riprap')}
                                                 className={`cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border transition-all ${isSelected ? 'bg-white border-cyan-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60'}`}
                                             >
                                                 <div className="flex items-center gap-3">
@@ -312,7 +337,7 @@ const QuoteGenerator: React.FC = () => {
                                                     </div>
                                                     <div>
                                                         <div className="text-xs font-bold text-slate-700">{item.label}</div>
-                                                        <div className="text-[10px] text-slate-400">${item.price.toLocaleString()}{item.unit === 'sqf' ? '/sqf' : ''}</div>
+                                                        <div className="text-[10px] text-slate-400">${item.price.toLocaleString()}{item.unit === 'sqf' || item.unit === 'lf' ? `/${item.unit}` : ''}</div>
                                                     </div>
                                                 </div>
                                                 <div className="text-xs font-mono font-bold text-slate-600">${lineTotal.toLocaleString()}</div>
