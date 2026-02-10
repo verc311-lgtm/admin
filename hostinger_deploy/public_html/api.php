@@ -65,28 +65,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
 
         if (!empty($data['projects'])) {
-            $stmt = $pdo->prepare("INSERT INTO cva_projects (id, name, client, totalAmount, balance, paidAmount, totalExpenses, profit, startDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $pdo->prepare('INSERT INTO "cva_projects" ("id", "name", "client", "totalAmount", "balance", "paidAmount", "totalExpenses", "profit", "startDate", "status") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             foreach ($data['projects'] as $p) {
                 $stmt->execute([$p['id'], $p['name'], $p['client'], $p['totalAmount'], $p['balance'], $p['paidAmount'], $p['totalExpenses'] ?? 0, $p['profit'] ?? 0, $p['startDate'], $p['status']]);
             }
         }
 
         if (!empty($data['payments'])) {
-            $stmt = $pdo->prepare("INSERT INTO cva_payments (id, projectId, projectName, invoiceId, amount, date, method, reference) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $pdo->prepare('INSERT INTO "cva_payments" ("id", "projectId", "projectName", "invoiceId", "amount", "date", "method", "reference") VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
             foreach ($data['payments'] as $pay) {
                 $stmt->execute([$pay['id'], $pay['projectId'], $pay['projectName'], $pay['invoiceId'] ?? null, $pay['amount'], $pay['date'], $pay['method'], $pay['reference'] ?? '']);
             }
         }
 
         if (!empty($data['invoices'])) {
-            $stmt = $pdo->prepare("INSERT INTO cva_invoices (id, projectId, projectName, invoiceNumber, amount, date, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $pdo->prepare('INSERT INTO "cva_invoices" ("id", "projectId", "projectName", "invoiceNumber", "amount", "date", "status") VALUES (?, ?, ?, ?, ?, ?, ?)');
             foreach ($data['invoices'] as $inv) {
                 $stmt->execute([$inv['id'], $inv['projectId'], $inv['projectName'], $inv['invoiceNumber'], $inv['amount'], $inv['date'], $inv['status']]);
             }
         }
 
         if (!empty($data['users'])) {
-            $stmt = $pdo->prepare("INSERT INTO cva_users (id, username, password, name, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt = $pdo->prepare('INSERT INTO "cva_users" ("id", "username", "password", "name", "role", "createdAt") VALUES (?, ?, ?, ?, ?, ?)');
             foreach ($data['users'] as $u) {
                 $stmt->execute([$u['id'], $u['username'], $u['password'], $u['name'], $u['role'], $u['createdAt']]);
             }
