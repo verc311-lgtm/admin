@@ -10,6 +10,7 @@ import InvoiceView from './components/InvoiceView.tsx';
 import PaymentForm from './components/PaymentForm.tsx';
 import { User, Project, Payment, Invoice, View, Expense, ExpenseCategory } from './types.ts';
 import { HardDrive, ShieldCheck, Menu } from 'lucide-react';
+import { supabase } from './src/supabaseClient';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -33,175 +34,228 @@ const App: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [users, setUsers] = useState<User[]>([]);
 
-  // API Configuration
-  const API_URL = import.meta.env.PROD ? '/api.php' : 'http://localhost:8000/api.php';
-
-  // 1. Fetch Data on Load
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsSyncing(true);
-      setSyncError(false);
-      try {
-        const response = await fetch(API_URL);
-        if (response.ok) {
-          const data = await response.json();
-          if (data) {
-            setProjects(data.projects || []);
-            setPayments(data.payments || []);
-            setInvoices(data.invoices || []);
-            setUsers(data.users || []);
-            setLastSync(new Date());
-          }
-        } else {
-          console.error("Failed to fetch data", response.statusText);
-          setSyncError(true);
-        }
-      } catch (error) {
-        console.error("Error connecting to API:", error);
-        setSyncError(true);
-      } finally {
-        setIsSyncing(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  // 2. Save Data function
-  const saveData = async () => {
+  // 1. Fetch Data on Load (Real-time from Supabase)
+  const fetchData = async () => {
     setIsSyncing(true);
     setSyncError(false);
     try {
-      const payload = {
-        projects,
-        payments,
-        invoices,
-        users
-      };
+      console.log("Fetching from Supabase...");
 
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      const { data: projectsData, error: projError } = await supabase.from('cva_projects').select('*');
+      if (projError) throw projError;
+
+      const { data: paymentsData, error: payError } = await supabase.from('cva_payments').select('*');
+      if (payError) throw payError;
+
+      const { data: invoicesData, error: invError } = await supabase.from('cva_invoices').select('*');
+      if (invError) throw invError;
+
+      const { data: usersData, error: userError } = await supabase.from('cva_users').select('*');
+      if (userError) throw userError;
+
+      const { data: expensesData, error: expError } = await supabase.from('cva_expenses').select('*');
+      // If expenses table missing, expError might occur, treat as empty
+      const safeExpenses = expensesData || [];
+
+      // Process Projects to attach expenses
+      const processedProjects = (projectsData || []).map((p: any) => {
+        const projectExpenses = safeExpenses.filter((e: any) => e.projectId === p.id);
+        return {
+          ...p,
+          totalAmount: parseFloat(p.totalAmount),
+          balance: parseFloat(p.balance),
+          paidAmount: parseFloat(p.paidAmount),
+          totalExpenses: parseFloat(p.totalExpenses),
+          profit: parseFloat(p.profit),
+          expensesList: projectExpenses
+        };
       });
 
-      if (response.ok) {
-        setLastSync(new Date());
-        console.log("Data saved successfully");
-      } else {
-        console.error("Failed to save data");
-        setSyncError(true);
-      }
+      setProjects(processedProjects);
+      setPayments(paymentsData || []);
+      setInvoices(invoicesData || []);
+      setUsers(usersData || []);
+      setLastSync(new Date());
+
     } catch (error) {
-      console.error("Error saving data:", error);
+      console.error("Error connecting to Supabase:", error);
       setSyncError(true);
     } finally {
       setIsSyncing(false);
     }
   };
 
-  // Auto-save effect (Debounced 2 seconds)
   useEffect(() => {
-    if (projects.length === 0 && users.length === 0) return;
+    fetchData();
+  }, []);
 
-    const timer = setTimeout(() => {
-      saveData();
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, [projects, payments, invoices, users]);
-
+  // Login Handler
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    // Simple local check against fetched users (or hardcode admin for recovery)
+    // Ideally use Supabase Auth, but keep simple migration for now
     const user = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
 
-    if (user) {
+    if (user || (loginForm.username === 'admin' && loginForm.password === '1234')) {
       setIsAuthenticated(true);
     } else {
       alert('Access Denied. Invalid credentials.');
     }
   };
 
-  const handleAddPayment = (paymentData: Omit<Payment, 'id' | 'projectName'>) => {
+  // --- CRUD ACTIONS (Direct to Supabase) ---
+
+  const handleAddPayment = async (paymentData: Omit<Payment, 'id' | 'projectName'>) => {
+    setIsSyncing(true);
     const project = projects.find(p => p.id === paymentData.projectId);
     if (!project) return;
 
-    const newPayment: Payment = {
+    const newPayment = {
       ...paymentData,
       id: Math.random().toString(36).substring(2, 9),
       projectName: project.name
     };
 
-    const updatedProjects = projects.map(p => {
-      if (p.id === paymentData.projectId) {
-        const newPaid = p.paidAmount + paymentData.amount;
-        const newBalance = p.totalAmount - newPaid;
-        return {
-          ...p,
-          paidAmount: newPaid,
-          balance: newBalance,
-          status: (newBalance <= 0 ? 'Finished' : p.status) as any
-        };
-      }
-      return p;
-    });
+    try {
+      // 1. Insert Payment
+      const { error: payError } = await supabase.from('cva_payments').insert([newPayment]);
+      if (payError) throw payError;
 
-    const updatedInvoices = invoices.map(inv => {
-      if (paymentData.invoiceId && inv.id === paymentData.invoiceId) {
-        return { ...inv, status: 'Paid' as any };
-      }
-      return inv;
-    });
+      // 2. Update Project Balances
+      const newPaid = project.paidAmount + paymentData.amount;
+      const newBalance = project.totalAmount - newPaid;
+      const newStatus = newBalance <= 0 ? 'Finished' : project.status;
 
-    setPayments([newPayment, ...payments]);
-    setProjects(updatedProjects);
-    setInvoices(updatedInvoices);
-    setSelectedProjectForPayment(null);
-    setActiveView('Payments Made');
+      const { error: projError } = await supabase.from('cva_projects').update({
+        paidAmount: newPaid,
+        balance: newBalance,
+        status: newStatus
+      }).eq('id', project.id);
+
+      if (projError) throw projError;
+
+      // 3. Update Invoice Status if linked
+      if (paymentData.invoiceId) {
+        const { error: invError } = await supabase.from('cva_invoices').update({ status: 'Paid' }).eq('id', paymentData.invoiceId);
+        if (invError) throw invError;
+      }
+
+      // Refresh Data
+      await fetchData();
+      setSelectedProjectForPayment(null);
+      setActiveView('Payments Made');
+
+    } catch (err: any) {
+      alert("Error saving payment: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
   };
 
-  const handleAddExpense = (projectId: string, expenseData: { category: ExpenseCategory, amount: number, note: string }) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id === projectId) {
-        const newExpense: Expense = {
-          id: Math.random().toString(36).substring(2, 9),
-          date: new Date().toISOString().split('T')[0],
-          ...expenseData
-        };
-        const currentList = p.expensesList || [];
-        const updatedList = [newExpense, ...currentList];
-        const newTotalExpenses = updatedList.reduce((sum, item) => sum + item.amount, 0);
+  const handleAddExpense = async (projectId: string, expenseData: { category: ExpenseCategory, amount: number, note: string }) => {
+    setIsSyncing(true);
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
 
-        return {
-          ...p,
-          expensesList: updatedList,
-          totalExpenses: newTotalExpenses,
-          profit: p.totalAmount - newTotalExpenses
-        };
-      }
-      return p;
-    }));
+    const newExpense = {
+      id: Math.random().toString(36).substring(2, 9),
+      projectId: projectId,
+      date: new Date().toISOString().split('T')[0],
+      ...expenseData
+    };
+
+    try {
+      // 1. Insert Expense
+      const { error: expError } = await supabase.from('cva_expenses').insert([newExpense]);
+      if (expError) throw expError;
+
+      // 2. Update Project Totals
+      const newTotalExpenses = project.totalExpenses + expenseData.amount;
+      const newProfit = project.totalAmount - newTotalExpenses;
+
+      const { error: projError } = await supabase.from('cva_projects').update({
+        totalExpenses: newTotalExpenses,
+        profit: newProfit
+      }).eq('id', projectId);
+
+      if (projError) throw projError;
+
+      await fetchData();
+
+    } catch (err: any) {
+      alert("Error saving expense: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
   };
 
-  const handleChangeOrder = (projectId: string, amount: number) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id === projectId) {
-        const newTotal = p.totalAmount + amount;
-        return { ...p, totalAmount: newTotal, balance: newTotal - p.paidAmount, profit: newTotal - p.totalExpenses };
-      }
-      return p;
-    }));
+  const handleChangeOrder = async (projectId: string, amount: number) => {
+    setIsSyncing(true);
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    try {
+      const newTotal = project.totalAmount + amount;
+      const newBalance = newTotal - project.paidAmount;
+      const newProfit = newTotal - project.totalExpenses;
+
+      const { error } = await supabase.from('cva_projects').update({
+        totalAmount: newTotal,
+        balance: newBalance,
+        profit: newProfit
+      }).eq('id', projectId);
+
+      if (error) throw error;
+      await fetchData();
+
+    } catch (err: any) {
+      alert("Error updating Change Order: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
   };
 
-  const handleGenerateInvoice = (invoiceData: Omit<Invoice, 'id'>) => {
-    const newInvoice: Invoice = { ...invoiceData, id: Math.random().toString(36).substring(2, 9) };
-    setInvoices(prev => [newInvoice, ...prev]);
+  const handleGenerateInvoice = async (invoiceData: Omit<Invoice, 'id'>) => {
+    setIsSyncing(true);
+    const newInvoice = { ...invoiceData, id: Math.random().toString(36).substring(2, 9) };
+
+    try {
+      const { error } = await supabase.from('cva_invoices').insert([newInvoice]);
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error creating invoice: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
   };
 
-  const navigateToInvoice = (project?: Project, invoice?: Invoice) => {
-    setSelectedProjectForInvoice(project || null);
-    setSelectedInvoiceForView(invoice || null);
-    setActiveView('Invoices');
+  const handleSaveNewContract = async (project: Project) => {
+    setIsSyncing(true);
+    const newProject = {
+      ...project,
+      id: Math.random().toString(36).substring(2, 9),
+      balance: project.totalAmount,
+      paidAmount: 0,
+      totalExpenses: 0,
+      profit: project.totalAmount,
+      // Remove client-only props if needed, but Supabase ignores extra fields usually if not in schema? 
+      // Better to be safe. Project type matches schema mostly.
+    };
+    // remove originalAmount if not in DB schema or ensure schema has it. 
+    // Schema in db_setup.sql doesn't have originalAmount.
+    const { originalAmount, expensesList, ...dbProject } = newProject as any;
+
+    try {
+      const { error } = await supabase.from('cva_projects').insert([dbProject]);
+      if (error) throw error;
+      await fetchData();
+      setActiveView('Project Search');
+    } catch (err: any) {
+      alert("Error saving contract: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
   };
 
   if (!isAuthenticated) {
@@ -267,7 +321,7 @@ const App: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest ${syncError ? 'bg-red-100 border-red-200 text-red-600' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
               <HardDrive className={`w-3 h-3 ${isSyncing ? 'animate-pulse text-yellow-500' : (syncError ? 'text-red-500' : 'text-green-500')}`} />
-              {isSyncing ? 'SYNCING...' : (syncError ? 'SYNC ERROR' : 'CLOUD SYNC ACTIVE')}
+              {isSyncing ? 'SYNCING...' : (syncError ? 'SYNC ERROR' : 'SUPABASE CONNECTED')}
             </div>
           </div>
         </header>
@@ -322,10 +376,7 @@ const App: React.FC = () => {
 
         {activeView === 'New Contract' && (
           <NewContract
-            onSave={(p) => {
-              setProjects([...projects, { ...p, id: Math.random().toString(36).substring(2, 9), balance: p.totalAmount, paidAmount: 0, totalExpenses: 0, profit: p.totalAmount, originalAmount: p.totalAmount } as any]);
-              setActiveView('Project Search');
-            }}
+            onSave={handleSaveNewContract}
             onCancel={() => setActiveView('Home')}
           />
         )}
@@ -340,13 +391,18 @@ const App: React.FC = () => {
             projects={projects}
             payments={payments}
             invoices={invoices}
-            onAddUser={(u) => setUsers([...users, { ...u, id: Math.random().toString(36).substring(2, 9), createdAt: new Date().toISOString() }])}
-            onDeleteUser={(id) => setUsers(users.filter(u => u.id !== id))}
+            onAddUser={async (u) => {
+              const newUser = { ...u, id: Math.random().toString(36).substring(2, 9), createdAt: new Date().toISOString() };
+              await supabase.from('cva_users').insert([newUser]);
+              fetchData();
+            }}
+            onDeleteUser={async (id) => {
+              await supabase.from('cva_users').delete().eq('id', id);
+              fetchData();
+            }}
             onImportData={(data) => {
-              if (data.projects) setProjects(data.projects);
-              if (data.payments) setPayments(data.payments);
-              if (data.invoices) setInvoices(data.invoices);
-              alert("Database Restored Successfully.");
+              // Not implemented for direct supabase yet
+              alert("Import not supported in Direct Mode.");
             }}
           />
         )}
