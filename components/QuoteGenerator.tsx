@@ -48,7 +48,6 @@ const QuoteGenerator: React.FC = () => {
         : 0;
 
     useEffect(() => {
-        // Update estimated total in UI in real-time if not generating
         if (!isGenerating) {
             setEstimatedTotal(currentCalculatedTotal);
         }
@@ -87,23 +86,23 @@ const QuoteGenerator: React.FC = () => {
             if (deckName) finalMaterials.push(deckName);
 
             const prompt = `
-          Role: You are an expert Marine Construction Estimator for "Coastal VA Marine Construction".
-          
-          Task: Create a "Rapid Estimate" scope of work description.
+          Role: You are a Senior Estimator for "Coastal VA Marine Construction". Write a formal "Preliminary Construction Proposal".
           
           Project Details:
+          - Client: ${clientName || 'Valued Client'}
           - Type: ${projectType}
-          - Size/Dimensions: ${dimensions} SQF
+          - Size: ${dimensions} SQF
           - Materials Included: ${finalMaterials.join(', ')}
-          - Note: Price is verified as $${finalPrice.toLocaleString()}.
           
-          Output Requirements:
-          1. **Scope of Work**: Write a professional, detailed paragraph describing exactly what will be done based ONLY on the included materials. Use industry standard language. 
-          2. **Total Price**: Use the provided calculated price of $${finalPrice}.
+          Directives:
+          1. **Tone**: Professional, authoritative, legalistic, and high-value.
+          2. **Exclusions Section**: You MUST include a distinct section titled "STANDARD EXCLUSIONS" listing: Permits, Engineering, Soil Tests, Hazardous Material Removal, Hidden Obstructions.
+          3. **Scope Entry**: Write a single, comprehensive paragraph describing the work to be performed based on the materials listed.
           
           Return JSON ONLY:
           {
-            "scopeOfWork": "The detailed description...",
+            "scopeOfWork": "The detailed professional scope...",
+            "exclusions": "Permits, Engineering, Soil Tests, Hidden Obstructions...",
             "totalPrice": ${finalPrice}
           }
         `;
@@ -117,7 +116,7 @@ const QuoteGenerator: React.FC = () => {
                 body: JSON.stringify({
                     model: "gpt-4o",
                     messages: [
-                        { role: "system", content: "You are a helpful construction estimator. Output JSON only." },
+                        { role: "system", content: "You are a senior construction estimator. Output JSON only." },
                         { role: "user", content: prompt }
                     ],
                     temperature: 0.3
@@ -131,7 +130,7 @@ const QuoteGenerator: React.FC = () => {
             const jsonMatch = content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
-                setScopeOfWork(parsed.scopeOfWork);
+                setScopeOfWork(parsed.scopeOfWork + "\n\n**STANDARD EXCLUSIONS**:\n" + (parsed.exclusions || "Permits, Engineering, Soil Tests."));
                 setEstimatedTotal(finalPrice);
             } else {
                 throw new Error("Failed to parse AI response JSON.");
@@ -160,7 +159,7 @@ const QuoteGenerator: React.FC = () => {
         doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(73, 204, 249);
-        doc.text("Rapid Project Estimate", pageWidth / 2, 28, { align: 'center' });
+        doc.text("Preliminary Construction Proposal", pageWidth / 2, 28, { align: 'center' });
 
         // Client & Date
         doc.setTextColor(0);
@@ -173,7 +172,7 @@ const QuoteGenerator: React.FC = () => {
         // Scope of Work
         doc.setFontSize(14);
         doc.setFont("helvetica", "bold");
-        doc.text("Scope of Work", 14, 85);
+        doc.text("Scope of Work & Approach", 14, 85);
 
         doc.setFontSize(11);
         doc.setFont("helvetica", "normal");
@@ -190,7 +189,7 @@ const QuoteGenerator: React.FC = () => {
         doc.setFontSize(16);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(10, 25, 47);
-        doc.text("Total Estimated Investment", pageWidth / 2, priceY + 15, { align: 'center' });
+        doc.text("Total Proposed Investment", pageWidth / 2, priceY + 15, { align: 'center' });
 
         doc.setFontSize(24);
         doc.setTextColor(0, 100, 0); // Green
@@ -200,10 +199,10 @@ const QuoteGenerator: React.FC = () => {
         doc.setFontSize(9);
         doc.setTextColor(100);
         doc.setFont("helvetica", "italic");
-        doc.text("DISCLAIMER: This is a RAPID ESTIMATE based on regional averages and provided dimensions.", pageWidth / 2, pageHeight - 20, { align: 'center' });
-        doc.text("Final price is subject to detailed site inspection and material market fluctuation.", pageWidth / 2, pageHeight - 15, { align: 'center' });
+        doc.text("NOTE: This proposal is preliminary. Final price subject to site inspection and engineering.", pageWidth / 2, pageHeight - 20, { align: 'center' });
+        doc.text("Permits and Engineering are excluded unless explicitly itemized.", pageWidth / 2, pageHeight - 15, { align: 'center' });
 
-        doc.save(`Estimate_${clientName || 'Project'}.pdf`);
+        doc.save(`Proposal_${clientName || 'Project'}.pdf`);
     };
 
     return (
@@ -213,9 +212,9 @@ const QuoteGenerator: React.FC = () => {
                 <div className="flex items-center gap-5">
                     <div className="bg-[#0a192f] p-4 rounded-2xl text-cyan-400"><Bot className="w-8 h-8" /></div>
                     <div>
-                        <h2 className="text-3xl font-black text-[#0a192f] uppercase italic tracking-tighter">AI Rapid Estimator</h2>
+                        <h2 className="text-3xl font-black text-[#0a192f] uppercase italic tracking-tighter">Proposal Generator</h2>
                         <p className="text-slate-400 font-bold uppercase tracking-widest text-xs mt-1">
-                            Verified Interactive Pricing
+                            Preliminary Construction Proposal
                         </p>
                     </div>
                 </div>
@@ -324,7 +323,10 @@ const QuoteGenerator: React.FC = () => {
                             </div>
 
                             <div className="p-4 bg-slate-900 rounded-xl flex justify-between items-center text-white">
-                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Estimated Total</span>
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Total Project Investment</span>
+                                    <span className="text-[10px] text-slate-500 italic">Includes 10% Misc/Overhead</span>
+                                </div>
                                 <span className="text-xl font-black text-cyan-400">${currentCalculatedTotal.toLocaleString()}</span>
                             </div>
                         </div>
@@ -338,32 +340,32 @@ const QuoteGenerator: React.FC = () => {
 
                     <button onClick={handleGenerateQuote} disabled={isGenerating || !apiKey} className="w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 shadow-xl mt-4">
                         {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5 text-cyan-400" />}
-                        {isGenerating ? 'Calculating...' : 'Confirm & Generate Scope'}
+                        {isGenerating ? 'Calculating...' : 'Generate Preliminary Proposal'}
                     </button>
                 </div>
 
                 {/* OUTPUTS */}
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col h-full">
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="font-black text-[#0a192f] uppercase tracking-widest text-sm">Estimate Results</h3>
+                        <h3 className="font-black text-[#0a192f] uppercase tracking-widest text-sm">Proposal Results</h3>
                         <button onClick={generatePDF} disabled={!scopeOfWork} className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 shadow-lg disabled:opacity-50">
-                            <Download className="w-4 h-4" /> Export PDF
+                            <Download className="w-4 h-4" /> Export Proposal
                         </button>
                     </div>
 
                     <div className="flex-1 space-y-6">
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Scope of Work (AI Generated)</label>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Scope of Work & Exclusions</label>
                             <textarea
                                 value={scopeOfWork}
                                 onChange={(e) => setScopeOfWork(e.target.value)}
                                 className="w-full h-64 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-medium text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed"
-                                placeholder="Generated scope will appear here..."
+                                placeholder="Generated proposal text will appear here..."
                             />
                         </div>
 
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Verified Total Price</label>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Final Proposed Price (Incl. Overlay)</label>
                             <div className="relative">
                                 <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
                                 <input
@@ -373,7 +375,7 @@ const QuoteGenerator: React.FC = () => {
                                     className="w-full bg-cyan-50/50 border-2 border-cyan-100 text-cyan-700 border-2 rounded-2xl pl-10 pr-5 py-4 font-black text-3xl outline-none focus:border-cyan-400"
                                 />
                             </div>
-                            <p className="text-[10px] text-slate-400 font-bold mt-2 ml-2">Based on current selection + labor + equipment.</p>
+                            <p className="text-[10px] text-slate-400 font-bold mt-2 ml-2">Includes Materials, Labor, Equipment, and Misc/Overhead.</p>
                         </div>
                     </div>
                 </div>

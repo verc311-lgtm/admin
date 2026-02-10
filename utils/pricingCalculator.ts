@@ -36,15 +36,15 @@ export const calculateInteractiveDockPrice = (
     selectedItemIds: string[],
     deckingType: string
 ): number => {
-    let total = 0;
+    let subtotal = 0;
 
     // 1. Sum Selected Standard Items
     DOCK_ITEMS.forEach(item => {
         if (selectedItemIds.includes(item.id)) {
             if (item.unit === 'fixed') {
-                total += item.price;
+                subtotal += item.price;
             } else {
-                total += (item.price * sqf);
+                subtotal += (item.price * sqf);
             }
         }
     });
@@ -52,8 +52,11 @@ export const calculateInteractiveDockPrice = (
     // 2. Add Decking (Selected Type)
     const deckOption = DECKING_OPTIONS.find(d => d.id === deckingType);
     if (deckOption) {
-        total += (deckOption.price * sqf);
+        subtotal += (deckOption.price * sqf);
     }
 
-    return total;
+    // 3. Apply 10% Markup (Overhead / Misc)
+    const totalWithMarkup = subtotal * 1.10;
+
+    return Math.ceil(totalWithMarkup);
 };
