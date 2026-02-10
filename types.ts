@@ -32,7 +32,7 @@ export interface User {
 }
 
 
-export type ExpenseCategory = 'Staff Hour' | 'Insurance' | 'Gas/Fuel' | 'Tools' | 'Transportation' | 'Machines' | 'Materials' | 'Miscellaneous';
+export type ExpenseCategory = 'Staff Hour' | 'Insurance' | 'Gas/Fuel' | 'Tools' | 'Equipment' | 'Materials' | 'Miscellaneous';
 
 export interface Expense {
   id: string;

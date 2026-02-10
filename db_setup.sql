@@ -51,6 +51,17 @@ CREATE TABLE IF NOT EXISTS `cva_invoices` (
   KEY `projectId` (`projectId`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `cva_expenses` (
+  `id` varchar(50) NOT NULL,
+  `projectId` varchar(50) NOT NULL,
+  `category` varchar(50) NOT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `date` date NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `projectId` (`projectId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Insertar usuario administrador por defecto (admin / 1234)
 INSERT IGNORE INTO `cva_users` (`id`, `username`, `password`, `name`, `role`, `createdAt`) 
 VALUES ('1', 'admin', '1234', 'Coastal Admin', 'Admin', NOW());

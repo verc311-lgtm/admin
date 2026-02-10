@@ -260,7 +260,7 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
     doc.save(`Invoice_${invoice.invoiceNumber}.pdf`);
   };
 
-  const expenseCategories: ExpenseCategory[] = ['Staff Hour', 'Insurance', 'Gas/Fuel', 'Tools', 'Transportation', 'Machines', 'Materials', 'Miscellaneous'];
+  const expenseCategories: ExpenseCategory[] = ['Staff Hour', 'Insurance', 'Gas/Fuel', 'Tools', 'Equipment', 'Materials', 'Miscellaneous'];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
