@@ -52,6 +52,18 @@ CREATE TABLE IF NOT EXISTS "cva_invoices" (
 
 CREATE INDEX IF NOT EXISTS "idx_invoices_projectId" ON "cva_invoices" ("projectId");
 
+CREATE TABLE IF NOT EXISTS "cva_expenses" (
+  "id" varchar(50) NOT NULL,
+  "projectId" varchar(50) NOT NULL,
+  "category" varchar(50) NOT NULL,
+  "note" varchar(255) DEFAULT NULL,
+  "amount" decimal(15,2) NOT NULL,
+  "date" date NOT NULL,
+  PRIMARY KEY ("id")
+);
+
+CREATE INDEX IF NOT EXISTS "idx_expenses_projectId" ON "cva_expenses" ("projectId");
+
 -- Insert default admin user
 INSERT INTO "cva_users" ("id", "username", "password", "name", "role", "createdAt") 
 VALUES ('1', 'admin', '1234', 'Coastal Admin', 'Admin', NOW())
