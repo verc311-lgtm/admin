@@ -19,7 +19,8 @@ const QuoteGenerator: React.FC = () => {
     const [clientAddress, setClientAddress] = useState('');
     const [projectType, setProjectType] = useState(PROJECT_TYPES[0]);
     const [dimensions, setDimensions] = useState('');
-    const [additionalExpenses, setAdditionalExpenses] = useState('');
+    const [otherWorkCost, setOtherWorkCost] = useState('');
+    const [otherWorkDescription, setOtherWorkDescription] = useState('');
 
     // Interactive State
     const [deckingType, setDeckingType] = useState(DECKING_OPTIONS[0].id);
@@ -53,7 +54,7 @@ const QuoteGenerator: React.FC = () => {
     const isDock = projectType === "Pier / Dock";
     const isFloatingDock = projectType === "Floating Dock";
     const qty = parseFloat(dimensions);
-    const expenses = parseFloat(additionalExpenses) || 0;
+    const expenses = parseFloat(otherWorkCost) || 0;
 
     const currentCalculatedTotal = !isNaN(qty)
         ? calculateInteractivePrice(
@@ -69,7 +70,7 @@ const QuoteGenerator: React.FC = () => {
         if (!isGenerating) {
             setEstimatedTotal(currentCalculatedTotal);
         }
-    }, [dimensions, additionalExpenses, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, deckingType, projectType]);
+    }, [dimensions, otherWorkCost, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, deckingType, projectType]);
 
     const handleGenerateQuote = async () => {
         setErrorMsg('');
@@ -86,7 +87,7 @@ const QuoteGenerator: React.FC = () => {
         setIsGenerating(true);
         let finalPrice = 0;
         let finalMaterials: string[] = [];
-        const expenses = parseFloat(additionalExpenses) || 0;
+        const expenses = parseFloat(otherWorkCost) || 0;
 
         try {
             const qty = parseFloat(dimensions);
@@ -113,7 +114,7 @@ const QuoteGenerator: React.FC = () => {
             }
 
             if (expenses > 0) {
-                finalMaterials.push(`Additional Expenses: $${expenses.toLocaleString()}`);
+                finalMaterials.push(`Other Work: ${otherWorkDescription || 'Misc'} ($${expenses.toLocaleString()})`);
             }
 
             const prompt = `
@@ -125,7 +126,7 @@ const QuoteGenerator: React.FC = () => {
           - Type: ${projectType}
           - Size: ${dimensions} ${!isDock && !isFloatingDock ? 'Linear Feet' : 'SQF'}
           - Materials Included: ${finalMaterials.join(', ')}
-          ${expenses > 0 ? `- Additional Inclusions/Expenses: $${expenses.toLocaleString()}` : ''}
+          ${expenses > 0 ? `- Other Work Included: ${otherWorkDescription} ($${expenses.toLocaleString()})` : ''}
           
           Directives:
           1. **Tone**: Professional, authoritative, legalistic, and high-value.
@@ -179,73 +180,113 @@ const QuoteGenerator: React.FC = () => {
     };
 
     const generatePDF = () => {
-        const doc = new jsPDF();
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
+        // Use Letter size (8.5 x 11 in) by default in jsPDF ('letter')
+        const doc = new jsPDF({
+            format: 'letter',
+            unit: 'mm'
+        });
+
+        const pageWidth = doc.internal.pageSize.getWidth(); // ~215.9mm
+        const pageHeight = doc.internal.pageSize.getHeight(); // ~279.4mm
+        const margin = 14;
 
         // Header
         doc.setFillColor(10, 25, 47);
-        doc.rect(0, 0, pageWidth, 40, 'F');
-        doc.setFontSize(22);
+        doc.rect(0, 0, pageWidth, 35, 'F'); // Compact header
+
+        doc.setFontSize(18);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(255, 255, 255);
-        doc.text("COASTAL VA MARINE CONSTRUCTION", pageWidth / 2, 20, { align: 'center' });
-        doc.setFontSize(10);
+        doc.text("COASTAL VA MARINE CONSTRUCTION", pageWidth / 2, 18, { align: 'center' });
+
+        doc.setFontSize(9);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(73, 204, 249);
-        doc.text("Preliminary Construction Proposal", pageWidth / 2, 28, { align: 'center' });
+        doc.text("Preliminary Construction Proposal", pageWidth / 2, 26, { align: 'center' });
 
-        // Client & Date
+        // Client Info Block
+        let currentY = 50;
         doc.setTextColor(0);
-        doc.setFontSize(12);
-        doc.text(`Client: ${clientName || 'Valued Client'}`, 14, 50);
-        doc.text(`Address: ${clientAddress || 'N/A'}`, 14, 56);
-        doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - 14, 50, { align: 'right' });
-        doc.text(`Project Type: ${projectType}`, 14, 64);
-        doc.text(`Dimensions: ${dimensions} ${!isDock && !isFloatingDock ? 'Linear Feet' : 'SQF'}`, 14, 72);
+        doc.setFontSize(11);
+
+        doc.text(`Client: ${clientName || 'Valued Client'}`, margin, currentY);
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - margin, currentY, { align: 'right' });
+        currentY += 6;
+        doc.text(`Address: ${clientAddress || 'N/A'}`, margin, currentY);
+        currentY += 8;
+        doc.text(`Project: ${projectType}`, margin, currentY);
+        currentY += 6;
+        doc.text(`Size: ${dimensions} ${!isDock && !isFloatingDock ? 'Linear Feet' : 'SQF'}`, margin, currentY);
+
+        currentY += 12;
 
         // Scope of Work
-        doc.setFontSize(14);
+        doc.setFontSize(13);
         doc.setFont("helvetica", "bold");
-        doc.text("Scope of Work & Approach", 14, 85);
+        doc.text("Scope of Work & Approach", margin, currentY);
+        currentY += 8;
 
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(50);
-        const splitScope = doc.splitTextToSize(scopeOfWork, pageWidth - 28);
-        doc.text(splitScope, 14, 95);
 
-        // Additional Expenses Display
-        const expenses = parseFloat(additionalExpenses) || 0;
-        let expensesY = 95 + (splitScope.length * 6) + 10;
+        // Calculate available height for text to avoid pushing total off page
+        // Reserve space for Total block (~50mm) and Footer (~20mm)
+        // Max text height = pageHeight - currentY - 70mm
+        const splitScope = doc.splitTextToSize(scopeOfWork, pageWidth - (margin * 2));
+        doc.text(splitScope, margin, currentY);
 
+        currentY += (splitScope.length * 5) + 10;
+
+        // "Other Work" Section if applicable
+        const expenses = parseFloat(otherWorkCost) || 0;
         if (expenses > 0) {
+            // Check if we need a new page
+            if (currentY > pageHeight - 60) {
+                doc.addPage();
+                currentY = 20;
+            }
+
             doc.setFont("helvetica", "bold");
-            doc.text(`Additional Expenses Included: $${expenses.toLocaleString()}`, 14, expensesY);
-            expensesY += 10;
+            doc.setTextColor(0);
+            doc.text("Other Work Included:", margin, currentY);
+            currentY += 5;
+
+            doc.setFont("helvetica", "normal");
+            doc.text(`${otherWorkDescription || 'Misc. Items'}`, margin, currentY);
+            doc.text(`$${expenses.toLocaleString()}`, pageWidth - margin, currentY, { align: 'right' });
+            currentY += 10;
         }
 
-        // Total Price
-        const priceY = expensesY + 10;
+        // Check space for total block
+        if (currentY > pageHeight - 50) {
+            doc.addPage();
+            currentY = 20;
+        }
+
+        // Total Price Block
         doc.setFillColor(240, 248, 255);
         doc.setDrawColor(73, 204, 249);
-        doc.roundedRect(14, priceY, pageWidth - 28, 40, 3, 3, 'FD');
+        doc.roundedRect(margin, currentY, pageWidth - (margin * 2), 35, 3, 3, 'FD');
 
-        doc.setFontSize(16);
+        const boxCenter = currentY + 17.5;
+
+        doc.setFontSize(14);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(10, 25, 47);
-        doc.text("Total Proposed Investment", pageWidth / 2, priceY + 15, { align: 'center' });
+        doc.text("Total Proposed Investment", pageWidth / 2, boxCenter - 5, { align: 'center' });
 
-        doc.setFontSize(24);
+        doc.setFontSize(20);
         doc.setTextColor(0, 100, 0); // Green
-        doc.text(`$${estimatedTotal.toLocaleString()}`, pageWidth / 2, priceY + 30, { align: 'center' });
+        doc.text(`$${estimatedTotal.toLocaleString()}`, pageWidth / 2, boxCenter + 8, { align: 'center' });
 
-        // Disclaimer
-        doc.setFontSize(9);
+        // Disclaimer (Footer)
+        const footerY = pageHeight - 15;
+        doc.setFontSize(8);
         doc.setTextColor(100);
         doc.setFont("helvetica", "italic");
-        doc.text("NOTE: This proposal is preliminary. Final price subject to site inspection and engineering.", pageWidth / 2, pageHeight - 20, { align: 'center' });
-        doc.text("Permits and Engineering are excluded unless explicitly itemized.", pageWidth / 2, pageHeight - 15, { align: 'center' });
+        doc.text("NOTE: This proposal is preliminary. Final price subject to site inspection and engineering.", pageWidth / 2, footerY, { align: 'center' });
+        doc.text("Permits and Engineering are excluded unless explicitly itemized.", pageWidth / 2, footerY + 4, { align: 'center' });
 
         doc.save(`Proposal_${clientName || 'Project'}.pdf`);
     };
@@ -253,11 +294,11 @@ const QuoteGenerator: React.FC = () => {
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
             {/* Header & Settings */}
-            <div className="flex justify-between items-center bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
+            <div className="flex flex-col md:flex-row justify-between items-center bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 gap-4">
                 <div className="flex items-center gap-5">
                     <div className="bg-[#0a192f] p-4 rounded-2xl text-cyan-400"><Bot className="w-8 h-8" /></div>
                     <div>
-                        <h2 className="text-3xl font-black text-[#0a192f] uppercase italic tracking-tighter">Proposal Generator</h2>
+                        <h2 className="text-2xl md:text-3xl font-black text-[#0a192f] uppercase italic tracking-tighter">Proposal Generator</h2>
                         <p className="text-slate-400 font-bold uppercase tracking-widest text-xs mt-1">
                             Preliminary Construction Proposal
                         </p>
@@ -287,10 +328,10 @@ const QuoteGenerator: React.FC = () => {
 
             <div className="grid md:grid-cols-2 gap-8">
                 {/* INPUTS */}
-                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+                <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
                     <h3 className="font-black text-[#0a192f] uppercase tracking-widest text-sm mb-4">Project Parameters</h3>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Client Name</label>
                             <input value={clientName} onChange={(e) => setClientName(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="Client Name" />
@@ -301,7 +342,7 @@ const QuoteGenerator: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Project Type</label>
                             <select value={projectType} onChange={(e) => setProjectType(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400">
@@ -314,20 +355,33 @@ const QuoteGenerator: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Additional Expenses Input */}
-                    <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Additional Expenses / Inclusions ($)</label>
-                        <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-                            <input
-                                type="number"
-                                value={additionalExpenses}
-                                onChange={(e) => setAdditionalExpenses(e.target.value)}
-                                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-8 pr-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400"
-                                placeholder="0.00"
-                            />
+                    {/* Other Work / Adjustments */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 flex items-center gap-2">
+                            <Plus className="w-3 h-3" /> Other Work / Adjustments
+                        </label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <input
+                                    type="text"
+                                    value={otherWorkDescription}
+                                    onChange={(e) => setOtherWorkDescription(e.target.value)}
+                                    className="w-full bg-white border-2 border-transparent rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 outline-none focus:border-cyan-400 transition-all placeholder:font-normal"
+                                    placeholder="Description (e.g. Demolition)"
+                                />
+                            </div>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</span>
+                                <input
+                                    type="number"
+                                    value={otherWorkCost}
+                                    onChange={(e) => setOtherWorkCost(e.target.value)}
+                                    className="w-full bg-white border-2 border-transparent rounded-xl pl-6 pr-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400 transition-all"
+                                    placeholder="0.00"
+                                />
+                            </div>
                         </div>
-                        <p className="text-[9px] text-slate-400 font-bold mt-1 ml-2">Cost will be added before markup (10%).</p>
+                        <p className="text-[8px] text-slate-400 font-bold ml-2">Applies to total before markup.</p>
                     </div>
 
                     <div>
