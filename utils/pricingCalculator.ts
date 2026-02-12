@@ -57,6 +57,7 @@ export const FLOATING_DOCK_ITEMS: PricingItem[] = [
     { id: 'pile', label: 'Pile', price: 6.00, category: 'material', isDefault: true, unit: 'sqf' },
     { id: 'yp_deck', label: 'Yellow Pine Deck', price: 3.00, category: 'decking', isDefault: true, unit: 'sqf' },
     { id: 'weardeck', label: 'WearDeck', price: 13.00, category: 'decking', isDefault: false, unit: 'sqf' },
+    { id: 'labor_fd', label: 'Installation Labor', price: 20.00, category: 'labor', isDefault: true, unit: 'sqf' },
     { id: 'machinery_fd', label: 'Mobilization & Equipment', price: 5000.00, category: 'fee', isDefault: true, unit: 'fixed' },
 ];
 
@@ -64,7 +65,8 @@ export const calculateInteractivePrice = (
     type: 'dock' | 'riprap' | 'floating_dock',
     quantity: number, // sqf or lf
     selectedItemIds: string[],
-    deckingType?: string
+    deckingType?: string,
+    additionalExpenses: number = 0
 ): number => {
     let subtotal = 0;
     let items: PricingItem[] = [];
@@ -92,7 +94,12 @@ export const calculateInteractivePrice = (
         }
     }
 
-    // 3. Apply 10% Markup (Overhead / Misc)
+    // 3. Add Additional Expenses (Direct add, before markup? Usually expenses are part of cost, so markup applies. 
+    // If it's a direct fee, maybe not. Assuming it's cost to be marked up for now to be safe for profit, 
+    // OR if it's a final adjustment. Let's add it to subtotal so it gets markup.)
+    subtotal += additionalExpenses;
+
+    // 4. Apply 10% Markup (Overhead / Misc)
     const totalWithMarkup = subtotal * 1.10;
 
     return Math.ceil(totalWithMarkup);

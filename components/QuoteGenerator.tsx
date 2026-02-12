@@ -19,6 +19,7 @@ const QuoteGenerator: React.FC = () => {
     const [clientAddress, setClientAddress] = useState('');
     const [projectType, setProjectType] = useState(PROJECT_TYPES[0]);
     const [dimensions, setDimensions] = useState('');
+    const [additionalExpenses, setAdditionalExpenses] = useState('');
 
     // Interactive State
     const [deckingType, setDeckingType] = useState(DECKING_OPTIONS[0].id);
@@ -52,13 +53,15 @@ const QuoteGenerator: React.FC = () => {
     const isDock = projectType === "Pier / Dock";
     const isFloatingDock = projectType === "Floating Dock";
     const qty = parseFloat(dimensions);
+    const expenses = parseFloat(additionalExpenses) || 0;
 
     const currentCalculatedTotal = !isNaN(qty)
         ? calculateInteractivePrice(
             isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : 'riprap'),
             qty,
             isDock ? selectedDockItems : (isFloatingDock ? selectedFloatingDockItems : selectedRipRapItems),
-            isDock ? deckingType : undefined
+            isDock ? deckingType : undefined,
+            expenses
         )
         : 0;
 
@@ -66,7 +69,7 @@ const QuoteGenerator: React.FC = () => {
         if (!isGenerating) {
             setEstimatedTotal(currentCalculatedTotal);
         }
-    }, [dimensions, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, deckingType, projectType]);
+    }, [dimensions, additionalExpenses, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, deckingType, projectType]);
 
     const handleGenerateQuote = async () => {
         setErrorMsg('');
@@ -83,6 +86,7 @@ const QuoteGenerator: React.FC = () => {
         setIsGenerating(true);
         let finalPrice = 0;
         let finalMaterials: string[] = [];
+        const expenses = parseFloat(additionalExpenses) || 0;
 
         try {
             const qty = parseFloat(dimensions);
@@ -108,6 +112,10 @@ const QuoteGenerator: React.FC = () => {
                     .map(i => i.label);
             }
 
+            if (expenses > 0) {
+                finalMaterials.push(`Additional Expenses: $${expenses.toLocaleString()}`);
+            }
+
             const prompt = `
           Role: You are a Senior Estimator for "Coastal VA Marine Construction". Write a formal "Preliminary Construction Proposal".
           
@@ -117,6 +125,7 @@ const QuoteGenerator: React.FC = () => {
           - Type: ${projectType}
           - Size: ${dimensions} ${!isDock && !isFloatingDock ? 'Linear Feet' : 'SQF'}
           - Materials Included: ${finalMaterials.join(', ')}
+          ${expenses > 0 ? `- Additional Inclusions/Expenses: $${expenses.toLocaleString()}` : ''}
           
           Directives:
           1. **Tone**: Professional, authoritative, legalistic, and high-value.
@@ -206,8 +215,18 @@ const QuoteGenerator: React.FC = () => {
         const splitScope = doc.splitTextToSize(scopeOfWork, pageWidth - 28);
         doc.text(splitScope, 14, 95);
 
+        // Additional Expenses Display
+        const expenses = parseFloat(additionalExpenses) || 0;
+        let expensesY = 95 + (splitScope.length * 6) + 10;
+
+        if (expenses > 0) {
+            doc.setFont("helvetica", "bold");
+            doc.text(`Additional Expenses Included: $${expenses.toLocaleString()}`, 14, expensesY);
+            expensesY += 10;
+        }
+
         // Total Price
-        const priceY = 95 + (splitScope.length * 6) + 20;
+        const priceY = expensesY + 10;
         doc.setFillColor(240, 248, 255);
         doc.setDrawColor(73, 204, 249);
         doc.roundedRect(14, priceY, pageWidth - 28, 40, 3, 3, 'FD');
@@ -293,6 +312,22 @@ const QuoteGenerator: React.FC = () => {
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">{isDock || isFloatingDock ? 'Dimensions (SQF)' : 'Dimensions (Lif. Ft.)'}</label>
                             <input value={dimensions} onChange={(e) => setDimensions(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 100" />
                         </div>
+                    </div>
+
+                    {/* Additional Expenses Input */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Additional Expenses / Inclusions ($)</label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                            <input
+                                type="number"
+                                value={additionalExpenses}
+                                onChange={(e) => setAdditionalExpenses(e.target.value)}
+                                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-8 pr-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400"
+                                placeholder="0.00"
+                            />
+                        </div>
+                        <p className="text-[9px] text-slate-400 font-bold mt-1 ml-2">Cost will be added before markup (10%).</p>
                     </div>
 
                     <div>
