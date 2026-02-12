@@ -40,14 +40,38 @@ export const RIP_RAP_ITEMS: PricingItem[] = [
     { id: 'equipment_rr', label: 'Mobilization & Equipment', price: 2500.00, category: 'fee', isDefault: false, unit: 'fixed' },
 ];
 
+// --- FLOATING DOCK ITEMS (SQF) ---
+export const FLOATING_DOCK_ITEMS: PricingItem[] = [
+    { id: 'end_stringer', label: 'End Stringer 3"x10"x6\'', price: 2.00, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'joins', label: 'Joists 3"x10"x16\'', price: 5.00, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'center_stringer', label: 'Center Stringer 3"x10"x16\'', price: 3.00, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'top_deck', label: 'Top Deck 0.31 CA-C', price: 5.00, category: 'decking', isDefault: false, unit: 'sqf' },
+    { id: 'deck_screws', label: 'Deck Screws', price: 5.00, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'inside_corner', label: 'Inside Corner', price: 2.00, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'outside_corner', label: 'Outside Corner', price: 1.00, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'float', label: 'Float', price: 14.00, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'carriage_bolts', label: 'Carriage Bolts', price: 4.00, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'lag_bolts', label: 'Lag Bolts', price: 0.50, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'l_plates', label: 'L Plates', price: 1.25, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'pile_guide', label: 'Pile Guide', price: 6.25, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'pile', label: 'Pile', price: 6.00, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'yp_deck', label: 'Yellow Pine Deck', price: 3.00, category: 'decking', isDefault: true, unit: 'sqf' },
+    { id: 'weardeck', label: 'WearDeck', price: 13.00, category: 'decking', isDefault: false, unit: 'sqf' },
+    { id: 'machinery_fd', label: 'Mobilization & Equipment', price: 5000.00, category: 'fee', isDefault: true, unit: 'fixed' },
+];
+
 export const calculateInteractivePrice = (
-    type: 'dock' | 'riprap',
+    type: 'dock' | 'riprap' | 'floating_dock',
     quantity: number, // sqf or lf
     selectedItemIds: string[],
     deckingType?: string
 ): number => {
     let subtotal = 0;
-    const items = type === 'dock' ? DOCK_ITEMS : RIP_RAP_ITEMS;
+    let items: PricingItem[] = [];
+
+    if (type === 'dock') items = DOCK_ITEMS;
+    else if (type === 'riprap') items = RIP_RAP_ITEMS;
+    else if (type === 'floating_dock') items = FLOATING_DOCK_ITEMS;
 
     // 1. Sum Selected Standard Items
     items.forEach(item => {
@@ -60,7 +84,7 @@ export const calculateInteractivePrice = (
         }
     });
 
-    // 2. Add Decking (Only for Docks)
+    // 2. Add Decking (Only for Fixed Docks - Floating has decking in items list)
     if (type === 'dock' && deckingType) {
         const deckOption = DECKING_OPTIONS.find(d => d.id === deckingType);
         if (deckOption) {

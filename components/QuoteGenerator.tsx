@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
+import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
 
 const PROJECT_TYPES = [
     "Pier / Dock",
+    "Floating Dock",
     "Rip-Rap / Erosion Control"
 ];
 
@@ -15,6 +16,7 @@ const QuoteGenerator: React.FC = () => {
 
     // Form Inputs
     const [clientName, setClientName] = useState('');
+    const [clientAddress, setClientAddress] = useState('');
     const [projectType, setProjectType] = useState(PROJECT_TYPES[0]);
     const [dimensions, setDimensions] = useState('');
 
@@ -22,6 +24,7 @@ const QuoteGenerator: React.FC = () => {
     const [deckingType, setDeckingType] = useState(DECKING_OPTIONS[0].id);
     const [selectedDockItems, setSelectedDockItems] = useState<string[]>(DOCK_ITEMS.filter(i => i.isDefault).map(i => i.id));
     const [selectedRipRapItems, setSelectedRipRapItems] = useState<string[]>(RIP_RAP_ITEMS.filter(i => i.isDefault).map(i => i.id));
+    const [selectedFloatingDockItems, setSelectedFloatingDockItems] = useState<string[]>(FLOATING_DOCK_ITEMS.filter(i => i.isDefault).map(i => i.id));
 
     // AI Results
     const [isGenerating, setIsGenerating] = useState(false);
@@ -35,31 +38,26 @@ const QuoteGenerator: React.FC = () => {
         setErrorMsg('');
     };
 
-    const toggleItem = (id: string, type: 'dock' | 'riprap') => {
+    const toggleItem = (id: string, type: 'dock' | 'riprap' | 'floating_dock') => {
         if (type === 'dock') {
-            if (selectedDockItems.includes(id)) {
-                setSelectedDockItems(selectedDockItems.filter(i => i !== id));
-            } else {
-                setSelectedDockItems([...selectedDockItems, id]);
-            }
+            setSelectedDockItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+        } else if (type === 'riprap') {
+            setSelectedRipRapItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
         } else {
-            if (selectedRipRapItems.includes(id)) {
-                setSelectedRipRapItems(selectedRipRapItems.filter(i => i !== id));
-            } else {
-                setSelectedRipRapItems([...selectedRipRapItems, id]);
-            }
+            setSelectedFloatingDockItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
         }
     };
 
     // Auto-calculate for display
     const isDock = projectType === "Pier / Dock";
+    const isFloatingDock = projectType === "Floating Dock";
     const qty = parseFloat(dimensions);
 
     const currentCalculatedTotal = !isNaN(qty)
         ? calculateInteractivePrice(
-            isDock ? 'dock' : 'riprap',
+            isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : 'riprap'),
             qty,
-            isDock ? selectedDockItems : selectedRipRapItems,
+            isDock ? selectedDockItems : (isFloatingDock ? selectedFloatingDockItems : selectedRipRapItems),
             isDock ? deckingType : undefined
         )
         : 0;
@@ -68,7 +66,7 @@ const QuoteGenerator: React.FC = () => {
         if (!isGenerating) {
             setEstimatedTotal(currentCalculatedTotal);
         }
-    }, [dimensions, selectedDockItems, selectedRipRapItems, deckingType, projectType]);
+    }, [dimensions, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, deckingType, projectType]);
 
     const handleGenerateQuote = async () => {
         setErrorMsg('');
@@ -100,6 +98,10 @@ const QuoteGenerator: React.FC = () => {
                     .map(i => i.label);
                 const deckName = DECKING_OPTIONS.find(d => d.id === deckingType)?.label;
                 if (deckName) finalMaterials.push(deckName);
+            } else if (isFloatingDock) {
+                finalMaterials = FLOATING_DOCK_ITEMS
+                    .filter(i => selectedFloatingDockItems.includes(i.id))
+                    .map(i => i.label);
             } else {
                 finalMaterials = RIP_RAP_ITEMS
                     .filter(i => selectedRipRapItems.includes(i.id))
@@ -111,18 +113,20 @@ const QuoteGenerator: React.FC = () => {
           
           Project Details:
           - Client: ${clientName || 'Valued Client'}
+          - Address: ${clientAddress || 'N/A'}
           - Type: ${projectType}
-          - Size: ${dimensions} ${isDock ? 'SQF' : 'Linear Feet'}
+          - Size: ${dimensions} ${!isDock && !isFloatingDock ? 'Linear Feet' : 'SQF'}
           - Materials Included: ${finalMaterials.join(', ')}
           
           Directives:
           1. **Tone**: Professional, authoritative, legalistic, and high-value.
           2. **Exclusions Section**: You MUST include a distinct section titled "STANDARD EXCLUSIONS" listing: Permits, Engineering, Soil Tests, Hazardous Material Removal, Hidden Obstructions.
-          3. **Scope Entry**: Write a single, comprehensive paragraph describing the work to be performed based on the materials listed.
+          3. **Scope Entry**: Write a comprehensive, detailed, and professionally formatted scope of work. Use distinct paragraphs or distinct bullet points for clarity. Do not bunch text together. 
+          4. **Formatting**: Ensure the output is clean and readable. Use markdown lists if appropriate.
           
           Return JSON ONLY:
           {
-            "scopeOfWork": "The detailed professional scope...",
+            "scopeOfWork": "The detailed professional scope...\\n\\n- Item 1\\n- Item 2",
             "exclusions": "Permits, Engineering, Soil Tests, Hidden Obstructions...",
             "totalPrice": ${finalPrice}
           }
@@ -186,9 +190,10 @@ const QuoteGenerator: React.FC = () => {
         doc.setTextColor(0);
         doc.setFontSize(12);
         doc.text(`Client: ${clientName || 'Valued Client'}`, 14, 50);
+        doc.text(`Address: ${clientAddress || 'N/A'}`, 14, 56);
         doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - 14, 50, { align: 'right' });
-        doc.text(`Project Type: ${projectType}`, 14, 58);
-        doc.text(`Dimensions: ${dimensions} ${isDock ? 'SQF' : 'Linear Feet'}`, 14, 66);
+        doc.text(`Project Type: ${projectType}`, 14, 64);
+        doc.text(`Dimensions: ${dimensions} ${!isDock && !isFloatingDock ? 'Linear Feet' : 'SQF'}`, 14, 72);
 
         // Scope of Work
         doc.setFontSize(14);
@@ -266,9 +271,15 @@ const QuoteGenerator: React.FC = () => {
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
                     <h3 className="font-black text-[#0a192f] uppercase tracking-widest text-sm mb-4">Project Parameters</h3>
 
-                    <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Client Name</label>
-                        <input value={clientName} onChange={(e) => setClientName(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="Client Name" />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Client Name</label>
+                            <input value={clientName} onChange={(e) => setClientName(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="Client Name" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Address</label>
+                            <input value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="123 Ocean Dr..." />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -279,7 +290,7 @@ const QuoteGenerator: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">{isDock ? 'Dimensions (SQF)' : 'Dimensions (Lif. Ft.)'}</label>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">{isDock || isFloatingDock ? 'Dimensions (SQF)' : 'Dimensions (Lif. Ft.)'}</label>
                             <input value={dimensions} onChange={(e) => setDimensions(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 100" />
                         </div>
                     </div>
@@ -318,17 +329,18 @@ const QuoteGenerator: React.FC = () => {
                             <div className="space-y-2">
                                 <h4 className="text-[10px] uppercase font-bold text-slate-400">Construction Items</h4>
                                 <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
-                                    {(isDock ? DOCK_ITEMS : RIP_RAP_ITEMS).map(item => {
+                                    {(isDock ? DOCK_ITEMS : (isFloatingDock ? FLOATING_DOCK_ITEMS : RIP_RAP_ITEMS)).map(item => {
                                         const isSelected = isDock
                                             ? selectedDockItems.includes(item.id)
-                                            : selectedRipRapItems.includes(item.id);
+                                            : (isFloatingDock ? selectedFloatingDockItems.includes(item.id) : selectedRipRapItems.includes(item.id));
+
                                         const quantity = parseFloat(dimensions) || 0;
                                         const lineTotal = item.unit === 'fixed' ? item.price : item.price * quantity;
 
                                         return (
                                             <div
                                                 key={item.id}
-                                                onClick={() => toggleItem(item.id, isDock ? 'dock' : 'riprap')}
+                                                onClick={() => toggleItem(item.id, isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : 'riprap'))}
                                                 className={`cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border transition-all ${isSelected ? 'bg-white border-cyan-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60'}`}
                                             >
                                                 <div className="flex items-center gap-3">
