@@ -44,6 +44,12 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
     doc.text(`Date: ${payment.date}`, pageWidth - 14, 75, { align: 'right' });
     doc.text(`Method: ${payment.method}`, pageWidth - 14, 80, { align: 'right' });
 
+    // Highlight Payment Amount clearly
+    doc.setFontSize(14);
+    doc.setTextColor(22, 163, 74); // Green
+    doc.setFont("helvetica", "bold");
+    doc.text(`AMOUNT PAID: $${payment.amount.toLocaleString()}`, pageWidth - 14, 90, { align: 'right' });
+
     // 3. Client Info
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
@@ -60,74 +66,80 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
 
     // 4. Payment Table
     autoTable(doc, {
-      startY: 90,
-      head: [['Description', 'Amount']],
+      startY: 100, // Moved down to accommodate Amount Paid
+      head: [['Description', 'Reference', 'Amount Received']],
       body: [
-        [`Payment Received - ${project.name}\nRef: ${payment.reference || 'N/A'}`, `$${payment.amount.toLocaleString()}`]
+        [`Payment for ${project.name}`, payment.reference || 'N/A', `$${payment.amount.toLocaleString()}`]
       ],
-      theme: 'striped',
+      theme: 'grid', // Changed to grid for better definition
       headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' },
       columnStyles: {
         0: { cellWidth: 'auto' },
-        1: { halign: 'right', fontStyle: 'bold', cellWidth: 50 }
+        1: { cellWidth: 50 },
+        2: { halign: 'right', fontStyle: 'bold', cellWidth: 40, textColor: [22, 163, 74] }
       },
       styles: { cellPadding: 5 },
       margin: { left: 14, right: 14 }
     });
 
     // 5. Balance Summary
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
-    const summaryWidth = 90;
+    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    const summaryWidth = 100;
     const summaryX = pageWidth - 14 - summaryWidth;
+    const rightAlignX = pageWidth - 18;
 
     // Background for summary
     doc.setFillColor(248, 250, 252); // slate-50
-    doc.setDrawColor(226, 232, 240); // slate-200
-    doc.roundedRect(summaryX, finalY, summaryWidth, 40, 3, 3, 'FD'); // Fill and Draw
+    doc.setDrawColor(203, 213, 225); // slate-300
+    doc.roundedRect(summaryX, finalY, summaryWidth, 50, 2, 2, 'FD');
 
-    let currentY = finalY + 10;
-    const rightAlignX = pageWidth - 20;
+    let currentY = finalY + 12;
 
-    // Contract Total
+    // Header for Summary
     doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text("ACCOUNT SUMMARY", summaryX + 5, currentY - 5);
+
+    // Contract Value
+    doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100);
-    doc.text("Contract Total:", summaryX + 5, currentY);
+    doc.text("Total Contract Value:", summaryX + 5, currentY + 3);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(15, 23, 42); // slate-900
-    doc.text(`$${project.totalAmount.toLocaleString()}`, rightAlignX, currentY, { align: "right" });
+    doc.setTextColor(15, 23, 42);
+    doc.text(`$${project.totalAmount.toLocaleString()}`, rightAlignX, currentY + 3, { align: "right" });
 
-    currentY += 8;
+    currentY += 10;
 
     // Total Paid
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100);
-    doc.text("Total Paid:", summaryX + 5, currentY);
+    doc.text("Total Paid to Date:", summaryX + 5, currentY + 3);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(22, 163, 74); // green-600
-    doc.text(`$${project.paidAmount.toLocaleString()}`, rightAlignX, currentY, { align: "right" });
+    doc.setTextColor(22, 163, 74); // Green
+    doc.text(`$${project.paidAmount.toLocaleString()}`, rightAlignX, currentY + 3, { align: "right" });
 
-    // Divider
-    currentY += 5;
-    doc.setDrawColor(203, 213, 225); // slate-300
-    doc.line(summaryX + 5, currentY, pageWidth - 19, currentY);
-
+    // Divider line
+    currentY += 8;
+    doc.setDrawColor(226, 232, 240);
+    doc.line(summaryX + 5, currentY, pageWidth - 18, currentY);
     currentY += 10;
 
     // Remaining Balance
     const pending = project.totalAmount - project.paidAmount;
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(15, 23, 42); // Navy
-    doc.text("Balance Due:", summaryX + 5, currentY);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Remaining Balance:", summaryX + 5, currentY + 3);
 
     doc.setFontSize(14);
-    if (pending > 0) {
-      doc.setTextColor(185, 28, 28); // Red-700
+    if (pending > 0.01) { // Tolerance for float errors
+      doc.setTextColor(185, 28, 28); // Red
     } else {
-      doc.setTextColor(22, 163, 74); // Green-600
+      doc.setTextColor(22, 163, 74); // Green
     }
-    doc.text(`$${pending.toLocaleString()}`, rightAlignX, currentY, { align: "right" });
+    doc.text(`$${Math.max(0, pending).toLocaleString()}`, rightAlignX, currentY + 3, { align: "right" });
 
     // 6. Footer
     doc.setFontSize(9);
