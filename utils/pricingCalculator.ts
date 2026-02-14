@@ -61,8 +61,27 @@ export const FLOATING_DOCK_ITEMS: PricingItem[] = [
     { id: 'machinery_fd', label: 'Mobilization & Equipment', price: 5000.00, category: 'fee', isDefault: true, unit: 'fixed' },
 ];
 
+// --- BULKHEAD ITEMS (LF) ---
+export const BULKHEAD_ITEMS: PricingItem[] = [
+    { id: 'tw95', label: 'TW-95', price: 210.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'piles_10x20', label: 'Piles 10" x 20\'', price: 52.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'bulkhead_boards', label: 'Bulkhead Boards 2"x10"x16\' T&G 2.5cca', price: 84.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'mantaray', label: 'MantaRay', price: 40.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'walers', label: 'Walers 6"x6"x16\'', price: 8.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'filter_cloth', label: 'Filter Cloth', price: 4.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'top_soil_sand', label: 'Top Soil / Sand', price: 40.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'gravel', label: 'Gravel (Tons)', price: 40.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'cap', label: 'Cap 2"x10"', price: 6.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'jet_filter', label: 'Jet Filter', price: 10.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'deadmens', label: 'DeadMens 8"x10\'', price: 15.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'tie_rod', label: 'Tie Rod 5/8"x10\'', price: 15.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'timber_bolts', label: 'Timber Bolts', price: 2.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'labor_bh', label: 'Installation Labor', price: 175.00, category: 'labor', isDefault: true, unit: 'lf' },
+    { id: 'machinery_bh', label: 'Mobilization & Equipment', price: 5000.00, category: 'fee', isDefault: true, unit: 'fixed' },
+];
+
 export const calculateInteractivePrice = (
-    type: 'dock' | 'riprap' | 'floating_dock',
+    type: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead',
     quantity: number, // sqf or lf
     selectedItemIds: string[],
     deckingType?: string,
@@ -74,6 +93,7 @@ export const calculateInteractivePrice = (
     if (type === 'dock') items = DOCK_ITEMS;
     else if (type === 'riprap') items = RIP_RAP_ITEMS;
     else if (type === 'floating_dock') items = FLOATING_DOCK_ITEMS;
+    else if (type === 'bulkhead') items = BULKHEAD_ITEMS;
 
     // 1. Sum Selected Standard Items
     items.forEach(item => {

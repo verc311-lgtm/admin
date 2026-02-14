@@ -57,16 +57,18 @@ const App: React.FC = () => {
       // If expenses table missing, expError might occur, treat as empty
       const safeExpenses = expensesData || [];
 
-      // Process Projects to attach expenses
+      // Process Projects to attach expenses and recalculate totals dynamically
       const processedProjects = (projectsData || []).map((p: any) => {
         const projectExpenses = safeExpenses.filter((e: any) => e.projectId === p.id);
+        const calculatedTotalExpenses = projectExpenses.reduce((sum: number, e: any) => sum + parseFloat(e.amount || 0), 0);
+
         return {
           ...p,
           totalAmount: parseFloat(p.totalAmount),
           balance: parseFloat(p.balance),
           paidAmount: parseFloat(p.paidAmount),
-          totalExpenses: parseFloat(p.totalExpenses),
-          profit: parseFloat(p.profit),
+          totalExpenses: calculatedTotalExpenses, // Use calculated sum instead of potentially stale DB column
+          profit: parseFloat(p.totalAmount) - calculatedTotalExpenses, // Recalculate profit
           expensesList: projectExpenses
         };
       });
@@ -224,7 +226,8 @@ const App: React.FC = () => {
       if (error) throw error;
       await fetchData();
     } catch (err: any) {
-      alert("Error creating invoice: " + err.message);
+      console.error("Critical Error creating invoice:", err);
+      alert("Error creating invoice: " + (err.message || JSON.stringify(err)));
       setSyncError(true);
       setIsSyncing(false);
     }
@@ -256,6 +259,12 @@ const App: React.FC = () => {
       setSyncError(true);
       setIsSyncing(false);
     }
+  };
+
+  const navigateToInvoice = (project?: Project, invoice?: Invoice) => {
+    setSelectedProjectForInvoice(project || null);
+    setSelectedInvoiceForView(invoice || null);
+    setActiveView('Invoices');
   };
 
   if (!isAuthenticated) {

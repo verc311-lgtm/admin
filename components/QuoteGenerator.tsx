@@ -1,18 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
 
-const PROJECT_TYPES = [
-    "Pier / Dock",
-    "Floating Dock",
-    "Rip-Rap / Erosion Control"
-];
+import React, { useState, useEffect } from 'react';
+import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square, Calculator, Check } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, BULKHEAD_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
+
+const PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Rip-Rap / Erosion Control"];
 
 const QuoteGenerator: React.FC = () => {
     // API Key State
     const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
-    const [showSettings, setShowSettings] = useState(!localStorage.getItem('openai_api_key'));
+    const [showSettings, setShowSettings] = useState(false);
 
     // Form Inputs
     const [clientName, setClientName] = useState('');
@@ -27,6 +24,7 @@ const QuoteGenerator: React.FC = () => {
     const [selectedDockItems, setSelectedDockItems] = useState<string[]>(DOCK_ITEMS.filter(i => i.isDefault).map(i => i.id));
     const [selectedRipRapItems, setSelectedRipRapItems] = useState<string[]>(RIP_RAP_ITEMS.filter(i => i.isDefault).map(i => i.id));
     const [selectedFloatingDockItems, setSelectedFloatingDockItems] = useState<string[]>(FLOATING_DOCK_ITEMS.filter(i => i.isDefault).map(i => i.id));
+    const [selectedBulkheadItems, setSelectedBulkheadItems] = useState<string[]>(BULKHEAD_ITEMS.filter(i => i.isDefault).map(i => i.id));
 
     // AI Results
     const [isGenerating, setIsGenerating] = useState(false);
@@ -40,27 +38,30 @@ const QuoteGenerator: React.FC = () => {
         setErrorMsg('');
     };
 
-    const toggleItem = (id: string, type: 'dock' | 'riprap' | 'floating_dock') => {
+    const toggleItem = (id: string, type: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead') => {
         if (type === 'dock') {
             setSelectedDockItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
         } else if (type === 'riprap') {
             setSelectedRipRapItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-        } else {
+        } else if (type === 'floating_dock') {
             setSelectedFloatingDockItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+        } else { // bulkhead
+            setSelectedBulkheadItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
         }
     };
 
     // Auto-calculate for display
     const isDock = projectType === "Pier / Dock";
     const isFloatingDock = projectType === "Floating Dock";
+    const isBulkhead = projectType === "Bulkhead";
     const qty = parseFloat(dimensions);
     const expenses = parseFloat(otherWorkCost) || 0;
 
     const currentCalculatedTotal = !isNaN(qty)
         ? calculateInteractivePrice(
-            isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : 'riprap'),
+            isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : 'riprap')),
             qty,
-            isDock ? selectedDockItems : (isFloatingDock ? selectedFloatingDockItems : selectedRipRapItems),
+            isDock ? selectedDockItems : (isFloatingDock ? selectedFloatingDockItems : (isBulkhead ? selectedBulkheadItems : selectedRipRapItems)),
             isDock ? deckingType : undefined,
             expenses
         )
@@ -70,7 +71,7 @@ const QuoteGenerator: React.FC = () => {
         if (!isGenerating) {
             setEstimatedTotal(currentCalculatedTotal);
         }
-    }, [dimensions, otherWorkCost, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, deckingType, projectType]);
+    }, [dimensions, otherWorkCost, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, selectedBulkheadItems, deckingType, projectType]);
 
     const handleGenerateQuote = async () => {
         setErrorMsg('');
@@ -107,6 +108,10 @@ const QuoteGenerator: React.FC = () => {
                 finalMaterials = FLOATING_DOCK_ITEMS
                     .filter(i => selectedFloatingDockItems.includes(i.id))
                     .map(i => i.label);
+            } else if (isBulkhead) {
+                finalMaterials = BULKHEAD_ITEMS
+                    .filter(i => selectedBulkheadItems.includes(i.id))
+                    .map(i => i.label);
             } else {
                 finalMaterials = RIP_RAP_ITEMS
                     .filter(i => selectedRipRapItems.includes(i.id))
@@ -114,39 +119,34 @@ const QuoteGenerator: React.FC = () => {
             }
 
             if (expenses > 0) {
-                finalMaterials.push(`Other Work: ${otherWorkDescription || 'Misc'} ($${expenses.toLocaleString()})`);
+                finalMaterials.push('Other Work: ' + (otherWorkDescription || 'Misc') + ' ($' + expenses.toLocaleString() + ')');
             }
 
-            const prompt = `
-          Role: You are a Senior Estimator for "Coastal VA Marine Construction". Write a formal "Preliminary Construction Proposal".
-          
-          Project Details:
-          - Client: ${clientName || 'Valued Client'}
-          - Address: ${clientAddress || 'N/A'}
-          - Type: ${projectType}
-          - Size: ${dimensions} ${!isDock && !isFloatingDock ? 'Linear Feet' : 'SQF'}
-          - Materials Included: ${finalMaterials.join(', ')}
-          ${expenses > 0 ? `- Other Work Included: ${otherWorkDescription} ($${expenses.toLocaleString()})` : ''}
-          
-          Directives:
-          1. **Tone**: Professional, authoritative, legalistic, and high-value.
-          2. **Exclusions Section**: You MUST include a distinct section titled "STANDARD EXCLUSIONS" listing: Permits, Engineering, Soil Tests, Hazardous Material Removal, Hidden Obstructions.
-          3. **Scope Entry**: Write a comprehensive, detailed, and professionally formatted scope of work. Use distinct paragraphs or distinct bullet points for clarity. Do not bunch text together. 
-          4. **Formatting**: Ensure the output is clean and readable. Use markdown lists if appropriate.
-          
-          Return JSON ONLY:
-          {
-            "scopeOfWork": "The detailed professional scope...\\n\\n- Item 1\\n- Item 2",
-            "exclusions": "Permits, Engineering, Soil Tests, Hidden Obstructions...",
-            "totalPrice": ${finalPrice}
-          }
-        `;
+            const prompt = "Role: You are a Senior Estimator for \"Coastal VA Marine Construction\". Write a formal \"Preliminary Construction Proposal\".\n\n" +
+                "Project Details:\n" +
+                "- Client: " + (clientName || 'Valued Client') + "\n" +
+                "- Address: " + (clientAddress || 'N/A') + "\n" +
+                "- Type: " + projectType + "\n" +
+                "- Size: " + dimensions + " " + ((isDock || isFloatingDock) ? 'SQF' : 'Linear Feet') + "\n" +
+                "- Materials Included: " + finalMaterials.join(', ') + "\n" +
+                (expenses > 0 ? "- Other Work Included: " + otherWorkDescription + " ($" + expenses.toLocaleString() + ")\n" : "") +
+                "\nDirectives:\n" +
+                "1. **Tone**: Professional, authoritative, legalistic, and high-value.\n" +
+                "2. **Exclusions Section**: You MUST include a distinct section titled \"STANDARD EXCLUSIONS\" listing: Permits, Engineering, Soil Tests, Hazardous Material Removal, Hidden Obstructions.\n" +
+                "3. **Scope Entry**: Write a comprehensive, detailed, and professionally formatted scope of work. Use distinct paragraphs or distinct bullet points for clarity. Do not bunch text together.\n" +
+                "4. **Formatting**: Ensure the output is clean and readable. Use markdown lists if appropriate.\n" +
+                "\nReturn JSON ONLY:\n" +
+                "{\n" +
+                "    \"scopeOfWork\": \"The detailed professional scope...\\n\\n- Item 1\\n- Item 2\",\n" +
+                "    \"exclusions\": \"Permits, Engineering, Soil Tests, Hidden Obstructions...\",\n" +
+                "    \"totalPrice\": " + finalPrice + "\n" +
+                "}";
 
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
+                    'Authorization': 'Bearer ' + apiKey
                 },
                 body: JSON.stringify({
                     model: "gpt-4o",
@@ -173,7 +173,7 @@ const QuoteGenerator: React.FC = () => {
 
         } catch (error: any) {
             console.error("OpenAI Error:", error);
-            setErrorMsg(`Error: ${error.message || "Unknown error occurred"}`);
+            setErrorMsg('Error: ' + (error.message || "Unknown error occurred"));
         } finally {
             setIsGenerating(false);
         }
@@ -209,14 +209,14 @@ const QuoteGenerator: React.FC = () => {
         doc.setTextColor(0);
         doc.setFontSize(11);
 
-        doc.text(`Client: ${clientName || 'Valued Client'}`, margin, currentY);
-        doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - margin, currentY, { align: 'right' });
+        doc.text('Client: ' + (clientName || 'Valued Client'), margin, currentY);
+        doc.text('Date: ' + new Date().toLocaleDateString(), pageWidth - margin, currentY, { align: 'right' });
         currentY += 6;
-        doc.text(`Address: ${clientAddress || 'N/A'}`, margin, currentY);
+        doc.text('Address: ' + (clientAddress || 'N/A'), margin, currentY);
         currentY += 8;
-        doc.text(`Project: ${projectType}`, margin, currentY);
+        doc.text('Project: ' + projectType, margin, currentY);
         currentY += 6;
-        doc.text(`Size: ${dimensions} ${!isDock && !isFloatingDock ? 'Linear Feet' : 'SQF'}`, margin, currentY);
+        doc.text('Size: ' + dimensions + ' ' + (isDock || isFloatingDock ? 'SQF' : 'Linear Feet'), margin, currentY);
 
         currentY += 12;
 
@@ -253,8 +253,8 @@ const QuoteGenerator: React.FC = () => {
             currentY += 5;
 
             doc.setFont("helvetica", "normal");
-            doc.text(`${otherWorkDescription || 'Misc. Items'}`, margin, currentY);
-            doc.text(`$${expenses.toLocaleString()}`, pageWidth - margin, currentY, { align: 'right' });
+            doc.text((otherWorkDescription || 'Misc. Items'), margin, currentY);
+            doc.text('$' + expenses.toLocaleString(), pageWidth - margin, currentY, { align: 'right' });
             currentY += 10;
         }
 
@@ -278,7 +278,7 @@ const QuoteGenerator: React.FC = () => {
 
         doc.setFontSize(20);
         doc.setTextColor(0, 100, 0); // Green
-        doc.text(`$${estimatedTotal.toLocaleString()}`, pageWidth / 2, boxCenter + 8, { align: 'center' });
+        doc.text('$' + estimatedTotal.toLocaleString(), pageWidth / 2, boxCenter + 8, { align: 'center' });
 
         // Disclaimer (Footer)
         const footerY = pageHeight - 15;
@@ -288,7 +288,7 @@ const QuoteGenerator: React.FC = () => {
         doc.text("NOTE: This proposal is preliminary. Final price subject to site inspection and engineering.", pageWidth / 2, footerY, { align: 'center' });
         doc.text("Permits and Engineering are excluded unless explicitly itemized.", pageWidth / 2, footerY + 4, { align: 'center' });
 
-        doc.save(`Proposal_${clientName || 'Project'}.pdf`);
+        doc.save('Proposal_' + (clientName || 'Project') + '.pdf');
     };
 
     return (
@@ -350,7 +350,7 @@ const QuoteGenerator: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">{isDock || isFloatingDock ? 'Dimensions (SQF)' : 'Dimensions (Lif. Ft.)'}</label>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">{isDock || isFloatingDock ? 'Dimensions (SQF)' : 'Dimensions (Lin. Ft.)'}</label>
                             <input value={dimensions} onChange={(e) => setDimensions(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 100" />
                         </div>
                     </div>
@@ -388,73 +388,58 @@ const QuoteGenerator: React.FC = () => {
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 mb-2 block">
                             Itemized Costs / Inclusions
                         </label>
-
-                        <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
                             {/* Decking Selector - Only for Docks */}
                             {isDock && (
-                                <div className="space-y-2">
-                                    <h4 className="text-[10px] uppercase font-bold text-slate-400">Decking Material</h4>
-                                    <div className="space-y-2">
+                                <div className="col-span-2 mb-4 bg-slate-100/50 p-3 rounded-2xl">
+                                    <h4 className="text-[10px] uppercase font-bold text-slate-400 mb-2">Decking Material</h4>
+                                    <div className="grid grid-cols-3 gap-2">
                                         {DECKING_OPTIONS.map(dt => (
                                             <div
                                                 key={dt.id}
                                                 onClick={() => setDeckingType(dt.id)}
-                                                className={`cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border-2 transition-all ${deckingType === dt.id ? 'bg-cyan-50 border-cyan-400' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
+                                                className={"cursor-pointer p-3 rounded-xl border-2 text-center transition-all " + (deckingType === dt.id ? 'bg-cyan-50 border-cyan-400' : 'bg-slate-50 border-slate-100')}
                                             >
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${deckingType === dt.id ? 'border-cyan-500' : 'border-slate-300'}`}>
-                                                        {deckingType === dt.id && <div className="w-2 h-2 rounded-full bg-cyan-500" />}
-                                                    </div>
-                                                    <span className="text-xs font-bold text-slate-700">{dt.label}</span>
-                                                </div>
-                                                <span className="text-[10px] font-mono text-slate-400 font-bold">+${dt.price}/sqf</span>
+                                                <p className="font-bold text-xs">{dt.label}</p>
+                                                <p className="text-[9px] text-slate-400">${dt.price}/sqf</p>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             )}
 
-                            {/* Item List */}
-                            <div className="space-y-2">
-                                <h4 className="text-[10px] uppercase font-bold text-slate-400">Construction Items</h4>
-                                <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
-                                    {(isDock ? DOCK_ITEMS : (isFloatingDock ? FLOATING_DOCK_ITEMS : RIP_RAP_ITEMS)).map(item => {
-                                        const isSelected = isDock
-                                            ? selectedDockItems.includes(item.id)
-                                            : (isFloatingDock ? selectedFloatingDockItems.includes(item.id) : selectedRipRapItems.includes(item.id));
+                            {/* Items List */}
+                            {(isDock ? DOCK_ITEMS : (isFloatingDock ? FLOATING_DOCK_ITEMS : (isBulkhead ? BULKHEAD_ITEMS : RIP_RAP_ITEMS))).map(item => {
+                                const isSelected = isDock
+                                    ? selectedDockItems.includes(item.id)
+                                    : (isFloatingDock ? selectedFloatingDockItems.includes(item.id) : (isBulkhead ? selectedBulkheadItems.includes(item.id) : selectedRipRapItems.includes(item.id)));
 
-                                        const quantity = parseFloat(dimensions) || 0;
-                                        const lineTotal = item.unit === 'fixed' ? item.price : item.price * quantity;
+                                const quantity = parseFloat(dimensions) || 0;
+                                const lineTotal = item.unit === 'fixed' ? item.price : item.price * quantity;
 
-                                        return (
-                                            <div
-                                                key={item.id}
-                                                onClick={() => toggleItem(item.id, isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : 'riprap'))}
-                                                className={`cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border transition-all ${isSelected ? 'bg-white border-cyan-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60'}`}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-4 h-4 rounded flex items-center justify-center border ${isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-slate-300 bg-white'}`}>
-                                                        {isSelected && <CheckSquare className="w-3 h-3 text-white" />}
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs font-bold text-slate-700">{item.label}</div>
-                                                        <div className="text-[10px] text-slate-400">${item.price.toLocaleString()}{item.unit === 'sqf' || item.unit === 'lf' ? `/${item.unit}` : ''}</div>
-                                                    </div>
-                                                </div>
-                                                <div className="text-xs font-mono font-bold text-slate-600">${lineTotal.toLocaleString()}</div>
+                                return (
+                                    <div key={item.id} onClick={() => toggleItem(item.id, isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : 'riprap')))} className={"cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border transition-all " + (isSelected ? 'bg-white border-cyan-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60')}>
+                                        <div className="flex items-center gap-3">
+                                            <div className={"w-4 h-4 rounded flex items-center justify-center border " + (isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-slate-300 bg-white')}>
+                                                {isSelected && <CheckSquare className="w-3 h-3 text-white" />}
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                                            <div>
+                                                <div className="text-xs font-bold text-slate-700">{item.label}</div>
+                                                <div className="text-[10px] text-slate-400">{'$' + item.price.toLocaleString() + (item.unit === 'sqf' || item.unit === 'lf' ? ' / ' + item.unit : '')}</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-xs font-mono font-bold text-slate-600">{'$' + lineTotal.toLocaleString()}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
 
-                            <div className="p-4 bg-slate-900 rounded-xl flex justify-between items-center text-white">
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Total Project Investment</span>
-                                    <span className="text-[10px] text-slate-500 italic">Includes 10% Misc/Overhead</span>
-                                </div>
-                                <span className="text-xl font-black text-cyan-400">${currentCalculatedTotal.toLocaleString()}</span>
+                        <div className="p-4 bg-slate-900 rounded-xl flex justify-between items-center text-white mt-4">
+                            <div className="flex flex-col">
+                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Total Project Investment</span>
+                                <span className="text-[10px] text-slate-500 italic">Includes 10% Misc/Overhead</span>
                             </div>
+                            <span className="text-xl font-black text-cyan-400">{'$' + currentCalculatedTotal.toLocaleString()}</span>
                         </div>
                     </div>
 
