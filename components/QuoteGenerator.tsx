@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square, Calculator, Check } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, BULKHEAD_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
+import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, BULKHEAD_ITEMS, BOATLIFT_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
 
-const PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Rip-Rap / Erosion Control"];
+const PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Boat Lift", "Rip-Rap / Erosion Control"];
 
 const QuoteGenerator: React.FC = () => {
     // API Key State
@@ -25,6 +25,7 @@ const QuoteGenerator: React.FC = () => {
     const [selectedRipRapItems, setSelectedRipRapItems] = useState<string[]>(RIP_RAP_ITEMS.filter(i => i.isDefault).map(i => i.id));
     const [selectedFloatingDockItems, setSelectedFloatingDockItems] = useState<string[]>(FLOATING_DOCK_ITEMS.filter(i => i.isDefault).map(i => i.id));
     const [selectedBulkheadItems, setSelectedBulkheadItems] = useState<string[]>(BULKHEAD_ITEMS.filter(i => i.isDefault).map(i => i.id));
+    const [selectedBoatLiftItems, setSelectedBoatLiftItems] = useState<string[]>(BOATLIFT_ITEMS.filter(i => i.isDefault).map(i => i.id));
 
     // AI Results
     const [isGenerating, setIsGenerating] = useState(false);
@@ -38,15 +39,17 @@ const QuoteGenerator: React.FC = () => {
         setErrorMsg('');
     };
 
-    const toggleItem = (id: string, type: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead') => {
+    const toggleItem = (id: string, type: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead' | 'boat_lift') => {
         if (type === 'dock') {
             setSelectedDockItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
         } else if (type === 'riprap') {
             setSelectedRipRapItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
         } else if (type === 'floating_dock') {
             setSelectedFloatingDockItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-        } else { // bulkhead
+        } else if (type === 'bulkhead') {
             setSelectedBulkheadItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+        } else {
+            setSelectedBoatLiftItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
         }
     };
 
@@ -54,14 +57,15 @@ const QuoteGenerator: React.FC = () => {
     const isDock = projectType === "Pier / Dock";
     const isFloatingDock = projectType === "Floating Dock";
     const isBulkhead = projectType === "Bulkhead";
+    const isBoatLift = projectType === "Boat Lift";
     const qty = parseFloat(dimensions);
     const expenses = parseFloat(otherWorkCost) || 0;
 
-    const currentCalculatedTotal = !isNaN(qty)
+    const currentCalculatedTotal = (!isNaN(qty) || isBoatLift)
         ? calculateInteractivePrice(
-            isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : 'riprap')),
-            qty,
-            isDock ? selectedDockItems : (isFloatingDock ? selectedFloatingDockItems : (isBulkhead ? selectedBulkheadItems : selectedRipRapItems)),
+            isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : (isBoatLift ? 'boat_lift' : 'riprap'))),
+            qty || 1, // Default to 1 for Boat Lift if dimensions not provided
+            isDock ? selectedDockItems : (isFloatingDock ? selectedFloatingDockItems : (isBulkhead ? selectedBulkheadItems : (isBoatLift ? selectedBoatLiftItems : selectedRipRapItems))),
             isDock ? deckingType : undefined,
             expenses
         )
@@ -71,7 +75,7 @@ const QuoteGenerator: React.FC = () => {
         if (!isGenerating) {
             setEstimatedTotal(currentCalculatedTotal);
         }
-    }, [dimensions, otherWorkCost, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, selectedBulkheadItems, deckingType, projectType]);
+    }, [dimensions, otherWorkCost, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, selectedBulkheadItems, selectedBoatLiftItems, deckingType, projectType]);
 
     const handleGenerateQuote = async () => {
         setErrorMsg('');
@@ -80,9 +84,11 @@ const QuoteGenerator: React.FC = () => {
             setShowSettings(true);
             return;
         }
-        if (!dimensions) {
-            setErrorMsg("Please enter the dimensions.");
-            return;
+        if (!dimensions && !isBoatLift) { // Boat lift might not need dimensions if fixed
+            // Actually currently logic uses dimensions for all calculations mostly, 
+            // but boat lift items are fixed. 
+            // However, let's keep it required for consistency or set to 1.
+            // If user leaves blank, dimensions is NaN.
         }
 
         setIsGenerating(true);
@@ -92,7 +98,9 @@ const QuoteGenerator: React.FC = () => {
 
         try {
             const qty = parseFloat(dimensions);
-            if (isNaN(qty)) {
+            // Relax dimension requirement for boat lift if all items are fixed?
+            // But let's assume they might enter '1' unit.
+            if (isNaN(qty) && !isBoatLift) {
                 throw new Error("Dimensions must be a valid number.");
             }
 
@@ -111,6 +119,10 @@ const QuoteGenerator: React.FC = () => {
             } else if (isBulkhead) {
                 finalMaterials = BULKHEAD_ITEMS
                     .filter(i => selectedBulkheadItems.includes(i.id))
+                    .map(i => i.label);
+            } else if (isBoatLift) {
+                finalMaterials = BOATLIFT_ITEMS
+                    .filter(i => selectedBoatLiftItems.includes(i.id))
                     .map(i => i.label);
             } else {
                 finalMaterials = RIP_RAP_ITEMS
@@ -409,16 +421,16 @@ const QuoteGenerator: React.FC = () => {
                             )}
 
                             {/* Items List */}
-                            {(isDock ? DOCK_ITEMS : (isFloatingDock ? FLOATING_DOCK_ITEMS : (isBulkhead ? BULKHEAD_ITEMS : RIP_RAP_ITEMS))).map(item => {
+                            {(isDock ? DOCK_ITEMS : (isFloatingDock ? FLOATING_DOCK_ITEMS : (isBulkhead ? BULKHEAD_ITEMS : (projectType === "Boat Lift" ? BOATLIFT_ITEMS : RIP_RAP_ITEMS)))).map(item => {
                                 const isSelected = isDock
                                     ? selectedDockItems.includes(item.id)
-                                    : (isFloatingDock ? selectedFloatingDockItems.includes(item.id) : (isBulkhead ? selectedBulkheadItems.includes(item.id) : selectedRipRapItems.includes(item.id)));
+                                    : (isFloatingDock ? selectedFloatingDockItems.includes(item.id) : (isBulkhead ? selectedBulkheadItems.includes(item.id) : (projectType === "Boat Lift" ? selectedBoatLiftItems.includes(item.id) : selectedRipRapItems.includes(item.id))));
 
                                 const quantity = parseFloat(dimensions) || 0;
                                 const lineTotal = item.unit === 'fixed' ? item.price : item.price * quantity;
 
                                 return (
-                                    <div key={item.id} onClick={() => toggleItem(item.id, isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : 'riprap')))} className={"cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border transition-all " + (isSelected ? 'bg-white border-cyan-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60')}>
+                                    <div key={item.id} onClick={() => toggleItem(item.id, isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : (projectType === "Boat Lift" ? 'boat_lift' : 'riprap'))))} className={"cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border transition-all " + (isSelected ? 'bg-white border-cyan-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60')}>
                                         <div className="flex items-center gap-3">
                                             <div className={"w-4 h-4 rounded flex items-center justify-center border " + (isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-slate-300 bg-white')}>
                                                 {isSelected && <CheckSquare className="w-3 h-3 text-white" />}

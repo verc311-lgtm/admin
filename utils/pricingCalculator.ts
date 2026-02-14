@@ -80,9 +80,20 @@ export const BULKHEAD_ITEMS: PricingItem[] = [
     { id: 'machinery_bh', label: 'Mobilization & Equipment', price: 5000.00, category: 'fee', isDefault: true, unit: 'fixed' },
 ];
 
+export const BOATLIFT_ITEMS: PricingItem[] = [
+    { id: '5k_lift', label: '5k Boat Lift', price: 8989.00, category: 'material', isDefault: false, unit: 'fixed' },
+    { id: '8k_lift', label: '8k Boat Lift', price: 9265.00, category: 'material', isDefault: false, unit: 'fixed' },
+    { id: '10k_lift', label: '10k Boat Lift', price: 9800.00, category: 'material', isDefault: true, unit: 'fixed' },
+    { id: '12k_lift', label: '12k Boat Lift', price: 10605.00, category: 'material', isDefault: false, unit: 'fixed' },
+    { id: '16k_lift', label: '16k Boat Lift', price: 12540.00, category: 'material', isDefault: false, unit: 'fixed' },
+    { id: 'piles_10x40', label: '4 Piles 10"x40\'', price: 4160.00, category: 'material', isDefault: true, unit: 'fixed' },
+    { id: 'labor_lift', label: 'Installation Labor', price: 4000.00, category: 'labor', isDefault: true, unit: 'fixed' },
+    { id: 'machinery_lift', label: 'Mobilization & Equipment', price: 3000.00, category: 'fee', isDefault: true, unit: 'fixed' },
+];
+
 export const calculateInteractivePrice = (
-    type: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead',
-    quantity: number, // sqf or lf
+    type: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead' | 'boat_lift',
+    quantity: number, // sqf or lf or 1 for lift
     selectedItemIds: string[],
     deckingType?: string,
     additionalExpenses: number = 0
@@ -94,6 +105,7 @@ export const calculateInteractivePrice = (
     else if (type === 'riprap') items = RIP_RAP_ITEMS;
     else if (type === 'floating_dock') items = FLOATING_DOCK_ITEMS;
     else if (type === 'bulkhead') items = BULKHEAD_ITEMS;
+    else if (type === 'boat_lift') items = BOATLIFT_ITEMS;
 
     // 1. Sum Selected Standard Items
     items.forEach(item => {
@@ -114,9 +126,7 @@ export const calculateInteractivePrice = (
         }
     }
 
-    // 3. Add Additional Expenses (Direct add, before markup? Usually expenses are part of cost, so markup applies. 
-    // If it's a direct fee, maybe not. Assuming it's cost to be marked up for now to be safe for profit, 
-    // OR if it's a final adjustment. Let's add it to subtotal so it gets markup.)
+    // 3. Add Additional Expenses
     subtotal += additionalExpenses;
 
     // 4. Apply 10% Markup (Overhead / Misc)
