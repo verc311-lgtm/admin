@@ -4,7 +4,7 @@ import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2
 import { jsPDF } from 'jspdf';
 import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, BULKHEAD_ITEMS, BOATLIFT_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
 
-const PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Boat Lift", "Rip-Rap / Erosion Control"];
+const PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Boat Lift", "Rip-Rap / Erosion Control", "Other / Custom Project"];
 
 const QuoteGenerator: React.FC = () => {
     // API Key State
@@ -18,6 +18,11 @@ const QuoteGenerator: React.FC = () => {
     const [dimensions, setDimensions] = useState('');
     const [otherWorkCost, setOtherWorkCost] = useState('');
     const [otherWorkDescription, setOtherWorkDescription] = useState('');
+
+    // Custom Items State
+    const [customItems, setCustomItems] = useState<{ id: string, description: string, price: number }[]>([]);
+    const [newCustomItemDesc, setNewCustomItemDesc] = useState('');
+    const [newCustomItemPrice, setNewCustomItemPrice] = useState('');
 
     // Interactive State
     const [deckingType, setDeckingType] = useState(DECKING_OPTIONS[0].id);
@@ -53,29 +58,50 @@ const QuoteGenerator: React.FC = () => {
         }
     };
 
+    const addCustomItem = () => {
+        if (newCustomItemDesc && newCustomItemPrice) {
+            setCustomItems([...customItems, { id: Date.now().toString(), description: newCustomItemDesc, price: parseFloat(newCustomItemPrice) }]);
+            setNewCustomItemDesc('');
+            setNewCustomItemPrice('');
+        }
+    };
+
+    const removeCustomItem = (id: string) => {
+        setCustomItems(customItems.filter(i => i.id !== id));
+    };
+
     // Auto-calculate for display
     const isDock = projectType === "Pier / Dock";
     const isFloatingDock = projectType === "Floating Dock";
     const isBulkhead = projectType === "Bulkhead";
     const isBoatLift = projectType === "Boat Lift";
+    const isCustom = projectType === "Other / Custom Project";
+
     const qty = parseFloat(dimensions);
     const expenses = parseFloat(otherWorkCost) || 0;
 
-    const currentCalculatedTotal = (!isNaN(qty) || isBoatLift)
-        ? calculateInteractivePrice(
-            isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : (isBoatLift ? 'boat_lift' : 'riprap'))),
-            qty || 1, // Default to 1 for Boat Lift if dimensions not provided
-            isDock ? selectedDockItems : (isFloatingDock ? selectedFloatingDockItems : (isBulkhead ? selectedBulkheadItems : (isBoatLift ? selectedBoatLiftItems : selectedRipRapItems))),
-            isDock ? deckingType : undefined,
-            expenses
-        )
-        : 0;
+    let currentCalculatedTotal = 0;
+
+    if (isCustom) {
+        const itemsTotal = customItems.reduce((sum, item) => sum + item.price, 0);
+        currentCalculatedTotal = Math.ceil((itemsTotal + expenses) * 1.10); // 10% Markup
+    } else {
+        currentCalculatedTotal = (!isNaN(qty) || isBoatLift)
+            ? calculateInteractivePrice(
+                isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : (isBoatLift ? 'boat_lift' : 'riprap'))),
+                qty || 1, // Default to 1 for Boat Lift
+                isDock ? selectedDockItems : (isFloatingDock ? selectedFloatingDockItems : (isBulkhead ? selectedBulkheadItems : (isBoatLift ? selectedBoatLiftItems : selectedRipRapItems))),
+                isDock ? deckingType : undefined,
+                expenses
+            )
+            : 0;
+    }
 
     useEffect(() => {
         if (!isGenerating) {
             setEstimatedTotal(currentCalculatedTotal);
         }
-    }, [dimensions, otherWorkCost, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, selectedBulkheadItems, selectedBoatLiftItems, deckingType, projectType]);
+    }, [dimensions, otherWorkCost, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, selectedBulkheadItems, selectedBoatLiftItems, customItems, deckingType, projectType]);
 
     const handleGenerateQuote = async () => {
         setErrorMsg('');
@@ -420,30 +446,72 @@ const QuoteGenerator: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Items List */}
-                            {(isDock ? DOCK_ITEMS : (isFloatingDock ? FLOATING_DOCK_ITEMS : (isBulkhead ? BULKHEAD_ITEMS : (projectType === "Boat Lift" ? BOATLIFT_ITEMS : RIP_RAP_ITEMS)))).map(item => {
-                                const isSelected = isDock
-                                    ? selectedDockItems.includes(item.id)
-                                    : (isFloatingDock ? selectedFloatingDockItems.includes(item.id) : (isBulkhead ? selectedBulkheadItems.includes(item.id) : (projectType === "Boat Lift" ? selectedBoatLiftItems.includes(item.id) : selectedRipRapItems.includes(item.id))));
-
-                                const quantity = parseFloat(dimensions) || 0;
-                                const lineTotal = item.unit === 'fixed' ? item.price : item.price * quantity;
-
-                                return (
-                                    <div key={item.id} onClick={() => toggleItem(item.id, isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : (projectType === "Boat Lift" ? 'boat_lift' : 'riprap'))))} className={"cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border transition-all " + (isSelected ? 'bg-white border-cyan-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60')}>
-                                        <div className="flex items-center gap-3">
-                                            <div className={"w-4 h-4 rounded flex items-center justify-center border " + (isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-slate-300 bg-white')}>
-                                                {isSelected && <CheckSquare className="w-3 h-3 text-white" />}
-                                            </div>
-                                            <div>
-                                                <div className="text-xs font-bold text-slate-700">{item.label}</div>
-                                                <div className="text-[10px] text-slate-400">{'$' + item.price.toLocaleString() + (item.unit === 'sqf' || item.unit === 'lf' ? ' / ' + item.unit : '')}</div>
-                                            </div>
-                                        </div>
-                                        <div className="text-xs font-mono font-bold text-slate-600">{'$' + lineTotal.toLocaleString()}</div>
+                            {/* Custom Items UI */}
+                            {isCustom ? (
+                                <div className="col-span-2 space-y-4">
+                                    <div className="flex gap-2">
+                                        <input
+                                            value={newCustomItemDesc}
+                                            onChange={(e) => setNewCustomItemDesc(e.target.value)}
+                                            placeholder="Item Description (e.g. Repair Piles)"
+                                            className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400"
+                                        />
+                                        <input
+                                            type="number"
+                                            value={newCustomItemPrice}
+                                            onChange={(e) => setNewCustomItemPrice(e.target.value)}
+                                            placeholder="Cost"
+                                            className="w-24 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400"
+                                        />
+                                        <button onClick={addCustomItem} className="bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl px-4 py-2 font-black uppercase text-xs">
+                                            <Plus className="w-4 h-4" />
+                                        </button>
                                     </div>
-                                );
-                            })}
+                                    <div className="space-y-2">
+                                        {customItems.map((item) => (
+                                            <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-bold text-slate-700">{item.description}</p>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <p className="text-sm font-mono font-black text-emerald-600">${item.price.toLocaleString()}</p>
+                                                    <button onClick={() => removeCustomItem(item.id)} className="text-slate-400 hover:text-red-500 transition-colors">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {customItems.length === 0 && (
+                                            <p className="text-center text-xs text-slate-400 italic py-4">Add custom items to build the estimate.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Standard Items List */
+                                (isDock ? DOCK_ITEMS : (isFloatingDock ? FLOATING_DOCK_ITEMS : (isBulkhead ? BULKHEAD_ITEMS : (projectType === "Boat Lift" ? BOATLIFT_ITEMS : RIP_RAP_ITEMS)))).map(item => {
+                                    const isSelected = isDock
+                                        ? selectedDockItems.includes(item.id)
+                                        : (isFloatingDock ? selectedFloatingDockItems.includes(item.id) : (isBulkhead ? selectedBulkheadItems.includes(item.id) : (projectType === "Boat Lift" ? selectedBoatLiftItems.includes(item.id) : selectedRipRapItems.includes(item.id))));
+
+                                    const quantity = parseFloat(dimensions) || 0;
+                                    const lineTotal = item.unit === 'fixed' ? item.price : item.price * quantity;
+
+                                    return (
+                                        <div key={item.id} onClick={() => toggleItem(item.id, isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : (projectType === "Boat Lift" ? 'boat_lift' : 'riprap'))))} className={"cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border transition-all " + (isSelected ? 'bg-white border-cyan-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60')}>
+                                            <div className="flex items-center gap-3">
+                                                <div className={"w-4 h-4 rounded flex items-center justify-center border " + (isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-slate-300 bg-white')}>
+                                                    {isSelected && <CheckSquare className="w-3 h-3 text-white" />}
+                                                </div>
+                                                <div>
+                                                    <div className="text-xs font-bold text-slate-700">{item.label}</div>
+                                                    <div className="text-[10px] text-slate-400">{'$' + item.price.toLocaleString() + (item.unit === 'sqf' || item.unit === 'lf' ? ' / ' + item.unit : '')}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-xs font-mono font-bold text-slate-600">{'$' + lineTotal.toLocaleString()}</div>
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
 
                         <div className="p-4 bg-slate-900 rounded-xl flex justify-between items-center text-white mt-4">
