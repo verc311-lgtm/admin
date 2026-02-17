@@ -8,6 +8,7 @@ import QuoteGenerator from './components/QuoteGenerator';
 import UserManagement from './components/UserManagement.tsx';
 import InvoiceView from './components/InvoiceView.tsx';
 import PaymentForm from './components/PaymentForm.tsx';
+import Schedule from './components/Schedule.tsx';
 import { User, Project, Payment, Invoice, View, Expense, ExpenseCategory } from './types.ts';
 import { HardDrive, ShieldCheck, Menu } from 'lucide-react';
 import { supabase } from './src/supabaseClient';
@@ -261,6 +262,23 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateProjectDates = async (projectId: string, startDate: string, estimatedEndDate: string | undefined) => {
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase.from('cva_projects').update({
+        startDate,
+        estimatedEndDate
+      }).eq('id', projectId);
+
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error updating schedule: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
+  };
+
   const navigateToInvoice = (project?: Project, invoice?: Invoice) => {
     setSelectedProjectForInvoice(project || null);
     setSelectedInvoiceForView(invoice || null);
@@ -413,6 +431,13 @@ const App: React.FC = () => {
               // Not implemented for direct supabase yet
               alert("Import not supported in Direct Mode.");
             }}
+          />
+        )}
+
+        {activeView === 'Schedule' && (
+          <Schedule
+            projects={projects}
+            onUpdateDates={handleUpdateProjectDates}
           />
         )}
       </main>

@@ -54,7 +54,8 @@ export interface Project {
   expensesList?: Expense[]; // Lista detallada de gastos
   profit: number;          // totalAmount - totalExpenses
   startDate: string;
+  estimatedEndDate?: string;
   status: 'Draft' | 'In Progress' | 'Finished';
 }
 
-export type View = 'Home' | 'Quotes' | 'Invoices' | 'Payments Made' | 'New Contract' | 'Project Search' | 'User Management';
+export type View = 'Home' | 'Quotes' | 'Invoices' | 'Payments Made' | 'New Contract' | 'Project Search' | 'User Management' | 'Schedule';

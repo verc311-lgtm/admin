@@ -11,7 +11,8 @@ import {
   Users,
   LogOut,
   ExternalLink,
-  X
+  X,
+  CalendarDays
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -29,6 +30,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, u
     { id: 'Quotes', label: 'AI Estimator', icon: Calculator },
     { id: 'Invoices', label: 'Invoices', icon: FileText },
     { id: 'Payments Made', label: 'Payment History', icon: ArrowUpCircle },
+    { id: 'Schedule', label: 'Schedule', icon: CalendarDays },
   ];
 
   const adminActions = [
