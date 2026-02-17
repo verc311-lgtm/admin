@@ -314,6 +314,18 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteAssignment = async (id: string) => {
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase.from('cva_assignments').delete().eq('id', id);
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error deleting assignment: " + err.message);
+      setIsSyncing(false);
+    }
+  };
+
   const navigateToInvoice = (project?: Project, invoice?: Invoice) => {
     setSelectedProjectForInvoice(project || null);
     setSelectedInvoiceForView(invoice || null);
@@ -477,6 +489,7 @@ const App: React.FC = () => {
             onUpdateDates={handleUpdateProjectDates}
             onAddCrew={handleAddCrew}
             onAddAssignment={handleAddAssignment}
+            onDeleteAssignment={handleDeleteAssignment}
           />
         )}
       </main>

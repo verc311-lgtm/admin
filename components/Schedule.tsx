@@ -8,10 +8,11 @@ interface ScheduleProps {
     assignments: Assignment[];
     onUpdateDates: (projectId: string, startDate: string, endDate: string | undefined) => void;
     onAddAssignment: (assignment: Omit<Assignment, 'id'>) => void;
+    onDeleteAssignment: (id: string) => void;
     onAddCrew: (name: string) => void;
 }
 
-const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], onUpdateDates, onAddAssignment, onAddCrew }) => {
+const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], onUpdateDates, onAddAssignment, onDeleteAssignment, onAddCrew }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [viewMode, setViewMode] = useState<'Timeline' | 'Weekly'>('Timeline');
     const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -19,7 +20,8 @@ const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], 
 
     // Weekly Assignment State
     const [selectedCell, setSelectedCell] = useState<{ crewId: string, date: Date } | null>(null);
-    const [assignmentForm, setAssignmentForm] = useState({ projectId: '', activity: '', workers: '' });
+    const [selectedDays, setSelectedDays] = useState<Date[]>([]);
+    const [assignmentForm, setAssignmentForm] = useState({ id: '', projectId: '', activity: '', workers: '' });
     const [newCrewName, setNewCrewName] = useState('');
     const [showCrewModal, setShowCrewModal] = useState(false);
 
@@ -47,6 +49,11 @@ const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], 
 
     const days = viewMode === 'Timeline' ? getDaysInMonth(currentDate) : getWeekDays(currentDate);
     const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    const resetForm = () => {
+        setAssignmentForm({ id: '', projectId: '', activity: '', workers: '' });
+        setSelectedDays([]);
+    };
 
     const handlePrev = () => {
         if (viewMode === 'Timeline') {
@@ -102,16 +109,20 @@ const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], 
     const handleSaveAssignment = (e: React.FormEvent) => {
         e.preventDefault();
         if (selectedCell && assignmentForm.projectId) {
-            onAddAssignment({
-                crewId: selectedCell.crewId,
-                projectId: assignmentForm.projectId,
-                date: selectedCell.date.toISOString().split('T')[0],
-                activity: assignmentForm.activity,
-                workers: assignmentForm.workers,
-                status: 'Pending'
+            // Bulk Assignment Loop
+            selectedDays.forEach(day => {
+                onAddAssignment({
+                    crewId: selectedCell.crewId,
+                    projectId: assignmentForm.projectId,
+                    date: day.toISOString().split('T')[0],
+                    activity: assignmentForm.activity,
+                    workers: assignmentForm.workers,
+                    status: 'Pending'
+                });
             });
+
             setSelectedCell(null);
-            setAssignmentForm({ projectId: '', activity: '', workers: '' });
+            resetForm();
         }
     };
 
@@ -131,7 +142,8 @@ const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], 
 
         const weekStart = days[0];
         const weekEnd = days[6];
-        let message = `📅 *Schedule: ${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}*\n\n`;
+        let message = `*WEEKLY REPORT: ${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}*\n`;
+        message += `----------------------------------\n`;
 
         crews.forEach(crew => {
             const crewAssignments = assignments.filter(a => {
@@ -140,15 +152,26 @@ const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], 
             });
 
             if (crewAssignments.length > 0) {
-                message += `Groups: *${crew.name}*\n`;
+                message += `🚀 *GROUP: ${crew.name.toUpperCase()}*\n`;
+
+                // Sort by date
                 crewAssignments.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
                 crewAssignments.forEach(a => {
                     const p = projects.find(proj => proj.id === a.projectId);
-                    const dateStr = new Date(a.date).toLocaleDateString('default', { weekday: 'short', day: 'numeric' });
-                    message += `- ${dateStr}: *${p?.name || 'Unknown'}* - ${a.activity} ${a.workers ? `(👷 ${a.workers})` : ''}\n`;
+                    const dateObj = new Date(a.date);
+                    const dayName = dateObj.toLocaleDateString('default', { weekday: 'long' }); // Monday
+                    const dateNum = dateObj.toLocaleDateString('default', { day: 'numeric', month: 'short' }); // 17 Feb
+
+                    message += `📅 *${dayName} (${dateNum})*\n`;
+                    message += `   🏗️ Project: ${p?.name || 'Unknown'}\n`;
+                    message += `   📝 Activity: ${a.activity}\n`;
+                    if (a.workers) {
+                        message += `   👷 Team: *${a.workers}*\n`;
+                    }
+                    message += `\n`;
                 });
-                message += `\n`;
+                message += `----------------------------------\n`;
             }
         });
 
@@ -247,7 +270,7 @@ const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], 
                                         </div>
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${project.status === 'Finished' ? 'bg-green-100 text-green-700' :
-                                                    project.status === 'Draft' ? 'bg-gray-100 text-gray-600' : 'bg-cyan-100 text-cyan-700'
+                                                project.status === 'Draft' ? 'bg-gray-100 text-gray-600' : 'bg-cyan-100 text-cyan-700'
                                                 }`}>
                                                 {project.status}
                                             </span>
@@ -342,7 +365,25 @@ const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], 
                                     <div
                                         key={day.toISOString()}
                                         className="border-r border-slate-100 last:border-r-0 p-2 hover:bg-cyan-50/50 transition-colors cursor-pointer relative group"
-                                        onClick={() => setSelectedCell({ crewId: crew.id, date: day })}
+                                        onClick={() => {
+                                            const dayDate = day;
+                                            // Pre-select if assignment exists
+                                            const assign = assignments?.find(a => a.crewId === crew.id && a.date === day.toISOString().split('T')[0]);
+
+                                            setSelectedCell({ crewId: crew.id, date: dayDate });
+                                            setSelectedDays([dayDate]); // Reset bulk select to this day
+
+                                            if (assign) {
+                                                setAssignmentForm({
+                                                    id: assign.id,
+                                                    projectId: assign.projectId,
+                                                    activity: assign.activity,
+                                                    workers: assign.workers || ''
+                                                });
+                                            } else {
+                                                setAssignmentForm({ id: '', projectId: '', activity: '', workers: '' });
+                                            }
+                                        }}
                                     >
                                         {assignment ? (
                                             <div className="h-full flex flex-col gap-1 p-2 bg-white border-l-4 border-cyan-500 rounded shadow-sm text-xs">
@@ -413,12 +454,46 @@ const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], 
                 <div className="fixed inset-0 bg-[#0a192f]/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                            <h3 className="font-bold text-lg text-[#0a192f]">Add Assignment</h3>
-                            <button onClick={() => setSelectedCell(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><div className="w-4 h-4 text-slate-500">✕</div></button>
+                            <h3 className="font-bold text-lg text-[#0a192f]">
+                                {assignmentForm.projectId ? 'Edit Assignment' : 'Add Assignment'}
+                            </h3>
+                            <button onClick={() => { setSelectedCell(null); resetForm(); }} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><div className="w-4 h-4 text-slate-500">✕</div></button>
                         </div>
                         <form onSubmit={handleSaveAssignment} className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-4 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                <div>Date: <span className="text-slate-700">{selectedCell.date.toLocaleDateString()}</span></div>
+
+                            {/* Date Selection (Bulk) */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Select Days</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {days.map(day => {
+                                        const dayName = day.toLocaleDateString('default', { weekday: 'short' });
+                                        const dayNum = day.getDate();
+                                        const isSelected = selectedDays.some(d => d.getTime() === day.getTime());
+                                        const isOriginal = day.getTime() === selectedCell.date.getTime();
+
+                                        return (
+                                            <button
+                                                key={day.toISOString()}
+                                                type="button"
+                                                onClick={() => {
+                                                    const timestamp = day.getTime();
+                                                    if (isSelected && !isOriginal) {
+                                                        setSelectedDays(selectedDays.filter(d => d.getTime() !== timestamp));
+                                                    } else if (!isSelected) {
+                                                        setSelectedDays([...selectedDays, day]);
+                                                    }
+                                                }}
+                                                className={`px-3 py-2 rounded-lg text-xs font-bold border-2 transition-all ${isSelected
+                                                    ? 'bg-cyan-600 border-cyan-600 text-white'
+                                                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-cyan-300'
+                                                    }`}
+                                            >
+                                                {dayName} {dayNum}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-1 font-medium">* Click multiple days to assign widely.</p>
                             </div>
 
                             <div>
@@ -460,8 +535,26 @@ const Schedule: React.FC<ScheduleProps> = ({ projects, crews, assignments = [], 
                             </div>
 
                             <div className="pt-4 flex gap-3">
-                                <button type="button" onClick={() => setSelectedCell(null)} className="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl uppercase tracking-wider transition-all">Cancel</button>
-                                <button type="submit" className="flex-1 px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl uppercase tracking-wider shadow-lg shadow-cyan-600/20 transition-all">Assign</button>
+                                {assignmentForm.id && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (window.confirm('Delete this assignment?')) {
+                                                onDeleteAssignment(assignmentForm.id);
+                                                setSelectedCell(null);
+                                                resetForm();
+                                            }
+                                        }}
+                                        className="px-4 py-3 bg-red-100 hover:bg-red-200 text-red-600 font-bold rounded-xl transition-all"
+                                        title="Delete"
+                                    >
+                                        🗑️
+                                    </button>
+                                )}
+                                <button type="button" onClick={() => { setSelectedCell(null); resetForm(); }} className="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl uppercase tracking-wider transition-all">Cancel</button>
+                                <button type="submit" className="flex-1 px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl uppercase tracking-wider shadow-lg shadow-cyan-600/20 transition-all">
+                                    {selectedDays.length > 1 ? `Assign (${selectedDays.length} Days)` : 'Assign'}
+                                </button>
                             </div>
                         </form>
                     </div>
