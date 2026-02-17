@@ -58,4 +58,20 @@ export interface Project {
   status: 'Draft' | 'In Progress' | 'Finished';
 }
 
+export interface Crew {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface Assignment {
+  id: string;
+  crewId: string;
+  projectId: string;
+  date: string;
+  activity: string;
+  workers?: string;
+  status: 'Pending' | 'Completed';
+}
+
 export type View = 'Home' | 'Quotes' | 'Invoices' | 'Payments Made' | 'New Contract' | 'Project Search' | 'User Management' | 'Schedule';

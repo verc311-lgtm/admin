@@ -9,7 +9,7 @@ import UserManagement from './components/UserManagement.tsx';
 import InvoiceView from './components/InvoiceView.tsx';
 import PaymentForm from './components/PaymentForm.tsx';
 import Schedule from './components/Schedule.tsx';
-import { User, Project, Payment, Invoice, View, Expense, ExpenseCategory } from './types.ts';
+import { User, Project, Payment, Invoice, View, Expense, ExpenseCategory, Crew, Assignment } from './types.ts';
 import { HardDrive, ShieldCheck, Menu } from 'lucide-react';
 import { supabase } from './src/supabaseClient';
 
@@ -34,6 +34,8 @@ const App: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [crews, setCrews] = useState<Crew[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
 
   // 1. Fetch Data on Load (Real-time from Supabase)
   const fetchData = async () => {
@@ -78,6 +80,13 @@ const App: React.FC = () => {
       setPayments(paymentsData || []);
       setInvoices(invoicesData || []);
       setUsers(usersData || []);
+
+      const { data: crewsData } = await supabase.from('cva_crews').select('*');
+      setCrews(crewsData || []);
+
+      const { data: assignData } = await supabase.from('cva_assignments').select('*');
+      setAssignments(assignData || []);
+
       setLastSync(new Date());
 
     } catch (error) {
@@ -279,6 +288,32 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAddCrew = async (name: string) => {
+    setIsSyncing(true);
+    try {
+      const newCrew = { id: Math.random().toString(36).substring(2, 9), name, color: 'bg-blue-500' };
+      const { error } = await supabase.from('cva_crews').insert([newCrew]);
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error creating crew: " + err.message);
+      setIsSyncing(false);
+    }
+  };
+
+  const handleAddAssignment = async (assignment: Omit<Assignment, 'id'>) => {
+    setIsSyncing(true);
+    try {
+      const newAssign = { ...assignment, id: Math.random().toString(36).substring(2, 9) };
+      const { error } = await supabase.from('cva_assignments').insert([newAssign]);
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error creating assignment: " + err.message);
+      setIsSyncing(false);
+    }
+  };
+
   const navigateToInvoice = (project?: Project, invoice?: Invoice) => {
     setSelectedProjectForInvoice(project || null);
     setSelectedInvoiceForView(invoice || null);
@@ -437,7 +472,11 @@ const App: React.FC = () => {
         {activeView === 'Schedule' && (
           <Schedule
             projects={projects}
+            crews={crews}
+            assignments={assignments}
             onUpdateDates={handleUpdateProjectDates}
+            onAddCrew={handleAddCrew}
+            onAddAssignment={handleAddAssignment}
           />
         )}
       </main>
