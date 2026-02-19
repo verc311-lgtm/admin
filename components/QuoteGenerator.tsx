@@ -13,6 +13,9 @@ interface QuoteSection {
     deckingType?: string;
     description?: string; // User note for this section
     price: number;
+    // New fields for Custom Project
+    customMaterialPrice?: number;
+    customLaborPrice?: number;
 }
 
 const QuoteGenerator: React.FC = () => {
@@ -34,6 +37,10 @@ const QuoteGenerator: React.FC = () => {
     const [currentSelectedItems, setCurrentSelectedItems] = useState<string[]>([]);
     const [currentDescription, setCurrentDescription] = useState(''); // e.g. "Main Dock"
 
+    // Custom Project State
+    const [customMaterialPrice, setCustomMaterialPrice] = useState('');
+    const [customLaborPrice, setCustomLaborPrice] = useState('');
+
     // Global Adjustments
     const [otherWorkCost, setOtherWorkCost] = useState('');
     const [otherWorkDescription, setOtherWorkDescription] = useState('');
@@ -48,6 +55,11 @@ const QuoteGenerator: React.FC = () => {
     useEffect(() => {
         const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
         setCurrentSelectedItems(defaults);
+        // Reset custom fields if switching away from Custom
+        if (currentType !== "Other / Custom Project") {
+            setCustomMaterialPrice('');
+            setCustomLaborPrice('');
+        }
     }, [currentType]);
 
     // Helpers
@@ -62,10 +74,23 @@ const QuoteGenerator: React.FC = () => {
         }
     };
 
-    const calculateSectionPrice = (type: string, dims: string, items: string[], decking?: string) => {
-        if (type === "Other / Custom Project") return 0; // Handled manually or via adjustments
-
+    const calculateSectionPrice = (
+        type: string,
+        dims: string,
+        items: string[],
+        decking?: string,
+        customMat?: string,
+        customLab?: string
+    ) => {
         const qty = parseFloat(dims) || 0;
+
+        if (type === "Other / Custom Project") {
+            const matRate = parseFloat(customMat || '0');
+            const labRate = parseFloat(customLab || '0');
+            // Formula: (QTY * MATERIAL) + (QTY * Labor)
+            return (qty * matRate) + (qty * labRate);
+        }
+
         // Map type string to calculator keys
         let calcType: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead' | 'boat_lift' = 'dock';
         if (type === 'Floating Dock') calcType = 'floating_dock';
@@ -90,7 +115,7 @@ const QuoteGenerator: React.FC = () => {
     };
 
     const addSection = () => {
-        const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking);
+        const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking, customMaterialPrice, customLaborPrice);
         const newSection: QuoteSection = {
             id: Date.now().toString(),
             type: currentType,
@@ -98,7 +123,9 @@ const QuoteGenerator: React.FC = () => {
             selectedItems: currentSelectedItems,
             deckingType: currentType === "Pier / Dock" ? currentDecking : undefined,
             description: currentDescription,
-            price
+            price,
+            customMaterialPrice: parseFloat(customMaterialPrice) || undefined,
+            customLaborPrice: parseFloat(customLaborPrice) || undefined
         };
 
         setSections([...sections, newSection]);
@@ -106,7 +133,9 @@ const QuoteGenerator: React.FC = () => {
         // Reset Form
         setCurrentDimensions('');
         setCurrentDescription('');
-        // Keep type same for convenience or reset? Let's keep type.
+        setCustomMaterialPrice('');
+        setCustomLaborPrice('');
+
         // Reset selection to defaults
         const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
         setCurrentSelectedItems(defaults);
@@ -134,7 +163,7 @@ const QuoteGenerator: React.FC = () => {
         let activeSections = [...sections];
         if (currentDimensions && parseFloat(currentDimensions) > 0) {
             if (window.confirm(`Did you mean to include the current "${currentType}" section in the proposal?`)) {
-                const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking);
+                const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking, customMaterialPrice, customLaborPrice);
                 const newSection: QuoteSection = {
                     id: Date.now().toString(),
                     type: currentType,
@@ -142,7 +171,9 @@ const QuoteGenerator: React.FC = () => {
                     selectedItems: currentSelectedItems,
                     deckingType: currentType === "Pier / Dock" ? currentDecking : undefined,
                     description: currentDescription,
-                    price
+                    price,
+                    customMaterialPrice: parseFloat(customMaterialPrice) || undefined,
+                    customLaborPrice: parseFloat(customLaborPrice) || undefined
                 };
                 activeSections.push(newSection);
                 setSections(activeSections); // Update State
@@ -150,6 +181,8 @@ const QuoteGenerator: React.FC = () => {
                 // Clear Form
                 setCurrentDimensions('');
                 setCurrentDescription('');
+                setCustomMaterialPrice('');
+                setCustomLaborPrice('');
                 const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
                 setCurrentSelectedItems(defaults);
             }
@@ -170,16 +203,25 @@ const QuoteGenerator: React.FC = () => {
             // Build Prompt
             let projectDesc = "";
             activeSections.forEach((s, idx) => {
-                const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
-                if (s.type === "Pier / Dock") {
-                    const deck = DECKING_OPTIONS.find(d => d.id === s.deckingType)?.label;
-                    if (deck) items.push(`Decking: ${deck}`);
-                }
+                if (s.type === "Other / Custom Project") {
+                    projectDesc += `\nSECTION ${idx + 1}: CUSTOM PROJECT - ${s.description ? s.description.toUpperCase() : 'DETAILS'}\n`;
+                    projectDesc += `- Concept/Description: ${s.description || 'Custom Work'}\n`;
+                    projectDesc += `- Quantity/Dimensions: ${s.dimensions}\n`;
+                    if (s.customMaterialPrice) projectDesc += `- Material Rate: $${s.customMaterialPrice}/unit\n`;
+                    if (s.customLaborPrice) projectDesc += `- Labor Rate: $${s.customLaborPrice}/unit\n`;
+                    projectDesc += `- Total Section Price: $${s.price.toLocaleString()}\n`;
+                } else {
+                    const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
+                    if (s.type === "Pier / Dock") {
+                        const deck = DECKING_OPTIONS.find(d => d.id === s.deckingType)?.label;
+                        if (deck) items.push(`Decking: ${deck}`);
+                    }
 
-                projectDesc += `\nSECTION ${idx + 1}: ${s.type.toUpperCase()}\n`;
-                if (s.description) projectDesc += `Note: ${s.description}\n`;
-                projectDesc += `- Dimensions: ${s.dimensions} ${s.type.includes('Dock') ? 'SQF' : 'Linear Feet/Units'}\n`;
-                projectDesc += `- Inclusions: ${items.join(', ')}\n`;
+                    projectDesc += `\nSECTION ${idx + 1}: ${s.type.toUpperCase()}\n`;
+                    if (s.description) projectDesc += `Note: ${s.description}\n`;
+                    projectDesc += `- Dimensions: ${s.dimensions} ${s.type.includes('Dock') ? 'SQF' : 'Linear Feet/Units'}\n`;
+                    projectDesc += `- Inclusions: ${items.join(', ')}\n`;
+                }
             });
 
             if (adjustments > 0) {
@@ -307,8 +349,19 @@ Output JSON:
             doc.text(`• ${s.type}`, margin + 5, y);
 
             doc.setFont("helvetica", "normal");
-            let desc = `${s.dimensions} ${s.type.includes('Dock') ? 'sqf' : 'units/lf'}`;
-            if (s.description) desc += ` - ${s.description}`;
+            let desc = "";
+            if (s.type === "Other / Custom Project") {
+                desc = `${s.dimensions} units`;
+                if (s.description) desc += ` - ${s.description}`;
+                if (s.customMaterialPrice) desc += ` (Mat: $${s.customMaterialPrice})`;
+                if (s.customLaborPrice) desc += ` (Lab: $${s.customLaborPrice})`;
+            } else {
+                desc = `${s.dimensions} ${s.type.includes('Dock') ? 'sqf' : 'units/lf'}`;
+                if (s.description) desc += ` - ${s.description}`;
+            }
+            // Truncate if too long
+            if (desc.length > 65) desc = desc.substring(0, 62) + '...';
+
             doc.text(desc, margin + 50, y);
 
             doc.text(`$${s.price.toLocaleString()}`, width - margin, y, { align: 'right' });
@@ -392,6 +445,9 @@ Output JSON:
         // Save
         doc.save(`Proposal_${clientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
     };
+
+    // Calculate live price for current section
+    const currentLivePrice = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking, customMaterialPrice, customLaborPrice);
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in">
@@ -482,40 +538,65 @@ Output JSON:
                         </div>
 
                         <div className="mb-4">
-                            <label className="text-[10px] font-bold uppercase text-slate-400">Description / Note (Optional)</label>
-                            <input value={currentDescription} onChange={e => setCurrentDescription(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. Main Dock on Left Side" />
+                            <label className="text-[10px] font-bold uppercase text-slate-400">{currentType === "Other / Custom Project" ? "Concept / Description" : "Description / Note (Optional)"}</label>
+                            <input value={currentDescription} onChange={e => setCurrentDescription(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder={currentType === "Other / Custom Project" ? "e.g. Gazebo Construction" : "e.g. Main Dock on Left Side"} />
                         </div>
 
-                        {/* Item Selector */}
-                        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 max-h-60 overflow-y-auto">
-                            <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block">Specifications & Materials</label>
-
-                            {currentType === "Pier / Dock" && (
-                                <div className="mb-4 grid grid-cols-2 gap-2">
-                                    {DECKING_OPTIONS.map(d => (
-                                        <div key={d.id} onClick={() => setCurrentDecking(d.id)} className={`cursor-pointer p-2 rounded-lg border text-center text-xs font-bold transition-all ${currentDecking === d.id ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-                                            {d.label}
-                                        </div>
-                                    ))}
+                        {/* Custom Project Inputs */}
+                        {currentType === "Other / Custom Project" ? (
+                            <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+                                <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block">Custom Pricing (Per Unit)</label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-slate-400">Material Cost ($)</label>
+                                        <input type="number" value={customMaterialPrice} onChange={e => setCustomMaterialPrice(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700" placeholder="0.00" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-slate-400">Labor Cost ($)</label>
+                                        <input type="number" value={customLaborPrice} onChange={e => setCustomLaborPrice(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700" placeholder="0.00" />
+                                    </div>
                                 </div>
-                            )}
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                {getItemsForType(currentType).map(item => {
-                                    const isSelected = currentSelectedItems.includes(item.id);
-                                    return (
-                                        <div key={item.id} onClick={() => toggleCurrentItem(item.id)} className={`cursor-pointer p-2 rounded-lg border flex items-center gap-3 transition-all ${isSelected ? 'bg-cyan-50 border-cyan-200' : 'hover:bg-slate-50 border-transparent'}`}>
-                                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-cyan-500 border-cyan-500' : 'bg-white border-slate-300'}`}>
-                                                {isSelected && <Check className="w-3 h-3 text-white" />}
-                                            </div>
-                                            <div>
-                                                <p className="text-xs font-bold text-slate-700">{item.label}</p>
-                                                <p className="text-[9px] text-slate-400">${item.price}</p>
-                                            </div>
-                                        </div>
-                                    )
-                                })}
+                                <div className="mt-2 text-xs text-slate-400 italic">
+                                    Total = (Qty * Material) + (Qty * Labor)
+                                </div>
                             </div>
+                        ) : (
+                            /* Item Selector (Standard) */
+                            <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 max-h-60 overflow-y-auto">
+                                <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block">Specifications & Materials</label>
+
+                                {currentType === "Pier / Dock" && (
+                                    <div className="mb-4 grid grid-cols-2 gap-2">
+                                        {DECKING_OPTIONS.map(d => (
+                                            <div key={d.id} onClick={() => setCurrentDecking(d.id)} className={`cursor-pointer p-2 rounded-lg border text-center text-xs font-bold transition-all ${currentDecking === d.id ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                                                {d.label}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {getItemsForType(currentType).map(item => {
+                                        const isSelected = currentSelectedItems.includes(item.id);
+                                        return (
+                                            <div key={item.id} onClick={() => toggleCurrentItem(item.id)} className={`cursor-pointer p-2 rounded-lg border flex items-center gap-3 transition-all ${isSelected ? 'bg-cyan-50 border-cyan-200' : 'hover:bg-slate-50 border-transparent'}`}>
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-cyan-500 border-cyan-500' : 'bg-white border-slate-300'}`}>
+                                                    {isSelected && <Check className="w-3 h-3 text-white" />}
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-bold text-slate-700">{item.label}</p>
+                                                    <p className="text-[9px] text-slate-400">${item.price}</p>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between mb-4 px-2">
+                            <span className="text-xs font-bold text-slate-400 uppercase">Section Total:</span>
+                            <span className="text-xl font-black text-slate-700">${currentLivePrice.toLocaleString()}</span>
                         </div>
 
                         <button onClick={addSection} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg transition-all">
