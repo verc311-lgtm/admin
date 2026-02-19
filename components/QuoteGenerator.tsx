@@ -51,6 +51,9 @@ const QuoteGenerator: React.FC = () => {
     const [aiEstimatedTotal, setAiEstimatedTotal] = useState<number>(0); // Allows override
     const [errorMsg, setErrorMsg] = useState('');
 
+    // PDF Project Summary Toggle
+    const [showProjectSummary, setShowProjectSummary] = useState(true);
+
     // Initialize default items when type changes
     useEffect(() => {
         const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
@@ -334,49 +337,51 @@ Output JSON:
 
         y += 15;
 
-        // --- Project Summary (Table-like) ---
-        doc.setDrawColor(200, 200, 200);
-        doc.line(margin, y, width - margin, y);
-        y += 8;
+        // --- Project Summary (Optional Table) ---
+        if (showProjectSummary) {
+            doc.setDrawColor(200, 200, 200);
+            doc.line(margin, y, width - margin, y);
+            y += 8;
 
-        doc.setFont("helvetica", "bold");
-        doc.text("PROJECT SUMMARY", margin, y);
-        y += 8;
-
-        sections.forEach(s => {
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(10);
-            doc.text(`• ${s.type}`, margin + 5, y);
+            doc.text("PROJECT SUMMARY", margin, y);
+            y += 8;
 
-            doc.setFont("helvetica", "normal");
-            let desc = "";
-            if (s.type === "Other / Custom Project") {
-                desc = `${s.dimensions} units`;
-                if (s.description) desc += ` - ${s.description}`;
-                if (s.customMaterialPrice) desc += ` (Mat: $${s.customMaterialPrice})`;
-                if (s.customLaborPrice) desc += ` (Lab: $${s.customLaborPrice})`;
-            } else {
-                desc = `${s.dimensions} ${s.type.includes('Dock') ? 'sqf' : 'units/lf'}`;
-                if (s.description) desc += ` - ${s.description}`;
+            sections.forEach(s => {
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.text(`• ${s.type}`, margin + 5, y);
+
+                doc.setFont("helvetica", "normal");
+                let desc = "";
+                if (s.type === "Other / Custom Project") {
+                    desc = `${s.dimensions} units`;
+                    if (s.description) desc += ` - ${s.description}`;
+                    if (s.customMaterialPrice) desc += ` (Mat: $${s.customMaterialPrice})`;
+                    if (s.customLaborPrice) desc += ` (Lab: $${s.customLaborPrice})`;
+                } else {
+                    desc = `${s.dimensions} ${s.type.includes('Dock') ? 'sqf' : 'units/lf'}`;
+                    if (s.description) desc += ` - ${s.description}`;
+                }
+                // Truncate if too long
+                if (desc.length > 65) desc = desc.substring(0, 62) + '...';
+
+                doc.text(desc, margin + 50, y);
+
+                doc.text(`$${s.price.toLocaleString()}`, width - margin, y, { align: 'right' });
+                y += 6;
+            });
+
+            if (otherWorkDescription) {
+                doc.text(`• Other: ${otherWorkDescription}`, margin + 5, y);
+                doc.text(`$${adjustments.toLocaleString()}`, width - margin, y, { align: 'right' });
+                y += 6;
             }
-            // Truncate if too long
-            if (desc.length > 65) desc = desc.substring(0, 62) + '...';
 
-            doc.text(desc, margin + 50, y);
-
-            doc.text(`$${s.price.toLocaleString()}`, width - margin, y, { align: 'right' });
-            y += 6;
-        });
-
-        if (otherWorkDescription) {
-            doc.text(`• Other: ${otherWorkDescription}`, margin + 5, y);
-            doc.text(`$${adjustments.toLocaleString()}`, width - margin, y, { align: 'right' });
-            y += 6;
+            y += 5;
+            doc.line(margin, y, width - margin, y);
+            y += 10;
         }
-
-        y += 5;
-        doc.line(margin, y, width - margin, y);
-        y += 10;
 
         // --- Scope of Work (Flowing Text) ---
         doc.setFont("helvetica", "bold");
@@ -638,9 +643,11 @@ Output JSON:
                                 <Bot className="w-4 h-4 text-cyan-600" /> Proposal Output
                             </h3>
                             {scopeOfWork && (
-                                <button onClick={generatePDF} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-red-500/20 transition-all">
-                                    <FileText className="w-4 h-4" /> PDF
-                                </button>
+                                <div className="flex gap-2">
+                                    <button onClick={generatePDF} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-red-500/20 transition-all">
+                                        <FileText className="w-4 h-4" /> PDF
+                                    </button>
+                                </div>
                             )}
                         </div>
 
@@ -660,6 +667,16 @@ Output JSON:
                                         onChange={e => setAiEstimatedTotal(parseFloat(e.target.value) || 0)}
                                         className="w-full bg-slate-100 border-2 border-slate-200 text-slate-800 rounded-xl px-4 py-3 font-black text-xl"
                                     />
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                    <input
+                                        type="checkbox"
+                                        id="showSummary"
+                                        checked={showProjectSummary}
+                                        onChange={e => setShowProjectSummary(e.target.checked)}
+                                        className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                                    />
+                                    <label htmlFor="showSummary" className="text-xs font-bold text-slate-500 uppercase cursor-pointer">Include Itemized Summary in PDF</label>
                                 </div>
                             </div>
                         ) : (
