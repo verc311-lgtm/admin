@@ -1,573 +1,564 @@
-
 import React, { useState, useEffect } from 'react';
-import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square, Calculator, Check } from 'lucide-react';
+import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square, Calculator, Check, Layout, Edit, Layers } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, BULKHEAD_ITEMS, BOATLIFT_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
 
 const PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Boat Lift", "Rip-Rap / Erosion Control", "Other / Custom Project"];
 
+interface QuoteSection {
+    id: string;
+    type: string;
+    dimensions: string;
+    selectedItems: string[];
+    deckingType?: string;
+    description?: string; // User note for this section
+    price: number;
+}
+
 const QuoteGenerator: React.FC = () => {
-    // API Key State
+    // API & Settings
     const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
     const [showSettings, setShowSettings] = useState(false);
 
-    // Form Inputs
+    // Client Info
     const [clientName, setClientName] = useState('');
     const [clientAddress, setClientAddress] = useState('');
-    const [projectType, setProjectType] = useState(PROJECT_TYPES[0]);
-    const [dimensions, setDimensions] = useState('');
+
+    // Multi-Section State
+    const [sections, setSections] = useState<QuoteSection[]>([]);
+
+    // Current Section Form State
+    const [currentType, setCurrentType] = useState(PROJECT_TYPES[0]);
+    const [currentDimensions, setCurrentDimensions] = useState('');
+    const [currentDecking, setCurrentDecking] = useState(DECKING_OPTIONS[0].id);
+    const [currentSelectedItems, setCurrentSelectedItems] = useState<string[]>([]);
+    const [currentDescription, setCurrentDescription] = useState(''); // e.g. "Main Dock"
+
+    // Global Adjustments
     const [otherWorkCost, setOtherWorkCost] = useState('');
     const [otherWorkDescription, setOtherWorkDescription] = useState('');
-
-    // Custom Items State
-    const [customItems, setCustomItems] = useState<{ id: string, description: string, price: number }[]>([]);
-    const [newCustomItemDesc, setNewCustomItemDesc] = useState('');
-    const [newCustomItemPrice, setNewCustomItemPrice] = useState('');
-
-    // Interactive State
-    const [deckingType, setDeckingType] = useState(DECKING_OPTIONS[0].id);
-    const [selectedDockItems, setSelectedDockItems] = useState<string[]>(DOCK_ITEMS.filter(i => i.isDefault).map(i => i.id));
-    const [selectedRipRapItems, setSelectedRipRapItems] = useState<string[]>(RIP_RAP_ITEMS.filter(i => i.isDefault).map(i => i.id));
-    const [selectedFloatingDockItems, setSelectedFloatingDockItems] = useState<string[]>(FLOATING_DOCK_ITEMS.filter(i => i.isDefault).map(i => i.id));
-    const [selectedBulkheadItems, setSelectedBulkheadItems] = useState<string[]>(BULKHEAD_ITEMS.filter(i => i.isDefault).map(i => i.id));
-    const [selectedBoatLiftItems, setSelectedBoatLiftItems] = useState<string[]>(BOATLIFT_ITEMS.filter(i => i.isDefault).map(i => i.id));
 
     // AI Results
     const [isGenerating, setIsGenerating] = useState(false);
     const [scopeOfWork, setScopeOfWork] = useState('');
-    const [estimatedTotal, setEstimatedTotal] = useState<number>(0);
+    const [aiEstimatedTotal, setAiEstimatedTotal] = useState<number>(0); // Allows override
     const [errorMsg, setErrorMsg] = useState('');
 
+    // Initialize default items when type changes
+    useEffect(() => {
+        const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
+        setCurrentSelectedItems(defaults);
+    }, [currentType]);
+
+    // Helpers
+    const getItemsForType = (type: string) => {
+        switch (type) {
+            case "Pier / Dock": return DOCK_ITEMS;
+            case "Floating Dock": return FLOATING_DOCK_ITEMS;
+            case "Bulkhead": return BULKHEAD_ITEMS;
+            case "Boat Lift": return BOATLIFT_ITEMS;
+            case "Rip-Rap / Erosion Control": return RIP_RAP_ITEMS;
+            default: return [];
+        }
+    };
+
+    const calculateSectionPrice = (type: string, dims: string, items: string[], decking?: string) => {
+        if (type === "Other / Custom Project") return 0; // Handled manually or via adjustments
+
+        const qty = parseFloat(dims) || 0;
+        // Map type string to calculator keys
+        let calcType: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead' | 'boat_lift' = 'dock';
+        if (type === 'Floating Dock') calcType = 'floating_dock';
+        else if (type === 'Bulkhead') calcType = 'bulkhead';
+        else if (type === 'Boat Lift') calcType = 'boat_lift';
+        else if (type === 'Rip-Rap / Erosion Control') calcType = 'riprap';
+
+        // For Boat Lift, quantity might be 1 if fixed items
+        const effectiveQty = (calcType === 'boat_lift' && qty === 0) ? 1 : qty;
+
+        return calculateInteractivePrice(calcType, effectiveQty, items, decking, 0);
+    };
+
+    // Form Handlers
     const handleSaveKey = () => {
         localStorage.setItem('openai_api_key', apiKey);
         setShowSettings(false);
-        setErrorMsg('');
     };
 
-    const toggleItem = (id: string, type: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead' | 'boat_lift') => {
-        if (type === 'dock') {
-            setSelectedDockItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-        } else if (type === 'riprap') {
-            setSelectedRipRapItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-        } else if (type === 'floating_dock') {
-            setSelectedFloatingDockItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-        } else if (type === 'bulkhead') {
-            setSelectedBulkheadItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-        } else {
-            setSelectedBoatLiftItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-        }
+    const toggleCurrentItem = (id: string) => {
+        setCurrentSelectedItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     };
 
-    const addCustomItem = () => {
-        if (newCustomItemDesc && newCustomItemPrice) {
-            setCustomItems([...customItems, { id: Date.now().toString(), description: newCustomItemDesc, price: parseFloat(newCustomItemPrice) }]);
-            setNewCustomItemDesc('');
-            setNewCustomItemPrice('');
-        }
+    const addSection = () => {
+        const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking);
+        const newSection: QuoteSection = {
+            id: Date.now().toString(),
+            type: currentType,
+            dimensions: currentDimensions,
+            selectedItems: currentSelectedItems,
+            deckingType: currentType === "Pier / Dock" ? currentDecking : undefined,
+            description: currentDescription,
+            price
+        };
+
+        setSections([...sections, newSection]);
+
+        // Reset Form
+        setCurrentDimensions('');
+        setCurrentDescription('');
+        // Keep type same for convenience or reset? Let's keep type.
+        // Reset selection to defaults
+        const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
+        setCurrentSelectedItems(defaults);
     };
 
-    const removeCustomItem = (id: string) => {
-        setCustomItems(customItems.filter(i => i.id !== id));
+    const removeSection = (id: string) => {
+        setSections(sections.filter(s => s.id !== id));
     };
 
-    // Auto-calculate for display
-    const isDock = projectType === "Pier / Dock";
-    const isFloatingDock = projectType === "Floating Dock";
-    const isBulkhead = projectType === "Bulkhead";
-    const isBoatLift = projectType === "Boat Lift";
-    const isCustom = projectType === "Other / Custom Project";
+    // Total Calculation
+    const sectionsTotal = sections.reduce((sum, s) => sum + s.price, 0);
+    const adjustments = parseFloat(otherWorkCost) || 0;
+    const grandTotal = sectionsTotal + adjustments;
 
-    const qty = parseFloat(dimensions);
-    const expenses = parseFloat(otherWorkCost) || 0;
-
-    let currentCalculatedTotal = 0;
-
-    if (isCustom) {
-        const itemsTotal = customItems.reduce((sum, item) => sum + item.price, 0);
-        currentCalculatedTotal = Math.ceil((itemsTotal + expenses) * 1.10); // 10% Markup
-    } else {
-        currentCalculatedTotal = (!isNaN(qty) || isBoatLift)
-            ? calculateInteractivePrice(
-                isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : (isBoatLift ? 'boat_lift' : 'riprap'))),
-                qty || 1, // Default to 1 for Boat Lift
-                isDock ? selectedDockItems : (isFloatingDock ? selectedFloatingDockItems : (isBulkhead ? selectedBulkheadItems : (isBoatLift ? selectedBoatLiftItems : selectedRipRapItems))),
-                isDock ? deckingType : undefined,
-                expenses
-            )
-            : 0;
-    }
-
-    useEffect(() => {
-        if (!isGenerating) {
-            setEstimatedTotal(currentCalculatedTotal);
-        }
-    }, [dimensions, otherWorkCost, selectedDockItems, selectedRipRapItems, selectedFloatingDockItems, selectedBulkheadItems, selectedBoatLiftItems, customItems, deckingType, projectType]);
-
+    // AI Generation
     const handleGenerateQuote = async () => {
         setErrorMsg('');
         if (!apiKey) {
-            setErrorMsg("Please enter your OpenAI API Key in settings.");
+            setErrorMsg("Please enter OpenAI API Key.");
             setShowSettings(true);
             return;
         }
-        if (!dimensions && !isBoatLift) { // Boat lift might not need dimensions if fixed
-            // Actually currently logic uses dimensions for all calculations mostly, 
-            // but boat lift items are fixed. 
-            // However, let's keep it required for consistency or set to 1.
-            // If user leaves blank, dimensions is NaN.
+        if (sections.length === 0) {
+            setErrorMsg("Please add at least one section.");
+            return;
         }
 
         setIsGenerating(true);
-        let finalPrice = 0;
-        let finalMaterials: string[] = [];
-        const expenses = parseFloat(otherWorkCost) || 0;
+        setAiEstimatedTotal(grandTotal);
 
         try {
-            const qty = parseFloat(dimensions);
-            // Relax dimension requirement for boat lift if all items are fixed?
-            // But let's assume they might enter '1' unit.
-            if (isNaN(qty) && !isBoatLift) {
-                throw new Error("Dimensions must be a valid number.");
+            // Build Prompt
+            let projectDesc = "";
+            sections.forEach((s, idx) => {
+                const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
+                if (s.type === "Pier / Dock") {
+                    const deck = DECKING_OPTIONS.find(d => d.id === s.deckingType)?.label;
+                    if (deck) items.push(`Decking: ${deck}`);
+                }
+
+                projectDesc += `\nSECTION ${idx + 1}: ${s.type.toUpperCase()}\n`;
+                if (s.description) projectDesc += `Note: ${s.description}\n`;
+                projectDesc += `- Dimensions: ${s.dimensions} ${s.type.includes('Dock') ? 'SQF' : 'Linear Feet/Units'}\n`;
+                projectDesc += `- Inclusions: ${items.join(', ')}\n`;
+            });
+
+            if (adjustments > 0) {
+                projectDesc += `\nOTHER WORK: ${otherWorkDescription} ($${adjustments})\n`;
             }
 
-            finalPrice = currentCalculatedTotal;
+            const prompt = `Role: Senior Estimator for "Coastal VA Marine Construction".
+Task: Write a detailed "Preliminary Construction Proposal".
 
-            if (isDock) {
-                finalMaterials = DOCK_ITEMS
-                    .filter(i => selectedDockItems.includes(i.id))
-                    .map(i => i.label);
-                const deckName = DECKING_OPTIONS.find(d => d.id === deckingType)?.label;
-                if (deckName) finalMaterials.push(deckName);
-            } else if (isFloatingDock) {
-                finalMaterials = FLOATING_DOCK_ITEMS
-                    .filter(i => selectedFloatingDockItems.includes(i.id))
-                    .map(i => i.label);
-            } else if (isBulkhead) {
-                finalMaterials = BULKHEAD_ITEMS
-                    .filter(i => selectedBulkheadItems.includes(i.id))
-                    .map(i => i.label);
-            } else if (isBoatLift) {
-                finalMaterials = BOATLIFT_ITEMS
-                    .filter(i => selectedBoatLiftItems.includes(i.id))
-                    .map(i => i.label);
-            } else {
-                finalMaterials = RIP_RAP_ITEMS
-                    .filter(i => selectedRipRapItems.includes(i.id))
-                    .map(i => i.label);
-            }
+Client: ${clientName || 'Valued Client'}
+Address: ${clientAddress || 'N/A'}
 
-            if (expenses > 0) {
-                finalMaterials.push('Other Work: ' + (otherWorkDescription || 'Misc') + ' ($' + expenses.toLocaleString() + ')');
-            }
+Scope of Work (Multiple Sections):
+${projectDesc}
 
-            const prompt = "Role: You are a Senior Estimator for \"Coastal VA Marine Construction\". Write a formal \"Preliminary Construction Proposal\".\n\n" +
-                "Project Details:\n" +
-                "- Client: " + (clientName || 'Valued Client') + "\n" +
-                "- Address: " + (clientAddress || 'N/A') + "\n" +
-                "- Type: " + projectType + "\n" +
-                "- Size: " + dimensions + " " + ((isDock || isFloatingDock) ? 'SQF' : 'Linear Feet') + "\n" +
-                "- Materials Included: " + finalMaterials.join(', ') + "\n" +
-                (expenses > 0 ? "- Other Work Included: " + otherWorkDescription + " ($" + expenses.toLocaleString() + ")\n" : "") +
-                "\nDirectives:\n" +
-                "1. **Tone**: Professional, authoritative, legalistic, and high-value.\n" +
-                "2. **Exclusions Section**: You MUST include a distinct section titled \"STANDARD EXCLUSIONS\" listing: Permits, Engineering, Soil Tests, Hazardous Material Removal, Hidden Obstructions.\n" +
-                "3. **Scope Entry**: Write a comprehensive, detailed, and professionally formatted scope of work. Use distinct paragraphs or distinct bullet points for clarity. Do not bunch text together.\n" +
-                "4. **Formatting**: Ensure the output is clean and readable. Use markdown lists if appropriate.\n" +
-                "\nReturn JSON ONLY:\n" +
-                "{\n" +
-                "    \"scopeOfWork\": \"The detailed professional scope...\\n\\n- Item 1\\n- Item 2\",\n" +
-                "    \"exclusions\": \"Permits, Engineering, Soil Tests, Hidden Obstructions...\",\n" +
-                "    \"totalPrice\": " + finalPrice + "\n" +
-                "}";
+Directives:
+1. **Professional Tone**: Authoritative, high-value, clear.
+2. **Structure**: 
+   - Write a master "Scope of Work" that describes the entire project cohesively.
+   - Use clear headings for each section (e.g., "## Pier Construction", "## Boat Lift Installation").
+   - Bullet points for materials/specs.
+3. **Exclusions**: Must include a standard exclusions section (Permits, Engineering, Soil Tests, Hidden Obstructions).
+4. **Format**: Return valid JSON only.
 
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+Output JSON:
+{
+    "scopeOfWork": "The full detailed text...",
+    "exclusions": "Permits, Engineering..."
+}`;
+
+            const res = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + apiKey
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
                 body: JSON.stringify({
                     model: "gpt-4o",
-                    messages: [
-                        { role: "system", content: "You are a senior construction estimator. Output JSON only." },
-                        { role: "user", content: prompt }
-                    ],
+                    messages: [{ role: "system", content: "You are a senior estimator. Output JSON only." }, { role: "user", content: prompt }],
                     temperature: 0.3
                 })
             });
 
-            const data = await response.json();
+            const data = await res.json();
             if (data.error) throw new Error(data.error.message);
 
             const content = data.choices[0].message.content;
-            const jsonMatch = content.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                setScopeOfWork(parsed.scopeOfWork + "\n\n**STANDARD EXCLUSIONS**:\n" + (parsed.exclusions || "Permits, Engineering, Soil Tests."));
-                setEstimatedTotal(finalPrice);
-            } else {
-                throw new Error("Failed to parse AI response JSON.");
-            }
+            const jsonStart = content.indexOf('{');
+            const jsonEnd = content.lastIndexOf('}') + 1;
+            const parsed = JSON.parse(content.substring(jsonStart, jsonEnd));
 
-        } catch (error: any) {
-            console.error("OpenAI Error:", error);
-            setErrorMsg('Error: ' + (error.message || "Unknown error occurred"));
+            setScopeOfWork(parsed.scopeOfWork + "\n\n**STANDARD EXCLUSIONS**:\n" + (parsed.exclusions || "Permits, Engineering, Soil Tests."));
+
+        } catch (err: any) {
+            console.error(err);
+            setErrorMsg("Error: " + err.message);
         } finally {
             setIsGenerating(false);
         }
     };
 
+    // PDF Generation
     const generatePDF = () => {
-        // Use Letter size (8.5 x 11 in) by default in jsPDF ('letter')
-        const doc = new jsPDF({
-            format: 'letter',
-            unit: 'mm'
-        });
+        const doc = new jsPDF({ format: 'letter', unit: 'mm' });
+        const width = doc.internal.pageSize.getWidth();
+        const height = doc.internal.pageSize.getHeight();
+        const margin = 15;
+        let y = 0;
 
-        const pageWidth = doc.internal.pageSize.getWidth(); // ~215.9mm
-        const pageHeight = doc.internal.pageSize.getHeight(); // ~279.4mm
-        const margin = 14;
+        // Colors
+        const primaryColor = [10, 25, 47]; // #0a192f
+        const accentColor = [73, 204, 249]; // Cyan
+        const grayColor = [100, 116, 139];
 
-        // Header
-        doc.setFillColor(10, 25, 47);
-        doc.rect(0, 0, pageWidth, 35, 'F'); // Compact header
-
-        doc.setFontSize(18);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(255, 255, 255);
-        doc.text("COASTAL VA MARINE CONSTRUCTION", pageWidth / 2, 18, { align: 'center' });
-
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(73, 204, 249);
-        doc.text("Preliminary Construction Proposal", pageWidth / 2, 26, { align: 'center' });
-
-        // Client Info Block
-        let currentY = 50;
-        doc.setTextColor(0);
-        doc.setFontSize(11);
-
-        doc.text('Client: ' + (clientName || 'Valued Client'), margin, currentY);
-        doc.text('Date: ' + new Date().toLocaleDateString(), pageWidth - margin, currentY, { align: 'right' });
-        currentY += 6;
-        doc.text('Address: ' + (clientAddress || 'N/A'), margin, currentY);
-        currentY += 8;
-        doc.text('Project: ' + projectType, margin, currentY);
-        currentY += 6;
-        doc.text('Size: ' + dimensions + ' ' + (isDock || isFloatingDock ? 'SQF' : 'Linear Feet'), margin, currentY);
-
-        currentY += 12;
-
-        // Scope of Work
-        doc.setFontSize(13);
-        doc.setFont("helvetica", "bold");
-        doc.text("Scope of Work & Approach", margin, currentY);
-        currentY += 8;
-
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(50);
-
-        // Calculate available height for text to avoid pushing total off page
-        // Reserve space for Total block (~50mm) and Footer (~20mm)
-        // Max text height = pageHeight - currentY - 70mm
-        const splitScope = doc.splitTextToSize(scopeOfWork, pageWidth - (margin * 2));
-        doc.text(splitScope, margin, currentY);
-
-        currentY += (splitScope.length * 5) + 10;
-
-        // "Other Work" Section if applicable
-        const expenses = parseFloat(otherWorkCost) || 0;
-        if (expenses > 0) {
-            // Check if we need a new page
-            if (currentY > pageHeight - 60) {
-                doc.addPage();
-                currentY = 20;
-            }
+        // --- Header Function ---
+        const drawHeader = () => {
+            doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            doc.rect(0, 0, width, 40, 'F');
 
             doc.setFont("helvetica", "bold");
-            doc.setTextColor(0);
-            doc.text("Other Work Included:", margin, currentY);
-            currentY += 5;
+            doc.setFontSize(22);
+            doc.setTextColor(255, 255, 255);
+            doc.text("COASTAL VA MARINE CONSTRUCTION", width / 2, 20, { align: 'center' });
+
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
+            doc.text("PRELIMINARY CONSTRUCTION PROPOSAL", width / 2, 28, { align: 'center' });
+
+            y = 55;
+        };
+
+        // --- Start Page 1 ---
+        drawHeader();
+
+        // Client Block
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text("PREPARED FOR:", margin, y);
+        doc.text("DATE:", width - margin - 30, y);
+
+        y += 6;
+        doc.setFont("helvetica", "normal");
+        doc.text(clientName || "Valued Client", margin, y);
+        doc.text(new Date().toLocaleDateString(), width - margin - 30, y);
+
+        y += 6;
+        if (clientAddress) {
+            doc.text(clientAddress, margin, y);
+        }
+
+        y += 15;
+
+        // --- Project Summary (Table-like) ---
+        doc.setDrawColor(200, 200, 200);
+        doc.line(margin, y, width - margin, y);
+        y += 8;
+
+        doc.setFont("helvetica", "bold");
+        doc.text("PROJECT SUMMARY", margin, y);
+        y += 8;
+
+        sections.forEach(s => {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.text(`• ${s.type}`, margin + 5, y);
 
             doc.setFont("helvetica", "normal");
-            doc.text((otherWorkDescription || 'Misc. Items'), margin, currentY);
-            doc.text('$' + expenses.toLocaleString(), pageWidth - margin, currentY, { align: 'right' });
-            currentY += 10;
+            let desc = `${s.dimensions} ${s.type.includes('Dock') ? 'sqf' : 'units/lf'}`;
+            if (s.description) desc += ` - ${s.description}`;
+            doc.text(desc, margin + 50, y);
+
+            doc.text(`$${s.price.toLocaleString()}`, width - margin, y, { align: 'right' });
+            y += 6;
+        });
+
+        if (otherWorkDescription) {
+            doc.text(`• Other: ${otherWorkDescription}`, margin + 5, y);
+            doc.text(`$${adjustments.toLocaleString()}`, width - margin, y, { align: 'right' });
+            y += 6;
         }
 
-        // Check space for total block
-        if (currentY > pageHeight - 50) {
-            doc.addPage();
-            currentY = 20;
-        }
+        y += 5;
+        doc.line(margin, y, width - margin, y);
+        y += 10;
 
-        // Total Price Block
-        doc.setFillColor(240, 248, 255);
-        doc.setDrawColor(73, 204, 249);
-        doc.roundedRect(margin, currentY, pageWidth - (margin * 2), 35, 3, 3, 'FD');
-
-        const boxCenter = currentY + 17.5;
-
-        doc.setFontSize(14);
+        // --- Scope of Work (Flowing Text) ---
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(10, 25, 47);
-        doc.text("Total Proposed Investment", pageWidth / 2, boxCenter - 5, { align: 'center' });
+        doc.setFontSize(12);
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        doc.text("SCOPE OF WORK & SPECIFICATIONS", margin, y);
+        y += 8;
 
-        doc.setFontSize(20);
-        doc.setTextColor(0, 100, 0); // Green
-        doc.text('$' + estimatedTotal.toLocaleString(), pageWidth / 2, boxCenter + 8, { align: 'center' });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(50, 50, 50);
 
-        // Disclaimer (Footer)
-        const footerY = pageHeight - 15;
+        const splitText = doc.splitTextToSize(scopeOfWork, width - (margin * 2));
+
+        // Print lines with page break check
+        for (let i = 0; i < splitText.length; i++) {
+            if (y > height - 60) { // Leave space for footer
+                doc.addPage();
+                drawHeader();
+            }
+            doc.text(splitText[i], margin, y);
+            y += 5;
+        }
+
+        // --- Investment Summary Page (Force New Page for Drama) ---
+        doc.addPage();
+        drawHeader();
+        y = 60;
+
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        doc.text("INVESTMENT SUMMARY", width / 2, y, { align: 'center' });
+        y += 20;
+
+        // Total Box
+        doc.setFillColor(245, 247, 250);
+        doc.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
+        doc.roundedRect(width / 2 - 60, y, 120, 50, 3, 3, 'FD');
+
+        y += 15;
+        doc.setFontSize(12);
+        doc.setTextColor(grayColor[0], grayColor[1], grayColor[2]);
+        doc.text("TOTAL PROPOSED INVESTMENT", width / 2, y, { align: 'center' });
+
+        y += 15;
+        doc.setFontSize(26);
+        doc.setTextColor(0, 100, 0); // Money Green
+        doc.text(`$${aiEstimatedTotal.toLocaleString()}`, width / 2, y, { align: 'center' });
+
+        // Footer / Signatures
+        y += 50;
+        doc.setDrawColor(0);
+        doc.line(margin, y, margin + 80, y); // Client Line
+        doc.line(width - margin - 80, y, width - margin, y); // Contractor Line
+
+        y += 5;
         doc.setFontSize(8);
-        doc.setTextColor(100);
-        doc.setFont("helvetica", "italic");
-        doc.text("NOTE: This proposal is preliminary. Final price subject to site inspection and engineering.", pageWidth / 2, footerY, { align: 'center' });
-        doc.text("Permits and Engineering are excluded unless explicitly itemized.", pageWidth / 2, footerY + 4, { align: 'center' });
+        doc.setTextColor(0);
+        doc.text("CLIENT SIGNATURE", margin, y);
+        doc.text("DATE", margin + 60, y);
 
-        doc.save('Proposal_' + (clientName || 'Project') + '.pdf');
+        doc.text("COASTAL VA REP", width - margin - 80, y);
+        doc.text("DATE", width - margin - 20, y);
+
+        // Save
+        doc.save(`Proposal_${clientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     return (
-        <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
-            {/* Header & Settings */}
-            <div className="flex flex-col md:flex-row justify-between items-center bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 gap-4">
-                <div className="flex items-center gap-5">
-                    <div className="bg-[#0a192f] p-4 rounded-2xl text-cyan-400"><Bot className="w-8 h-8" /></div>
+        <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in">
+            {/* Header */}
+            <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex items-center gap-4">
+                    <div className="bg-[#0a192f] p-3 rounded-xl text-cyan-400"><Bot className="w-6 h-6" /></div>
                     <div>
-                        <h2 className="text-2xl md:text-3xl font-black text-[#0a192f] uppercase italic tracking-tighter">Proposal Generator</h2>
-                        <p className="text-slate-400 font-bold uppercase tracking-widest text-xs mt-1">
-                            Preliminary Construction Proposal
-                        </p>
+                        <h2 className="text-2xl font-bold text-[#0a192f]">Proposal Generator <span className="text-cyan-600">PRO</span></h2>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Multi-Section AI Estimator</p>
                     </div>
                 </div>
-                <button onClick={() => setShowSettings(!showSettings)} className="p-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-500 transition-colors">
-                    <Settings className="w-6 h-6" />
-                </button>
+                <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-slate-100 rounded-lg"><Settings className="w-5 h-5 text-slate-400" /></button>
             </div>
 
             {showSettings && (
-                <div className="bg-slate-800 text-white p-8 rounded-[2rem] shadow-xl animate-in slide-in-from-top-4">
-                    <h3 className="font-bold uppercase tracking-widest mb-4 flex items-center gap-2"><Settings className="w-4 h-4" /> AI Configuration</h3>
-                    <p className="text-slate-400 text-sm mb-4">Enter your OpenAI API Key to enable automatic estimating.</p>
-                    <div className="flex gap-4">
-                        <input
-                            type="password"
-                            value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
-                            placeholder="sk-..."
-                            className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-cyan-400 font-mono"
-                        />
-                        <button onClick={handleSaveKey} className="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl font-bold uppercase text-xs">Save Key</button>
+                <div className="bg-slate-800 p-6 rounded-2xl text-white mb-6">
+                    <label className="text-xs font-bold uppercase mb-2 block text-slate-400">OpenAI API Key</label>
+                    <div className="flex gap-2">
+                        <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} className="flex-1 bg-slate-900 border border-slate-700 px-4 py-2 rounded-lg" />
+                        <button onClick={handleSaveKey} className="bg-cyan-600 px-4 py-2 rounded-lg font-bold text-xs uppercase">Save</button>
                     </div>
                 </div>
             )}
 
-            <div className="grid md:grid-cols-2 gap-8">
-                {/* INPUTS */}
-                <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
-                    <h3 className="font-black text-[#0a192f] uppercase tracking-widest text-sm mb-4">Project Parameters</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* LEFT COLUMN: Builder */}
+                <div className="lg:col-span-7 space-y-6">
+
+                    {/* Client Info */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Client Name</label>
-                            <input value={clientName} onChange={(e) => setClientName(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="Client Name" />
+                            <label className="text-[10px] font-bold uppercase text-slate-400">Client Name</label>
+                            <input value={clientName} onChange={e => setClientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700" placeholder="John Doe" />
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Address</label>
-                            <input value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="123 Ocean Dr..." />
+                            <label className="text-[10px] font-bold uppercase text-slate-400">Project Address</label>
+                            <input value={clientAddress} onChange={e => setClientAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700" placeholder="123 Ocean Dr" />
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Project Type</label>
-                            <select value={projectType} onChange={(e) => setProjectType(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400">
-                                {PROJECT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">{isDock || isFloatingDock ? 'Dimensions (SQF)' : 'Dimensions (Lin. Ft.)'}</label>
-                            <input value={dimensions} onChange={(e) => setDimensions(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 100" />
-                        </div>
-                    </div>
-
-                    {/* Other Work / Adjustments */}
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 flex items-center gap-2">
-                            <Plus className="w-3 h-3" /> Other Work / Adjustments
-                        </label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
-                                <input
-                                    type="text"
-                                    value={otherWorkDescription}
-                                    onChange={(e) => setOtherWorkDescription(e.target.value)}
-                                    className="w-full bg-white border-2 border-transparent rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 outline-none focus:border-cyan-400 transition-all placeholder:font-normal"
-                                    placeholder="Description (e.g. Demolition)"
-                                />
-                            </div>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</span>
-                                <input
-                                    type="number"
-                                    value={otherWorkCost}
-                                    onChange={(e) => setOtherWorkCost(e.target.value)}
-                                    className="w-full bg-white border-2 border-transparent rounded-xl pl-6 pr-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400 transition-all"
-                                    placeholder="0.00"
-                                />
-                            </div>
-                        </div>
-                        <p className="text-[8px] text-slate-400 font-bold ml-2">Applies to total before markup.</p>
-                    </div>
-
-                    <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 mb-2 block">
-                            Itemized Costs / Inclusions
-                        </label>
-                        <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
-                            {/* Decking Selector - Only for Docks */}
-                            {isDock && (
-                                <div className="col-span-2 mb-4 bg-slate-100/50 p-3 rounded-2xl">
-                                    <h4 className="text-[10px] uppercase font-bold text-slate-400 mb-2">Decking Material</h4>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {DECKING_OPTIONS.map(dt => (
-                                            <div
-                                                key={dt.id}
-                                                onClick={() => setDeckingType(dt.id)}
-                                                className={"cursor-pointer p-3 rounded-xl border-2 text-center transition-all " + (deckingType === dt.id ? 'bg-cyan-50 border-cyan-400' : 'bg-slate-50 border-slate-100')}
-                                            >
-                                                <p className="font-bold text-xs">{dt.label}</p>
-                                                <p className="text-[9px] text-slate-400">${dt.price}/sqf</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Custom Items UI */}
-                            {isCustom ? (
-                                <div className="col-span-2 space-y-4">
-                                    <div className="flex gap-2">
-                                        <input
-                                            value={newCustomItemDesc}
-                                            onChange={(e) => setNewCustomItemDesc(e.target.value)}
-                                            placeholder="Item Description (e.g. Repair Piles)"
-                                            className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400"
-                                        />
-                                        <input
-                                            type="number"
-                                            value={newCustomItemPrice}
-                                            onChange={(e) => setNewCustomItemPrice(e.target.value)}
-                                            placeholder="Cost"
-                                            className="w-24 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400"
-                                        />
-                                        <button onClick={addCustomItem} className="bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl px-4 py-2 font-black uppercase text-xs">
-                                            <Plus className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {customItems.map((item) => (
-                                            <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                                                <div className="flex-1">
-                                                    <p className="text-sm font-bold text-slate-700">{item.description}</p>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <p className="text-sm font-mono font-black text-emerald-600">${item.price.toLocaleString()}</p>
-                                                    <button onClick={() => removeCustomItem(item.id)} className="text-slate-400 hover:text-red-500 transition-colors">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {customItems.length === 0 && (
-                                            <p className="text-center text-xs text-slate-400 italic py-4">Add custom items to build the estimate.</p>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : (
-                                /* Standard Items List */
-                                (isDock ? DOCK_ITEMS : (isFloatingDock ? FLOATING_DOCK_ITEMS : (isBulkhead ? BULKHEAD_ITEMS : (projectType === "Boat Lift" ? BOATLIFT_ITEMS : RIP_RAP_ITEMS)))).map(item => {
-                                    const isSelected = isDock
-                                        ? selectedDockItems.includes(item.id)
-                                        : (isFloatingDock ? selectedFloatingDockItems.includes(item.id) : (isBulkhead ? selectedBulkheadItems.includes(item.id) : (projectType === "Boat Lift" ? selectedBoatLiftItems.includes(item.id) : selectedRipRapItems.includes(item.id))));
-
-                                    const quantity = parseFloat(dimensions) || 0;
-                                    const lineTotal = item.unit === 'fixed' ? item.price : item.price * quantity;
-
-                                    return (
-                                        <div key={item.id} onClick={() => toggleItem(item.id, isDock ? 'dock' : (isFloatingDock ? 'floating_dock' : (isBulkhead ? 'bulkhead' : (projectType === "Boat Lift" ? 'boat_lift' : 'riprap'))))} className={"cursor-pointer px-4 py-3 rounded-xl flex items-center justify-between border transition-all " + (isSelected ? 'bg-white border-cyan-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60')}>
-                                            <div className="flex items-center gap-3">
-                                                <div className={"w-4 h-4 rounded flex items-center justify-center border " + (isSelected ? 'bg-cyan-500 border-cyan-500' : 'border-slate-300 bg-white')}>
-                                                    {isSelected && <CheckSquare className="w-3 h-3 text-white" />}
-                                                </div>
-                                                <div>
-                                                    <div className="text-xs font-bold text-slate-700">{item.label}</div>
-                                                    <div className="text-[10px] text-slate-400">{'$' + item.price.toLocaleString() + (item.unit === 'sqf' || item.unit === 'lf' ? ' / ' + item.unit : '')}</div>
-                                                </div>
-                                            </div>
-                                            <div className="text-xs font-mono font-bold text-slate-600">{'$' + lineTotal.toLocaleString()}</div>
+                    {/* Added Sections List */}
+                    {sections.length > 0 && (
+                        <div className="space-y-3">
+                            <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest ml-1">Current Sections</h3>
+                            {sections.map((section, idx) => (
+                                <div key={section.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center group hover:border-cyan-200 transition-all">
+                                    <div className="flex gap-4 items-center">
+                                        <div className="bg-cyan-50 text-cyan-700 font-bold w-8 h-8 flex items-center justify-center rounded-lg text-xs">{idx + 1}</div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-700">{section.type}</h4>
+                                            <p className="text-xs text-slate-500">{section.dimensions} units • {section.description || 'No description'}</p>
                                         </div>
-                                    );
-                                })
-                            )}
-                        </div>
-
-                        <div className="p-4 bg-slate-900 rounded-xl flex justify-between items-center text-white mt-4">
-                            <div className="flex flex-col">
-                                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Total Project Investment</span>
-                                <span className="text-[10px] text-slate-500 italic">Includes 10% Misc/Overhead</span>
-                            </div>
-                            <span className="text-xl font-black text-cyan-400">{'$' + currentCalculatedTotal.toLocaleString()}</span>
-                        </div>
-                    </div>
-
-                    {errorMsg && (
-                        <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl text-xs font-bold">
-                            {errorMsg}
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <span className="font-mono font-bold text-slate-700">${section.price.toLocaleString()}</span>
+                                        <button onClick={() => removeSection(section.id)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
 
-                    <button onClick={handleGenerateQuote} disabled={isGenerating || !apiKey} className="w-full py-4 bg-[#0a192f] text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-50 shadow-xl mt-4">
-                        {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5 text-cyan-400" />}
-                        {isGenerating ? 'Calculating...' : 'Generate Preliminary Proposal'}
-                    </button>
-                </div>
+                    {/* Add New Section Form */}
+                    <div className="bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed border-slate-200">
+                        <h3 className="flex items-center gap-2 font-black text-slate-600 uppercase tracking-widest text-sm mb-6">
+                            <Plus className="w-4 h-4 text-cyan-500" /> Add Project Section
+                        </h3>
 
-                {/* OUTPUTS */}
-                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col h-full">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="font-black text-[#0a192f] uppercase tracking-widest text-sm">Proposal Results</h3>
-                        <button onClick={generatePDF} disabled={!scopeOfWork} className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 shadow-lg disabled:opacity-50">
-                            <Download className="w-4 h-4" /> Export Proposal
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-400">Section Type</label>
+                                <select value={currentType} onChange={e => setCurrentType(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400">
+                                    {PROJECT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-400">Dimensions / Qty</label>
+                                <input value={currentDimensions} onChange={e => setCurrentDimensions(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 100" />
+                            </div>
+                        </div>
+
+                        <div className="mb-4">
+                            <label className="text-[10px] font-bold uppercase text-slate-400">Description / Note (Optional)</label>
+                            <input value={currentDescription} onChange={e => setCurrentDescription(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. Main Dock on Left Side" />
+                        </div>
+
+                        {/* Item Selector */}
+                        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 max-h-60 overflow-y-auto">
+                            <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block">Specifications & Materials</label>
+
+                            {currentType === "Pier / Dock" && (
+                                <div className="mb-4 grid grid-cols-2 gap-2">
+                                    {DECKING_OPTIONS.map(d => (
+                                        <div key={d.id} onClick={() => setCurrentDecking(d.id)} className={`cursor-pointer p-2 rounded-lg border text-center text-xs font-bold transition-all ${currentDecking === d.id ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                                            {d.label}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {getItemsForType(currentType).map(item => {
+                                    const isSelected = currentSelectedItems.includes(item.id);
+                                    return (
+                                        <div key={item.id} onClick={() => toggleCurrentItem(item.id)} className={`cursor-pointer p-2 rounded-lg border flex items-center gap-3 transition-all ${isSelected ? 'bg-cyan-50 border-cyan-200' : 'hover:bg-slate-50 border-transparent'}`}>
+                                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-cyan-500 border-cyan-500' : 'bg-white border-slate-300'}`}>
+                                                {isSelected && <Check className="w-3 h-3 text-white" />}
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-700">{item.label}</p>
+                                                <p className="text-[9px] text-slate-400">${item.price}</p>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        <button onClick={addSection} className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg transition-all">
+                            <Plus className="w-4 h-4 text-cyan-400" /> Add to Proposal
                         </button>
                     </div>
 
-                    <div className="flex-1 space-y-6">
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Scope of Work & Exclusions</label>
-                            <textarea
-                                value={scopeOfWork}
-                                onChange={(e) => setScopeOfWork(e.target.value)}
-                                className="w-full h-64 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-medium text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed"
-                                placeholder="Generated proposal text will appear here..."
-                            />
+                    {/* Global Adjustments */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest mb-3">Adjustments</h3>
+                        <div className="flex gap-4">
+                            <input value={otherWorkDescription} onChange={e => setOtherWorkDescription(e.target.value)} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm" placeholder="Misc / Other Work" />
+                            <div className="relative w-32">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                                <input type="number" value={otherWorkCost} onChange={e => setOtherWorkCost(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-4 py-2 text-sm font-bold" placeholder="0.00" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* RIGHT COLUMN: Output */}
+                <div className="lg:col-span-5 flex flex-col h-full space-y-6">
+
+                    {/* Live Total */}
+                    <div className="bg-[#0a192f] p-8 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-32 bg-cyan-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                        <p className="text-cyan-400 font-bold uppercase tracking-widest text-xs mb-1">Total Estimated Investment</p>
+                        <h2 className="text-5xl font-black tracking-tighter mb-2">${grandTotal.toLocaleString()}</h2>
+                        <p className="text-slate-400 text-xs italic opacity-70">Includes all sections & adjustments</p>
+                    </div>
+
+                    {/* AI Actions */}
+                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex-1 flex flex-col">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-black text-slate-700 uppercase tracking-widest text-sm flex items-center gap-2">
+                                <Bot className="w-4 h-4 text-cyan-600" /> Proposal Output
+                            </h3>
+                            {scopeOfWork && (
+                                <button onClick={generatePDF} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-red-500/20 transition-all">
+                                    <FileText className="w-4 h-4" /> PDF
+                                </button>
+                            )}
                         </div>
 
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Final Proposed Price (Incl. Overlay)</label>
-                            <div className="relative">
-                                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-                                <input
-                                    type="number"
-                                    value={estimatedTotal}
-                                    onChange={(e) => setEstimatedTotal(parseFloat(e.target.value))}
-                                    className="w-full bg-cyan-50/50 border-2 border-cyan-100 text-cyan-700 border-2 rounded-2xl pl-10 pr-5 py-4 font-black text-3xl outline-none focus:border-cyan-400"
+                        {scopeOfWork ? (
+                            <div className="flex-1 flex flex-col gap-4">
+                                <textarea
+                                    value={scopeOfWork}
+                                    onChange={e => setScopeOfWork(e.target.value)}
+                                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-medium text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed"
                                 />
+                                {/* Price Override */}
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-slate-400">Final Price (Editable)</label>
+                                    <input
+                                        type="number"
+                                        value={aiEstimatedTotal}
+                                        onChange={e => setAiEstimatedTotal(parseFloat(e.target.value) || 0)}
+                                        className="w-full bg-slate-100 border-2 border-slate-200 text-slate-800 rounded-xl px-4 py-3 font-black text-xl"
+                                    />
+                                </div>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-bold mt-2 ml-2">Includes Materials, Labor, Equipment, and Misc/Overhead.</p>
-                        </div>
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
+                                <Layers className="w-12 h-12 text-slate-200 mb-4" />
+                                <p className="text-slate-400 font-bold text-sm">Add sections to generate proposal</p>
+                            </div>
+                        )}
+
+                        <button
+                            onClick={handleGenerateQuote}
+                            disabled={isGenerating || sections.length === 0}
+                            className="w-full mt-6 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-cyan-600/20 transition-all"
+                        >
+                            {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5" />}
+                            {isGenerating ? 'Drafting Proposal...' : 'Generate with AI'}
+                        </button>
+
+                        {errorMsg && <p className="text-center text-red-500 text-xs font-bold mt-4">{errorMsg}</p>}
                     </div>
                 </div>
             </div>
