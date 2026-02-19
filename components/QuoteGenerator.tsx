@@ -129,18 +129,47 @@ const QuoteGenerator: React.FC = () => {
             setShowSettings(true);
             return;
         }
-        if (sections.length === 0) {
+
+        // Auto-Add Pending Section Logic
+        let activeSections = [...sections];
+        if (currentDimensions && parseFloat(currentDimensions) > 0) {
+            if (window.confirm(`Did you mean to include the current "${currentType}" section in the proposal?`)) {
+                const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking);
+                const newSection: QuoteSection = {
+                    id: Date.now().toString(),
+                    type: currentType,
+                    dimensions: currentDimensions,
+                    selectedItems: currentSelectedItems,
+                    deckingType: currentType === "Pier / Dock" ? currentDecking : undefined,
+                    description: currentDescription,
+                    price
+                };
+                activeSections.push(newSection);
+                setSections(activeSections); // Update State
+
+                // Clear Form
+                setCurrentDimensions('');
+                setCurrentDescription('');
+                const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
+                setCurrentSelectedItems(defaults);
+            }
+        }
+
+        if (activeSections.length === 0) {
             setErrorMsg("Please add at least one section.");
             return;
         }
 
         setIsGenerating(true);
-        setAiEstimatedTotal(grandTotal);
+        // Recalculate total with potential new section
+        const newSectionsTotal = activeSections.reduce((sum, s) => sum + s.price, 0);
+        const newGrandTotal = newSectionsTotal + adjustments;
+        setAiEstimatedTotal(newGrandTotal);
 
         try {
             // Build Prompt
             let projectDesc = "";
-            sections.forEach((s, idx) => {
+            activeSections.forEach((s, idx) => {
                 const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
                 if (s.type === "Pier / Dock") {
                     const deck = DECKING_OPTIONS.find(d => d.id === s.deckingType)?.label;
@@ -172,6 +201,7 @@ Directives:
    - Write a master "Scope of Work" that describes the entire project cohesively.
    - Use clear headings for each section (e.g., "## Pier Construction", "## Boat Lift Installation").
    - Bullet points for materials/specs.
+   - Use a clean layout.
 3. **Exclusions**: Must include a standard exclusions section (Permits, Engineering, Soil Tests, Hidden Obstructions).
 4. **Format**: Return valid JSON only.
 
@@ -407,7 +437,10 @@ Output JSON:
                     {/* Added Sections List */}
                     {sections.length > 0 && (
                         <div className="space-y-3">
-                            <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest ml-1">Current Sections</h3>
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest ml-1">Current Sections</h3>
+                                <button onClick={() => setSections([])} className="text-[10px] text-red-500 font-bold hover:underline">Clear All</button>
+                            </div>
                             {sections.map((section, idx) => (
                                 <div key={section.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center group hover:border-cyan-200 transition-all">
                                     <div className="flex gap-4 items-center">
@@ -427,8 +460,11 @@ Output JSON:
                     )}
 
                     {/* Add New Section Form */}
-                    <div className="bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed border-slate-200">
-                        <h3 className="flex items-center gap-2 font-black text-slate-600 uppercase tracking-widest text-sm mb-6">
+                    <div className="bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed border-slate-200 relative">
+                        <div className="absolute -top-3 left-6 bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                            Step 1: Build Proposal
+                        </div>
+                        <h3 className="flex items-center gap-2 font-black text-slate-600 uppercase tracking-widest text-sm mb-6 mt-2">
                             <Plus className="w-4 h-4 text-cyan-500" /> Add Project Section
                         </h3>
 
@@ -482,7 +518,7 @@ Output JSON:
                             </div>
                         </div>
 
-                        <button onClick={addSection} className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg transition-all">
+                        <button onClick={addSection} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg transition-all">
                             <Plus className="w-4 h-4 text-cyan-400" /> Add to Proposal
                         </button>
                     </div>
@@ -512,8 +548,11 @@ Output JSON:
                     </div>
 
                     {/* AI Actions */}
-                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex-1 flex flex-col">
-                        <div className="flex justify-between items-center mb-6">
+                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex-1 flex flex-col relative">
+                        <div className="absolute -top-3 left-6 bg-cyan-100 text-cyan-800 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                            Step 2: Generate & Export
+                        </div>
+                        <div className="flex justify-between items-center mb-6 mt-4">
                             <h3 className="font-black text-slate-700 uppercase tracking-widest text-sm flex items-center gap-2">
                                 <Bot className="w-4 h-4 text-cyan-600" /> Proposal Output
                             </h3>
@@ -551,7 +590,7 @@ Output JSON:
 
                         <button
                             onClick={handleGenerateQuote}
-                            disabled={isGenerating || sections.length === 0}
+                            disabled={isGenerating || (sections.length === 0 && (!currentDimensions || parseFloat(currentDimensions) === 0))}
                             className="w-full mt-6 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-cyan-600/20 transition-all"
                         >
                             {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5" />}
