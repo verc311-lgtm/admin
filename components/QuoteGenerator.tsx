@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square, Calculator, Check, Layout, Edit, Layers, MessageSquare } from 'lucide-react';
+import { Bot, FileText, Loader2, Settings, Plus, Trash2, Check, Layers, MessageSquare, Edit3 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, BULKHEAD_ITEMS, BOATLIFT_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
 
@@ -11,64 +11,49 @@ interface QuoteSection {
     dimensions: string;
     selectedItems: string[];
     deckingType?: string;
-    description?: string; // User note for this section
+    description?: string;
     price: number;
-    // New fields for Custom Project
     customMaterialPrice?: number;
     customLaborPrice?: number;
 }
 
 const QuoteGenerator: React.FC = () => {
-    // API & Settings
     const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
     const [showSettings, setShowSettings] = useState(false);
 
-    // Client Info
     const [clientName, setClientName] = useState('');
     const [clientAddress, setClientAddress] = useState('');
 
-    // Multi-Section State
     const [sections, setSections] = useState<QuoteSection[]>([]);
-
-    // Current Section Form State
     const [currentType, setCurrentType] = useState(PROJECT_TYPES[0]);
     const [currentDimensions, setCurrentDimensions] = useState('');
     const [currentDecking, setCurrentDecking] = useState(DECKING_OPTIONS[0].id);
     const [currentSelectedItems, setCurrentSelectedItems] = useState<string[]>([]);
-    const [currentDescription, setCurrentDescription] = useState(''); // e.g. "Main Dock"
-
-    // Custom Project State
+    const [currentDescription, setCurrentDescription] = useState('');
     const [customMaterialPrice, setCustomMaterialPrice] = useState('');
     const [customLaborPrice, setCustomLaborPrice] = useState('');
 
-    // Global Adjustments
     const [otherWorkCost, setOtherWorkCost] = useState('');
     const [otherWorkDescription, setOtherWorkDescription] = useState('');
 
-    // AI Results
     const [isGenerating, setIsGenerating] = useState(false);
     const [scopeOfWork, setScopeOfWork] = useState('');
-    const [aiEstimatedTotal, setAiEstimatedTotal] = useState<number>(0); // Allows override
+    const [aiEstimatedTotal, setAiEstimatedTotal] = useState<number>(0);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // Additional prompt instructions
-    const [customAIPrompt, setCustomAIPrompt] = useState('');
-
-    // PDF Project Summary Toggle
+    // Manual mode: user types scope directly without AI
+    const [manualMode, setManualMode] = useState(false);
     const [showProjectSummary, setShowProjectSummary] = useState(true);
 
-    // Initialize default items when type changes
     useEffect(() => {
         const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
         setCurrentSelectedItems(defaults);
-        // Reset custom fields if switching away from Custom
         if (currentType !== "Other / Custom Project") {
             setCustomMaterialPrice('');
             setCustomLaborPrice('');
         }
     }, [currentType]);
 
-    // Helpers
     const getItemsForType = (type: string) => {
         switch (type) {
             case "Pier / Dock": return DOCK_ITEMS;
@@ -80,37 +65,20 @@ const QuoteGenerator: React.FC = () => {
         }
     };
 
-    const calculateSectionPrice = (
-        type: string,
-        dims: string,
-        items: string[],
-        decking?: string,
-        customMat?: string,
-        customLab?: string
-    ) => {
+    const calculateSectionPrice = (type: string, dims: string, items: string[], decking?: string, customMat?: string, customLab?: string) => {
         const qty = parseFloat(dims) || 0;
-
         if (type === "Other / Custom Project") {
-            const matRate = parseFloat(customMat || '0');
-            const labRate = parseFloat(customLab || '0');
-            // Formula: (QTY * MATERIAL) + (QTY * Labor)
-            return (qty * matRate) + (qty * labRate);
+            return (qty * (parseFloat(customMat || '0'))) + (qty * (parseFloat(customLab || '0')));
         }
-
-        // Map type string to calculator keys
         let calcType: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead' | 'boat_lift' = 'dock';
         if (type === 'Floating Dock') calcType = 'floating_dock';
         else if (type === 'Bulkhead') calcType = 'bulkhead';
         else if (type === 'Boat Lift') calcType = 'boat_lift';
         else if (type === 'Rip-Rap / Erosion Control') calcType = 'riprap';
-
-        // For Boat Lift, quantity might be 1 if fixed items
         const effectiveQty = (calcType === 'boat_lift' && qty === 0) ? 1 : qty;
-
         return calculateInteractivePrice(calcType, effectiveQty, items, decking, 0);
     };
 
-    // Form Handlers
     const handleSaveKey = () => {
         localStorage.setItem('openai_api_key', apiKey);
         setShowSettings(false);
@@ -122,176 +90,136 @@ const QuoteGenerator: React.FC = () => {
 
     const addSection = () => {
         const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking, customMaterialPrice, customLaborPrice);
-        const newSection: QuoteSection = {
-            id: Date.now().toString(),
-            type: currentType,
-            dimensions: currentDimensions,
+        setSections([...sections, {
+            id: Date.now().toString(), type: currentType, dimensions: currentDimensions,
             selectedItems: currentSelectedItems,
             deckingType: currentType === "Pier / Dock" ? currentDecking : undefined,
-            description: currentDescription,
-            price,
+            description: currentDescription, price,
             customMaterialPrice: parseFloat(customMaterialPrice) || undefined,
             customLaborPrice: parseFloat(customLaborPrice) || undefined
-        };
-
-        setSections([...sections, newSection]);
-
-        // Reset Form
+        }]);
         setCurrentDimensions('');
         setCurrentDescription('');
         setCustomMaterialPrice('');
         setCustomLaborPrice('');
-
-        // Reset selection to defaults
         const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
         setCurrentSelectedItems(defaults);
     };
 
-    const removeSection = (id: string) => {
-        setSections(sections.filter(s => s.id !== id));
-    };
+    const removeSection = (id: string) => setSections(sections.filter(s => s.id !== id));
 
-    // Total Calculation
     const sectionsTotal = sections.reduce((sum, s) => sum + s.price, 0);
     const adjustments = parseFloat(otherWorkCost) || 0;
     const grandTotal = sectionsTotal + adjustments;
 
-    // AI Generation
+    // Activate manual mode: prefills textarea with a blank template and lets user write from scratch
+    const activateManualMode = () => {
+        setManualMode(true);
+        setAiEstimatedTotal(grandTotal);
+        if (!scopeOfWork) {
+            setScopeOfWork(
+                `SCOPE OF WORK\n\n` +
+                sections.map((s, i) => `Section ${i + 1}: ${s.type}\n- Dimensions: ${s.dimensions}\n- ${s.description || ''}\n`).join('\n') +
+                `\n\nSTANDARD EXCLUSIONS:\nPermits, Engineering, Soil Tests, Hidden Obstructions, Electrical Work.`
+            );
+        }
+    };
+
     const handleGenerateQuote = async () => {
         setErrorMsg('');
-        if (!apiKey) {
-            setErrorMsg("Please enter OpenAI API Key.");
-            setShowSettings(true);
-            return;
-        }
+        if (!apiKey) { setErrorMsg("Please enter OpenAI API Key."); setShowSettings(true); return; }
 
-        // Auto-Add Pending Section Logic
         let activeSections = [...sections];
         if (currentDimensions && parseFloat(currentDimensions) > 0) {
             if (window.confirm(`Did you mean to include the current "${currentType}" section in the proposal?`)) {
                 const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking, customMaterialPrice, customLaborPrice);
-                const newSection: QuoteSection = {
-                    id: Date.now().toString(),
-                    type: currentType,
-                    dimensions: currentDimensions,
+                activeSections.push({
+                    id: Date.now().toString(), type: currentType, dimensions: currentDimensions,
                     selectedItems: currentSelectedItems,
                     deckingType: currentType === "Pier / Dock" ? currentDecking : undefined,
-                    description: currentDescription,
-                    price,
+                    description: currentDescription, price,
                     customMaterialPrice: parseFloat(customMaterialPrice) || undefined,
                     customLaborPrice: parseFloat(customLaborPrice) || undefined
-                };
-                activeSections.push(newSection);
-                setSections(activeSections); // Update State
-
-                // Clear Form
-                setCurrentDimensions('');
-                setCurrentDescription('');
-                setCustomMaterialPrice('');
-                setCustomLaborPrice('');
-                const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
-                setCurrentSelectedItems(defaults);
+                });
+                setSections(activeSections);
+                setCurrentDimensions(''); setCurrentDescription('');
+                setCustomMaterialPrice(''); setCustomLaborPrice('');
             }
         }
-
-        if (activeSections.length === 0) {
-            setErrorMsg("Please add at least one section.");
-            return;
-        }
+        if (activeSections.length === 0) { setErrorMsg("Please add at least one section."); return; }
 
         setIsGenerating(true);
-        // Recalculate total with potential new section
-        const newSectionsTotal = activeSections.reduce((sum, s) => sum + s.price, 0);
-        const newGrandTotal = newSectionsTotal + adjustments;
-        setAiEstimatedTotal(newGrandTotal);
+        const total = activeSections.reduce((s, x) => s + x.price, 0) + adjustments;
+        setAiEstimatedTotal(total);
 
         try {
-            // Build Prompt
             let projectDesc = "";
             activeSections.forEach((s, idx) => {
                 if (s.type === "Other / Custom Project") {
-                    projectDesc += `\nSECTION ${idx + 1}: CUSTOM PROJECT - ${s.description ? s.description.toUpperCase() : 'DETAILS'}\n`;
-                    projectDesc += `- Concept/Description: ${s.description || 'Custom Work'}\n`;
-                    projectDesc += `- Quantity/Dimensions: ${s.dimensions}\n`;
-                    if (s.customMaterialPrice) projectDesc += `- Material Rate: $${s.customMaterialPrice}/unit\n`;
-                    if (s.customLaborPrice) projectDesc += `- Labor Rate: $${s.customLaborPrice}/unit\n`;
-                    projectDesc += `- Total Section Price: $${s.price.toLocaleString()}\n`;
+                    projectDesc += `\nSECTION ${idx + 1}: CUSTOM PROJECT\n`;
+                    projectDesc += `Description: ${s.description || 'Custom Work'}\n`;
+                    projectDesc += `Quantity: ${s.dimensions}\n`;
+                    if (s.customMaterialPrice) projectDesc += `Material Rate: $${s.customMaterialPrice}/unit\n`;
+                    if (s.customLaborPrice) projectDesc += `Labor Rate: $${s.customLaborPrice}/unit\n`;
                 } else {
                     const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
                     if (s.type === "Pier / Dock") {
                         const deck = DECKING_OPTIONS.find(d => d.id === s.deckingType)?.label;
                         if (deck) items.push(`Decking: ${deck}`);
                     }
-
-                    projectDesc += `\nSECTION ${idx + 1}: ${s.type.toUpperCase()}\n`;
+                    projectDesc += `\nSECTION ${idx + 1}: ${s.type}\n`;
                     if (s.description) projectDesc += `Note: ${s.description}\n`;
-                    projectDesc += `- Dimensions: ${s.dimensions} ${s.type.includes('Dock') ? 'SQF' : 'Linear Feet/Units'}\n`;
-                    projectDesc += `- Inclusions: ${items.join(', ')}\n`;
+                    projectDesc += `Dimensions: ${s.dimensions} ${s.type.includes('Dock') ? 'SQF' : 'Linear Feet'}\n`;
+                    projectDesc += `Components: ${items.join(', ')}\n`;
                 }
             });
+            if (adjustments > 0) projectDesc += `\nADDITIONAL WORK: ${otherWorkDescription}\n`;
 
-            if (adjustments > 0) {
-                projectDesc += `\nOTHER WORK: ${otherWorkDescription} ($${adjustments})\n`;
-            }
-
-            const prompt = `Role: Senior Estimator for "Coastal VA Marine Construction".
-Task: Write a detailed "Preliminary Construction Proposal".
+            const prompt = `You are a senior estimator writing a formal construction proposal for "Coastal VA Marine Construction".
 
 Client: ${clientName || 'Valued Client'}
 Address: ${clientAddress || 'N/A'}
 
-Scope of Work (Multiple Sections):
+Project Sections:
 ${projectDesc}
 
-Optional Manual Instructions: 
-${customAIPrompt || 'N/A'}
+CRITICAL FORMATTING RULES - YOU MUST FOLLOW THESE EXACTLY:
+- Write in PLAIN TEXT only. NO markdown. NO asterisks (*). NO hash symbols (#). NO dashes (---) as dividers. NO bold markers.
+- Use section headings in ALL CAPS followed by a colon, like: SCOPE OF WORK:
+- Use a simple hyphen and space for bullet points ONLY when listing items: "- Item here"
+- Write in complete, professional sentences. Formal business language.
+- DO NOT mention specific dollar amounts in the scope text.
+- Keep each section focused and clear.
 
-Directives:
-1. **Professional Tone**: Authoritative, high-value, clear.
-2. **Structure**: 
-   - Write a master "Scope of Work" that describes the entire project cohesively.
-   - Use clear headings for each section (e.g., "## Pier Construction", "## Boat Lift Installation").
-   - Bullet points for materials/specs.
-   - Use a clean layout.
-   - DO NOT mention exact prices in the Scope of Work text unless specifically requested.
-3. **Exclusions**: Must include a standard exclusions section (Permits, Engineering, Soil Tests, Hidden Obstructions).
-4. **Format**: Return valid JSON only.
+Write the following sections:
+1. A brief introduction paragraph about the project.
+2. For each section listed, write a heading and 3-5 bullet points describing materials, methods, and specifications.
+3. A STANDARD EXCLUSIONS section listing: Permits, Engineering Drawings, Soil Tests, Utility Locating, Hidden Obstructions.
 
-Output JSON:
+Return ONLY valid JSON with no other text:
 {
-    "scopeOfWork": "The full detailed text...",
-    "exclusions": "Permits, Engineering..."
+  "scopeOfWork": "...",
+  "exclusions": "Permits, Engineering Drawings, Soil Tests, Utility Locating, Hidden Obstructions."
 }`;
 
             const res = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-                body: JSON.stringify({
-                    model: "gpt-4o",
-                    messages: [{ role: "system", content: "You are a senior estimator. Output JSON only." }, { role: "user", content: prompt }],
-                    temperature: 0.3
-                })
+                body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "user", content: prompt }], temperature: 0.2 })
             });
-
             const data = await res.json();
             if (data.error) throw new Error(data.error.message);
-
             const content = data.choices[0].message.content;
-            const jsonStart = content.indexOf('{');
-            const jsonEnd = content.lastIndexOf('}') + 1;
-            const parsed = JSON.parse(content.substring(jsonStart, jsonEnd));
-
-            setScopeOfWork(parsed.scopeOfWork + "\n\n**STANDARD EXCLUSIONS**:\n" + (parsed.exclusions || "Permits, Engineering, Soil Tests."));
-
+            const parsed = JSON.parse(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1));
+            setScopeOfWork(parsed.scopeOfWork + "\n\nSTANDARD EXCLUSIONS:\n" + (parsed.exclusions || "Permits, Engineering, Soil Tests."));
         } catch (err: any) {
-            console.error(err);
             setErrorMsg("Error: " + err.message);
         } finally {
             setIsGenerating(false);
         }
     };
 
-    // PDF Generation
+    // PDF Generation - all text is forced to black, header colors are isolated
     const generatePDF = () => {
         const doc = new jsPDF({ format: 'letter', unit: 'mm' });
         const width = doc.internal.pageSize.getWidth();
@@ -299,173 +227,227 @@ Output JSON:
         const margin = 15;
         let y = 0;
 
-        // Colors
-        const primaryColor = [10, 25, 47]; // #0a192f
-        const accentColor = [73, 204, 249]; // Cyan
-        const grayColor = [100, 116, 139];
+        const DARK_NAVY = [10, 25, 47];
+        const CYAN = [73, 204, 249];
+        const BLACK: [number, number, number] = [0, 0, 0];
+        const DARK_GRAY: [number, number, number] = [50, 50, 50];
+        const MONEY_GREEN: [number, number, number] = [0, 110, 0];
+        const LIGHT_GRAY: [number, number, number] = [120, 120, 120];
 
-        // --- Header Function ---
+        // Draws header and ALWAYS resets to black text before returning
         const drawHeader = () => {
-            doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            doc.setFillColor(DARK_NAVY[0], DARK_NAVY[1], DARK_NAVY[2]);
             doc.rect(0, 0, width, 40, 'F');
-
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(22);
+            doc.setFontSize(20);
             doc.setTextColor(255, 255, 255);
-            doc.text("COASTAL VA MARINE CONSTRUCTION", width / 2, 20, { align: 'center' });
-
+            doc.text("COASTAL VA MARINE CONSTRUCTION", width / 2, 18, { align: 'center' });
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
+            doc.text("PRELIMINARY CONSTRUCTION PROPOSAL", width / 2, 27, { align: 'center' });
+            // ALWAYS reset to black immediately after header
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
             doc.setFontSize(10);
             doc.setFont("helvetica", "normal");
-            doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
-            doc.text("PRELIMINARY CONSTRUCTION PROPOSAL", width / 2, 28, { align: 'center' });
-
-            // CRITICAL: Reset text color to black
-            doc.setTextColor(0, 0, 0);
-            y = 55;
+            y = 52;
         };
 
-        // --- Start Page 1 ---
+        // ---- PAGE 1 ----
         drawHeader();
 
-        // Client Block
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(11);
+        // Client info block
         doc.setFont("helvetica", "bold");
-        doc.text("PREPARED FOR:", margin, y);
-        doc.text("DATE:", width - margin - 30, y);
-
-        y += 6;
-        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(LIGHT_GRAY[0], LIGHT_GRAY[1], LIGHT_GRAY[2]);
+        doc.text("PREPARED FOR", margin, y);
+        doc.text("DATE", width - margin - 28, y);
+        y += 5;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
         doc.text(clientName || "Valued Client", margin, y);
-        doc.text(new Date().toLocaleDateString(), width - margin - 30, y);
+        doc.text(new Date().toLocaleDateString(), width - margin - 28, y);
+        y += 5;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
+        if (clientAddress) doc.text(clientAddress, margin, y);
+        y += 12;
 
-        y += 6;
-        if (clientAddress) {
-            doc.text(clientAddress, margin, y);
-        }
+        // Divider
+        doc.setDrawColor(210, 210, 210);
+        doc.line(margin, y, width - margin, y);
+        y += 8;
 
-        y += 15;
-
-        // --- Project Summary (Optional Table) ---
+        // ---- PROJECT SUMMARY (optional) ----
         if (showProjectSummary) {
-            doc.setDrawColor(200, 200, 200);
-            doc.line(margin, y, width - margin, y);
-            y += 8;
-
             doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+            doc.setTextColor(LIGHT_GRAY[0], LIGHT_GRAY[1], LIGHT_GRAY[2]);
             doc.text("PROJECT SUMMARY", margin, y);
-            y += 8;
+            y += 6;
 
             sections.forEach(s => {
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(10);
-                doc.text(`• ${s.type}`, margin + 5, y);
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                doc.text(`${s.type}`, margin + 4, y);
 
                 doc.setFont("helvetica", "normal");
-                let desc = "";
-                if (s.type === "Other / Custom Project") {
-                    desc = `${s.dimensions} units`;
-                    if (s.description) desc += ` - ${s.description}`;
-                    if (s.customMaterialPrice) desc += ` (Mat: $${s.customMaterialPrice})`;
-                    if (s.customLaborPrice) desc += ` (Lab: $${s.customLaborPrice})`;
-                } else {
-                    desc = `${s.dimensions} ${s.type.includes('Dock') ? 'sqf' : 'units/lf'}`;
-                    if (s.description) desc += ` - ${s.description}`;
-                }
-                // Truncate if too long
-                if (desc.length > 65) desc = desc.substring(0, 62) + '...';
+                doc.setFontSize(9);
+                doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
+                let desc = s.type === "Other / Custom Project"
+                    ? `${s.dimensions} units${s.description ? ' - ' + s.description : ''}`
+                    : `${s.dimensions} ${s.type.includes('Dock') ? 'sqft' : 'lf'}${s.description ? ' - ' + s.description : ''}`;
+                if (desc.length > 60) desc = desc.substring(0, 57) + '...';
+                doc.text(desc, margin + 55, y);
 
-                doc.text(desc, margin + 50, y);
-
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
                 doc.text(`$${s.price.toLocaleString()}`, width - margin, y, { align: 'right' });
                 y += 6;
             });
 
-            if (otherWorkDescription) {
-                doc.text(`• Other: ${otherWorkDescription}`, margin + 5, y);
+            if (otherWorkDescription && adjustments > 0) {
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
+                doc.text(`Other: ${otherWorkDescription}`, margin + 4, y);
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
                 doc.text(`$${adjustments.toLocaleString()}`, width - margin, y, { align: 'right' });
                 y += 6;
             }
-
-            y += 5;
+            y += 4;
+            doc.setDrawColor(210, 210, 210);
             doc.line(margin, y, width - margin, y);
             y += 10;
         }
 
-        // --- Scope of Work (Flowing Text) ---
+        // ---- SCOPE OF WORK ----
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        doc.setFontSize(11);
+        doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
         doc.text("SCOPE OF WORK & SPECIFICATIONS", margin, y);
         y += 8;
-
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0); // Always black for professional look
+        doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
 
-        const splitText = doc.splitTextToSize(scopeOfWork, width - (margin * 2));
-
-        // Print lines with page break check
-        for (let i = 0; i < splitText.length; i++) {
-            if (y > height - 40) { // Leave space for footer
+        const lines = doc.splitTextToSize(scopeOfWork, width - margin * 2);
+        for (let i = 0; i < lines.length; i++) {
+            if (y > height - 35) {
                 doc.addPage();
                 drawHeader();
-                // Reset to Scope font after header draw resets to defaults
+                // Force all text settings to body style after header
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(10);
-                doc.setTextColor(0, 0, 0);
+                doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
             }
-            doc.text(splitText[i], margin, y);
+            doc.text(lines[i], margin, y);
             y += 5;
         }
 
-        // --- Investment Summary Page (Force New Page for Drama) ---
+        // ---- INVESTMENT SUMMARY PAGE ----
         doc.addPage();
         drawHeader();
-        y = 60;
+        // After header, force black
+        doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+        y = 65;
 
-        doc.setFontSize(16);
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        doc.setFontSize(15);
+        doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
         doc.text("INVESTMENT SUMMARY", width / 2, y, { align: 'center' });
-        y += 20;
+        y += 6;
+        doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
+        doc.setLineWidth(0.5);
+        doc.line(width / 2 - 40, y, width / 2 + 40, y);
+        doc.setLineWidth(0.2);
+        y += 18;
+
+        // Section breakdown table (always shown on this page)
+        if (sections.length > 0) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+            doc.setTextColor(LIGHT_GRAY[0], LIGHT_GRAY[1], LIGHT_GRAY[2]);
+            doc.text("DESCRIPTION", margin, y);
+            doc.text("AMOUNT", width - margin, y, { align: 'right' });
+            y += 4;
+            doc.setDrawColor(210, 210, 210);
+            doc.line(margin, y, width - margin, y);
+            y += 6;
+
+            sections.forEach(s => {
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
+                doc.text(s.type, margin, y);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                doc.text(`$${s.price.toLocaleString()}`, width - margin, y, { align: 'right' });
+                y += 7;
+            });
+
+            if (adjustments > 0) {
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
+                doc.text(otherWorkDescription || 'Other', margin, y);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                doc.text(`$${adjustments.toLocaleString()}`, width - margin, y, { align: 'right' });
+                y += 7;
+            }
+            y += 3;
+            doc.setDrawColor(DARK_NAVY[0], DARK_NAVY[1], DARK_NAVY[2]);
+            doc.line(margin, y, width - margin, y);
+            y += 10;
+        }
 
         // Total Box
-        doc.setFillColor(245, 247, 250);
-        doc.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
-        doc.roundedRect(width / 2 - 60, y, 120, 50, 3, 3, 'FD');
-
-        y += 15;
-        doc.setFontSize(12);
-        doc.setTextColor(grayColor[0], grayColor[1], grayColor[2]);
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
+        doc.roundedRect(width / 2 - 55, y, 110, 45, 3, 3, 'FD');
+        y += 12;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(LIGHT_GRAY[0], LIGHT_GRAY[1], LIGHT_GRAY[2]);
         doc.text("TOTAL PROPOSED INVESTMENT", width / 2, y, { align: 'center' });
-
-        y += 15;
-        doc.setFontSize(26);
-        doc.setTextColor(0, 100, 0); // Money Green
+        y += 12;
+        doc.setFontSize(28);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(MONEY_GREEN[0], MONEY_GREEN[1], MONEY_GREEN[2]);
         doc.text(`$${aiEstimatedTotal.toLocaleString()}`, width / 2, y, { align: 'center' });
+        y += 25;
 
-        // Footer / Signatures
-        y += 50;
-        doc.setDrawColor(0);
-        doc.line(margin, y, margin + 80, y); // Client Line
-        doc.line(width - margin - 80, y, width - margin, y); // Contractor Line
-
-        y += 5;
+        // Validity note
+        doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.setTextColor(0);
-        doc.text("CLIENT SIGNATURE", margin, y);
-        doc.text("DATE", margin + 60, y);
+        doc.setTextColor(LIGHT_GRAY[0], LIGHT_GRAY[1], LIGHT_GRAY[2]);
+        doc.text("This proposal is valid for 30 days from the date of issue.", width / 2, y, { align: 'center' });
+        y += 25;
 
-        doc.text("COASTAL VA REP", width - margin - 80, y);
-        doc.text("DATE", width - margin - 20, y);
+        // Signature lines
+        doc.setDrawColor(BLACK[0], BLACK[1], BLACK[2]);
+        doc.setLineWidth(0.3);
+        doc.line(margin, y, margin + 75, y);
+        doc.line(width - margin - 75, y, width - margin, y);
+        y += 5;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
+        doc.text("CLIENT SIGNATURE & DATE", margin, y);
+        doc.text("COASTAL VA REPRESENTATIVE & DATE", width - margin - 75, y);
 
-        // Save
-        doc.save(`Proposal_${clientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+        doc.save(`Proposal_${(clientName || 'Client').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
-    // Calculate live price for current section
     const currentLivePrice = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking, customMaterialPrice, customLaborPrice);
+    const proposalReady = scopeOfWork.trim().length > 0;
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in">
@@ -478,253 +460,264 @@ Output JSON:
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Multi-Section AI Estimator</p>
                     </div>
                 </div>
-                <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-slate-100 rounded-lg"><Settings className="w-5 h-5 text-slate-400" /></button>
+                <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                    <Settings className="w-5 h-5 text-slate-400" />
+                </button>
             </div>
 
             {showSettings && (
-                <div className="bg-slate-800 p-6 rounded-2xl text-white mb-6 animate-in slide-in-from-top duration-300">
+                <div className="bg-slate-800 p-6 rounded-2xl text-white animate-in slide-in-from-top duration-200">
                     <label className="text-xs font-bold uppercase mb-2 block text-slate-400">OpenAI API Key</label>
                     <div className="flex gap-2">
-                        <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} className="flex-1 bg-slate-900 border border-slate-700 px-4 py-2 rounded-lg" />
-                        <button onClick={handleSaveKey} className="bg-cyan-600 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-cyan-500 transition-colors">Save</button>
+                        <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} className="flex-1 bg-slate-900 border border-slate-700 px-4 py-2 rounded-lg focus:border-cyan-500 outline-none" />
+                        <button onClick={handleSaveKey} className="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-lg font-bold text-xs uppercase transition-colors">Save</button>
                     </div>
                 </div>
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-                {/* LEFT COLUMN: Builder */}
+                {/* LEFT: Builder */}
                 <div className="lg:col-span-7 space-y-6">
-
                     {/* Client Info */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-[10px] font-bold uppercase text-slate-400">Client Name</label>
-                            <input value={clientName} onChange={e => setClientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700" placeholder="John Doe" />
+                            <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Client Name</label>
+                            <input value={clientName} onChange={e => setClientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700 focus:border-cyan-400 outline-none" placeholder="John Doe" />
                         </div>
                         <div>
-                            <label className="text-[10px] font-bold uppercase text-slate-400">Project Address</label>
-                            <input value={clientAddress} onChange={e => setClientAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700" placeholder="123 Ocean Dr" />
+                            <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Project Address</label>
+                            <input value={clientAddress} onChange={e => setClientAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700 focus:border-cyan-400 outline-none" placeholder="123 Ocean Dr" />
                         </div>
                     </div>
 
-                    {/* Added Sections List */}
+                    {/* Sections List */}
                     {sections.length > 0 && (
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
-                                <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest ml-1">Current Sections</h3>
-                                <button onClick={() => setSections([])} className="text-[10px] text-red-500 font-bold hover:underline">Clear All</button>
+                                <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest ml-1">Sections Added</h3>
+                                <button onClick={() => setSections([])} className="text-[10px] text-red-400 font-bold hover:underline">Clear All</button>
                             </div>
-                            {sections.map((section, idx) => (
-                                <div key={section.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center group hover:border-cyan-200 transition-all">
+                            {sections.map((s, idx) => (
+                                <div key={s.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-cyan-200 transition-all">
                                     <div className="flex gap-4 items-center">
-                                        <div className="bg-cyan-50 text-cyan-700 font-bold w-8 h-8 flex items-center justify-center rounded-lg text-xs">{idx + 1}</div>
+                                        <div className="bg-cyan-50 text-cyan-700 font-black w-8 h-8 flex items-center justify-center rounded-lg text-xs">{idx + 1}</div>
                                         <div>
-                                            <h4 className="font-bold text-slate-700">{section.type}</h4>
-                                            <p className="text-xs text-slate-500">{section.dimensions} units • {section.description || 'No description'}</p>
+                                            <h4 className="font-bold text-slate-700">{s.type}</h4>
+                                            <p className="text-xs text-slate-400">{s.dimensions} units{s.description ? ` · ${s.description}` : ''}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-4">
-                                        <span className="font-mono font-bold text-slate-700">${section.price.toLocaleString()}</span>
-                                        <button onClick={() => removeSection(section.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                        <span className="font-mono font-bold text-slate-700">${s.price.toLocaleString()}</span>
+                                        <button onClick={() => removeSection(s.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                             ))}
                         </div>
                     )}
 
-                    {/* Add New Section Form */}
+                    {/* Add Section Form */}
                     <div className="bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed border-slate-200 relative">
-                        <div className="absolute -top-3 left-6 bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-                            Step 1: Build Proposal
-                        </div>
+                        <div className="absolute -top-3 left-6 bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Step 1: Build Proposal</div>
                         <h3 className="flex items-center gap-2 font-black text-slate-600 uppercase tracking-widest text-sm mb-6 mt-2">
                             <Plus className="w-4 h-4 text-cyan-500" /> Add Project Section
                         </h3>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-400">Section Type</label>
+                                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Section Type</label>
                                 <select value={currentType} onChange={e => setCurrentType(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400">
                                     {PROJECT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-400">Dimensions / Qty</label>
+                                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Dimensions / Qty</label>
                                 <input value={currentDimensions} onChange={e => setCurrentDimensions(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="e.g. 100" />
                             </div>
                         </div>
 
                         <div className="mb-4">
-                            <label className="text-[10px] font-bold uppercase text-slate-400">{currentType === "Other / Custom Project" ? "Concept / Description" : "Description / Note (Optional)"}</label>
+                            <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                                {currentType === "Other / Custom Project" ? "Concept / Description" : "Description / Note (Optional)"}
+                            </label>
                             <input value={currentDescription} onChange={e => setCurrentDescription(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder={currentType === "Other / Custom Project" ? "e.g. Gazebo Construction" : "e.g. Main Dock on Left Side"} />
                         </div>
 
-                        {/* Custom Project Inputs */}
                         {currentType === "Other / Custom Project" ? (
                             <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
                                 <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block">Custom Pricing (Per Unit)</label>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-[10px] font-bold uppercase text-slate-400">Material Cost ($)</label>
-                                        <input type="number" value={customMaterialPrice} onChange={e => setCustomMaterialPrice(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700" placeholder="0.00" />
+                                        <label className="text-[10px] font-bold uppercase text-slate-400">Material ($)</label>
+                                        <input type="number" value={customMaterialPrice} onChange={e => setCustomMaterialPrice(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="0.00" />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-bold uppercase text-slate-400">Labor Cost ($)</label>
-                                        <input type="number" value={customLaborPrice} onChange={e => setCustomLaborPrice(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700" placeholder="0.00" />
+                                        <label className="text-[10px] font-bold uppercase text-slate-400">Labor ($)</label>
+                                        <input type="number" value={customLaborPrice} onChange={e => setCustomLaborPrice(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700 outline-none focus:border-cyan-400" placeholder="0.00" />
                                     </div>
                                 </div>
-                                <div className="mt-2 text-xs text-slate-400 italic">
-                                    Total = (Qty * Material) + (Qty * Labor)
-                                </div>
+                                <p className="mt-2 text-xs text-slate-400 italic">Total = (Qty x Material) + (Qty x Labor)</p>
                             </div>
                         ) : (
-                            /* Item Selector (Standard) */
-                            <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 max-h-60 overflow-y-auto">
+                            <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 max-h-56 overflow-y-auto">
                                 <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block">Specifications & Materials</label>
-
                                 {currentType === "Pier / Dock" && (
-                                    <div className="mb-4 grid grid-cols-2 gap-2">
+                                    <div className="mb-3 grid grid-cols-2 gap-2">
                                         {DECKING_OPTIONS.map(d => (
-                                            <div key={d.id} onClick={() => setCurrentDecking(d.id)} className={`cursor-pointer p-2 rounded-lg border text-center text-xs font-bold transition-all ${currentDecking === d.id ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-                                                {d.label}
-                                            </div>
+                                            <div key={d.id} onClick={() => setCurrentDecking(d.id)} className={`cursor-pointer p-2 rounded-lg border text-center text-xs font-bold transition-all ${currentDecking === d.id ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-slate-50 border-slate-100 text-slate-500 hover:border-slate-300'}`}>{d.label}</div>
                                         ))}
                                     </div>
                                 )}
-
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     {getItemsForType(currentType).map(item => {
-                                        const isSelected = currentSelectedItems.includes(item.id);
+                                        const sel = currentSelectedItems.includes(item.id);
                                         return (
-                                            <div key={item.id} onClick={() => toggleCurrentItem(item.id)} className={`cursor-pointer p-2 rounded-lg border flex items-center gap-3 transition-all ${isSelected ? 'bg-cyan-50 border-cyan-200' : 'hover:bg-slate-50 border-transparent'}`}>
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-cyan-500 border-cyan-500' : 'bg-white border-slate-300'}`}>
-                                                    {isSelected && <Check className="w-3 h-3 text-white" />}
+                                            <div key={item.id} onClick={() => toggleCurrentItem(item.id)} className={`cursor-pointer p-2 rounded-lg border flex items-center gap-3 transition-all ${sel ? 'bg-cyan-50 border-cyan-200' : 'hover:bg-slate-50 border-transparent'}`}>
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${sel ? 'bg-cyan-500 border-cyan-500' : 'bg-white border-slate-300'}`}>
+                                                    {sel && <Check className="w-3 h-3 text-white" />}
                                                 </div>
                                                 <div>
                                                     <p className="text-xs font-bold text-slate-700">{item.label}</p>
                                                     <p className="text-[9px] text-slate-400">${item.price}</p>
                                                 </div>
                                             </div>
-                                        )
+                                        );
                                     })}
                                 </div>
                             </div>
                         )}
 
-                        <div className="flex items-center justify-between mb-4 px-2">
+                        <div className="flex justify-between items-center mb-4 px-1">
                             <span className="text-xs font-bold text-slate-400 uppercase">Section Total:</span>
                             <span className="text-xl font-black text-slate-700">${currentLivePrice.toLocaleString()}</span>
                         </div>
-
-                        <button onClick={addSection} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98]">
+                        <button onClick={addSection} className="w-full py-4 bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-bold rounded-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg transition-all">
                             <Plus className="w-4 h-4 text-cyan-400" /> Add to Proposal
                         </button>
                     </div>
 
-                    {/* Global Adjustments */}
+                    {/* Adjustments */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                        <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest mb-3">Adjustments</h3>
+                        <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest mb-3">Adjustments / Other</h3>
                         <div className="flex gap-4">
-                            <input value={otherWorkDescription} onChange={e => setOtherWorkDescription(e.target.value)} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm" placeholder="Misc / Other Work" />
+                            <input value={otherWorkDescription} onChange={e => setOtherWorkDescription(e.target.value)} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm focus:border-cyan-400 outline-none" placeholder="Misc / Other Work" />
                             <div className="relative w-32">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
-                                <input type="number" value={otherWorkCost} onChange={e => setOtherWorkCost(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-4 py-2 text-sm font-bold" placeholder="0.00" />
+                                <input type="number" value={otherWorkCost} onChange={e => setOtherWorkCost(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-4 py-2 text-sm font-bold focus:border-cyan-400 outline-none" placeholder="0.00" />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* RIGHT COLUMN: Output */}
-                <div className="lg:col-span-12 xl:col-span-5 flex flex-col h-full space-y-6">
-
-                    {/* Live Total */}
+                {/* RIGHT: Output */}
+                <div className="lg:col-span-5 flex flex-col space-y-6">
+                    {/* Total */}
                     <div className="bg-[#0a192f] p-8 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-32 bg-cyan-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
                         <p className="text-cyan-400 font-bold uppercase tracking-widest text-xs mb-1">Total Estimated Investment</p>
                         <h2 className="text-5xl font-black tracking-tighter mb-2">${grandTotal.toLocaleString()}</h2>
-                        <p className="text-slate-400 text-xs italic opacity-70">Includes all sections & adjustments</p>
+                        <p className="text-slate-500 text-xs italic">Includes all sections & adjustments</p>
                     </div>
 
-                    {/* AI Actions */}
-                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex-1 flex flex-col relative">
-                        <div className="absolute -top-3 left-6 bg-cyan-100 text-cyan-800 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-                            Step 2: Generate & Export
-                        </div>
-                        <div className="flex justify-between items-center mb-6 mt-4">
+                    {/* Step 2 Panel */}
+                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col relative">
+                        <div className="absolute -top-3 left-6 bg-cyan-100 text-cyan-800 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Step 2: Scope & Export</div>
+
+                        <div className="flex justify-between items-center mb-5 mt-4">
                             <h3 className="font-black text-slate-700 uppercase tracking-widest text-sm flex items-center gap-2">
-                                <Bot className="w-4 h-4 text-cyan-600" /> Proposal Output
+                                <Bot className="w-4 h-4 text-cyan-600" /> Proposal Scope
                             </h3>
-                            {scopeOfWork && (
-                                <div className="flex gap-2">
-                                    <button onClick={generatePDF} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-red-500/20 transition-all hover:scale-105 active:scale-95">
-                                        <FileText className="w-4 h-4" /> PDF
-                                    </button>
-                                </div>
+                            {proposalReady && (
+                                <button onClick={generatePDF} className="bg-red-500 hover:bg-red-600 active:scale-95 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-red-500/20 transition-all">
+                                    <FileText className="w-4 h-4" /> Export PDF
+                                </button>
                             )}
                         </div>
 
-                        {/* Manual Instructions Toggle/Box */}
-                        {!scopeOfWork && (
-                            <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                <label className="text-[10px] font-black uppercase text-slate-400 mb-2 flex items-center gap-2 tracking-widest">
-                                    <MessageSquare className="w-3 h-3 text-cyan-500" /> Optional: AI Instructions
-                                </label>
-                                <textarea
-                                    value={customAIPrompt}
-                                    onChange={e => setCustomAIPrompt(e.target.value)}
-                                    placeholder="e.g. Write it in Spanish, be very brief, focuses on environmental benefits..."
-                                    className="w-full bg-white border border-slate-200 rounded-lg p-3 text-xs font-medium text-slate-600 outline-none focus:border-cyan-400 h-20 resize-none shadow-inner"
-                                />
-                            </div>
-                        )}
+                        {/* Mode Toggle */}
+                        <div className="flex gap-2 mb-4">
+                            <button
+                                onClick={() => setManualMode(false)}
+                                className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 transition-all border ${!manualMode ? 'bg-cyan-600 text-white border-cyan-600 shadow-md shadow-cyan-600/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-cyan-300'}`}
+                            >
+                                <Bot className="w-3 h-3" /> AI Generate
+                            </button>
+                            <button
+                                onClick={activateManualMode}
+                                className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 transition-all border ${manualMode ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-400'}`}
+                            >
+                                <Edit3 className="w-3 h-3" /> Write Manually
+                            </button>
+                        </div>
 
-                        {scopeOfWork ? (
-                            <div className="flex-1 flex flex-col gap-4">
+                        {proposalReady ? (
+                            <div className="flex flex-col gap-4">
                                 <textarea
                                     value={scopeOfWork}
                                     onChange={e => setScopeOfWork(e.target.value)}
-                                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-medium text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed shadow-inner"
+                                    rows={16}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed font-mono shadow-inner"
                                 />
-                                {/* Price Override */}
                                 <div>
-                                    <label className="text-[10px] font-bold uppercase text-slate-400">Final Price (Editable)</label>
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Final Price (Editable)</label>
                                     <input
                                         type="number"
                                         value={aiEstimatedTotal}
                                         onChange={e => setAiEstimatedTotal(parseFloat(e.target.value) || 0)}
-                                        className="w-full bg-slate-100 border-2 border-slate-200 text-slate-800 rounded-xl px-4 py-3 font-black text-xl shadow-inner focus:border-cyan-400 outline-none"
+                                        className="w-full bg-slate-100 border-2 border-slate-200 text-slate-800 rounded-xl px-4 py-3 font-black text-xl focus:border-cyan-400 outline-none"
                                     />
                                 </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <input
-                                        type="checkbox"
-                                        id="showSummary"
-                                        checked={showProjectSummary}
-                                        onChange={e => setShowProjectSummary(e.target.checked)}
-                                        className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer"
-                                    />
-                                    <label htmlFor="showSummary" className="text-xs font-bold text-slate-500 uppercase cursor-pointer select-none">Include Itemized Summary in PDF</label>
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" id="showSummary" checked={showProjectSummary} onChange={e => setShowProjectSummary(e.target.checked)} className="w-4 h-4 cursor-pointer" />
+                                    <label htmlFor="showSummary" className="text-xs font-bold text-slate-400 uppercase cursor-pointer select-none">Include Itemized Summary in PDF</label>
                                 </div>
                             </div>
+                        ) : manualMode ? (
+                            <div className="flex flex-col gap-4">
+                                <p className="text-xs text-slate-400 italic">Write your scope of work below. This text will appear exactly as typed in the PDF.</p>
+                                <textarea
+                                    value={scopeOfWork}
+                                    onChange={e => setScopeOfWork(e.target.value)}
+                                    rows={16}
+                                    placeholder={"SCOPE OF WORK:\n\nSection 1: Pier Construction\n- Install treated wood piling, 12\" diameter\n- Frame with 2x10 stringers\n...\n\nSTANDARD EXCLUSIONS:\nPermits, Engineering..."}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed font-mono shadow-inner"
+                                />
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Final Price</label>
+                                    <input
+                                        type="number"
+                                        value={aiEstimatedTotal || grandTotal}
+                                        onChange={e => setAiEstimatedTotal(parseFloat(e.target.value) || 0)}
+                                        className="w-full bg-slate-100 border-2 border-slate-200 text-slate-800 rounded-xl px-4 py-3 font-black text-xl focus:border-cyan-400 outline-none"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" id="showSummary2" checked={showProjectSummary} onChange={e => setShowProjectSummary(e.target.checked)} className="w-4 h-4 cursor-pointer" />
+                                    <label htmlFor="showSummary2" className="text-xs font-bold text-slate-400 uppercase cursor-pointer select-none">Include Itemized Summary in PDF</label>
+                                </div>
+                                <button onClick={generatePDF} disabled={scopeOfWork.trim().length < 10} className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shadow-lg transition-all">
+                                    <FileText className="w-4 h-4" /> Export PDF
+                                </button>
+                            </div>
                         ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
+                            <div className="flex flex-col items-center justify-center text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
                                 <Layers className="w-12 h-12 text-slate-200 mb-4" />
-                                <p className="text-slate-400 font-bold text-sm">Add sections to generate proposal</p>
-                                <p className="text-slate-300 text-[10px] mt-2 italic px-4">Once you add sections, the AI will draft your Scope of Work based on the details above.</p>
+                                <p className="text-slate-400 font-bold text-sm">Ready to generate</p>
+                                <p className="text-slate-300 text-xs mt-1 px-6">Add sections then use AI or write manually</p>
                             </div>
                         )}
 
-                        <button
-                            onClick={handleGenerateQuote}
-                            disabled={isGenerating || (sections.length === 0 && (!currentDimensions || parseFloat(currentDimensions) === 0))}
-                            className="w-full mt-6 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-cyan-600/20 transition-all hover:scale-[1.01] active:scale-[0.98]"
-                        >
-                            {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5" />}
-                            {isGenerating ? 'Drafting Proposal...' : 'Generate with AI'}
-                        </button>
+                        {!manualMode && (
+                            <button
+                                onClick={handleGenerateQuote}
+                                disabled={isGenerating || (sections.length === 0 && (!currentDimensions || parseFloat(currentDimensions) === 0))}
+                                className="w-full mt-5 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-cyan-600/20 transition-all active:scale-[0.98]"
+                            >
+                                {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5" />}
+                                {isGenerating ? 'Drafting Proposal...' : 'Generate with AI'}
+                            </button>
+                        )}
 
-                        {errorMsg && <p className="text-center text-red-500 text-xs font-bold mt-4 animate-bounce">{errorMsg}</p>}
+                        {errorMsg && <p className="text-center text-red-500 text-xs font-bold mt-4">{errorMsg}</p>}
                     </div>
                 </div>
             </div>
