@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square, Calculator, Check, Layout, Edit, Layers } from 'lucide-react';
+import { Bot, FileText, Send, Save, Download, Loader2, Settings, X, Plus, Trash2, CheckSquare, Square, Calculator, Check, Layout, Edit, Layers, MessageSquare } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, BULKHEAD_ITEMS, BOATLIFT_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
 
@@ -50,6 +50,9 @@ const QuoteGenerator: React.FC = () => {
     const [scopeOfWork, setScopeOfWork] = useState('');
     const [aiEstimatedTotal, setAiEstimatedTotal] = useState<number>(0); // Allows override
     const [errorMsg, setErrorMsg] = useState('');
+
+    // Additional prompt instructions
+    const [customAIPrompt, setCustomAIPrompt] = useState('');
 
     // PDF Project Summary Toggle
     const [showProjectSummary, setShowProjectSummary] = useState(true);
@@ -240,6 +243,9 @@ Address: ${clientAddress || 'N/A'}
 Scope of Work (Multiple Sections):
 ${projectDesc}
 
+Optional Manual Instructions: 
+${customAIPrompt || 'N/A'}
+
 Directives:
 1. **Professional Tone**: Authoritative, high-value, clear.
 2. **Structure**: 
@@ -247,6 +253,7 @@ Directives:
    - Use clear headings for each section (e.g., "## Pier Construction", "## Boat Lift Installation").
    - Bullet points for materials/specs.
    - Use a clean layout.
+   - DO NOT mention exact prices in the Scope of Work text unless specifically requested.
 3. **Exclusions**: Must include a standard exclusions section (Permits, Engineering, Soil Tests, Hidden Obstructions).
 4. **Format**: Return valid JSON only.
 
@@ -312,6 +319,8 @@ Output JSON:
             doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
             doc.text("PRELIMINARY CONSTRUCTION PROPOSAL", width / 2, 28, { align: 'center' });
 
+            // CRITICAL: Reset text color to black
+            doc.setTextColor(0, 0, 0);
             y = 55;
         };
 
@@ -392,15 +401,19 @@ Output JSON:
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
-        doc.setTextColor(50, 50, 50);
+        doc.setTextColor(0, 0, 0); // Always black for professional look
 
         const splitText = doc.splitTextToSize(scopeOfWork, width - (margin * 2));
 
         // Print lines with page break check
         for (let i = 0; i < splitText.length; i++) {
-            if (y > height - 60) { // Leave space for footer
+            if (y > height - 40) { // Leave space for footer
                 doc.addPage();
                 drawHeader();
+                // Reset to Scope font after header draw resets to defaults
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.setTextColor(0, 0, 0);
             }
             doc.text(splitText[i], margin, y);
             y += 5;
@@ -469,11 +482,11 @@ Output JSON:
             </div>
 
             {showSettings && (
-                <div className="bg-slate-800 p-6 rounded-2xl text-white mb-6">
+                <div className="bg-slate-800 p-6 rounded-2xl text-white mb-6 animate-in slide-in-from-top duration-300">
                     <label className="text-xs font-bold uppercase mb-2 block text-slate-400">OpenAI API Key</label>
                     <div className="flex gap-2">
                         <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} className="flex-1 bg-slate-900 border border-slate-700 px-4 py-2 rounded-lg" />
-                        <button onClick={handleSaveKey} className="bg-cyan-600 px-4 py-2 rounded-lg font-bold text-xs uppercase">Save</button>
+                        <button onClick={handleSaveKey} className="bg-cyan-600 px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-cyan-500 transition-colors">Save</button>
                     </div>
                 </div>
             )}
@@ -513,7 +526,7 @@ Output JSON:
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <span className="font-mono font-bold text-slate-700">${section.price.toLocaleString()}</span>
-                                        <button onClick={() => removeSection(section.id)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                                        <button onClick={() => removeSection(section.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                             ))}
@@ -604,7 +617,7 @@ Output JSON:
                             <span className="text-xl font-black text-slate-700">${currentLivePrice.toLocaleString()}</span>
                         </div>
 
-                        <button onClick={addSection} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg transition-all">
+                        <button onClick={addSection} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98]">
                             <Plus className="w-4 h-4 text-cyan-400" /> Add to Proposal
                         </button>
                     </div>
@@ -623,7 +636,7 @@ Output JSON:
                 </div>
 
                 {/* RIGHT COLUMN: Output */}
-                <div className="lg:col-span-5 flex flex-col h-full space-y-6">
+                <div className="lg:col-span-12 xl:col-span-5 flex flex-col h-full space-y-6">
 
                     {/* Live Total */}
                     <div className="bg-[#0a192f] p-8 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
@@ -644,19 +657,34 @@ Output JSON:
                             </h3>
                             {scopeOfWork && (
                                 <div className="flex gap-2">
-                                    <button onClick={generatePDF} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-red-500/20 transition-all">
+                                    <button onClick={generatePDF} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-red-500/20 transition-all hover:scale-105 active:scale-95">
                                         <FileText className="w-4 h-4" /> PDF
                                     </button>
                                 </div>
                             )}
                         </div>
 
+                        {/* Manual Instructions Toggle/Box */}
+                        {!scopeOfWork && (
+                            <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                <label className="text-[10px] font-black uppercase text-slate-400 mb-2 flex items-center gap-2 tracking-widest">
+                                    <MessageSquare className="w-3 h-3 text-cyan-500" /> Optional: AI Instructions
+                                </label>
+                                <textarea
+                                    value={customAIPrompt}
+                                    onChange={e => setCustomAIPrompt(e.target.value)}
+                                    placeholder="e.g. Write it in Spanish, be very brief, focuses on environmental benefits..."
+                                    className="w-full bg-white border border-slate-200 rounded-lg p-3 text-xs font-medium text-slate-600 outline-none focus:border-cyan-400 h-20 resize-none shadow-inner"
+                                />
+                            </div>
+                        )}
+
                         {scopeOfWork ? (
                             <div className="flex-1 flex flex-col gap-4">
                                 <textarea
                                     value={scopeOfWork}
                                     onChange={e => setScopeOfWork(e.target.value)}
-                                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-medium text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed"
+                                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-medium text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed shadow-inner"
                                 />
                                 {/* Price Override */}
                                 <div>
@@ -665,7 +693,7 @@ Output JSON:
                                         type="number"
                                         value={aiEstimatedTotal}
                                         onChange={e => setAiEstimatedTotal(parseFloat(e.target.value) || 0)}
-                                        className="w-full bg-slate-100 border-2 border-slate-200 text-slate-800 rounded-xl px-4 py-3 font-black text-xl"
+                                        className="w-full bg-slate-100 border-2 border-slate-200 text-slate-800 rounded-xl px-4 py-3 font-black text-xl shadow-inner focus:border-cyan-400 outline-none"
                                     />
                                 </div>
                                 <div className="flex items-center gap-2 mt-2">
@@ -674,28 +702,29 @@ Output JSON:
                                         id="showSummary"
                                         checked={showProjectSummary}
                                         onChange={e => setShowProjectSummary(e.target.checked)}
-                                        className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                                        className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer"
                                     />
-                                    <label htmlFor="showSummary" className="text-xs font-bold text-slate-500 uppercase cursor-pointer">Include Itemized Summary in PDF</label>
+                                    <label htmlFor="showSummary" className="text-xs font-bold text-slate-500 uppercase cursor-pointer select-none">Include Itemized Summary in PDF</label>
                                 </div>
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
                                 <Layers className="w-12 h-12 text-slate-200 mb-4" />
                                 <p className="text-slate-400 font-bold text-sm">Add sections to generate proposal</p>
+                                <p className="text-slate-300 text-[10px] mt-2 italic px-4">Once you add sections, the AI will draft your Scope of Work based on the details above.</p>
                             </div>
                         )}
 
                         <button
                             onClick={handleGenerateQuote}
                             disabled={isGenerating || (sections.length === 0 && (!currentDimensions || parseFloat(currentDimensions) === 0))}
-                            className="w-full mt-6 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-cyan-600/20 transition-all"
+                            className="w-full mt-6 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-cyan-600/20 transition-all hover:scale-[1.01] active:scale-[0.98]"
                         >
                             {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5" />}
                             {isGenerating ? 'Drafting Proposal...' : 'Generate with AI'}
                         </button>
 
-                        {errorMsg && <p className="text-center text-red-500 text-xs font-bold mt-4">{errorMsg}</p>}
+                        {errorMsg && <p className="text-center text-red-500 text-xs font-bold mt-4 animate-bounce">{errorMsg}</p>}
                     </div>
                 </div>
             </div>
