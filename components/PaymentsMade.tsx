@@ -166,7 +166,7 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
 
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left" style={{ minWidth: 640 }}>
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
