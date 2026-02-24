@@ -16,8 +16,7 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    // 1. Header
-    doc.setFillColor(10, 25, 47); // Navy Blue
+    doc.setFillColor(10, 25, 47);
     doc.rect(0, 0, pageWidth, 40, 'F');
 
     doc.setFontSize(22);
@@ -30,7 +29,6 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
     doc.setTextColor(73, 204, 249);
     doc.text("Payment Receipt", pageWidth / 2, 28, { align: 'center' });
 
-    // 2. Receipt Details
     doc.setTextColor(0);
     doc.setFontSize(30);
     doc.setFont("helvetica", "bold");
@@ -44,13 +42,11 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
     doc.text(`Date: ${payment.date}`, pageWidth - 14, 75, { align: 'right' });
     doc.text(`Method: ${payment.method}`, pageWidth - 14, 80, { align: 'right' });
 
-    // Highlight Payment Amount clearly
     doc.setFontSize(14);
-    doc.setTextColor(22, 163, 74); // Green
+    doc.setTextColor(22, 163, 74);
     doc.setFont("helvetica", "bold");
     doc.text(`AMOUNT PAID: $${payment.amount.toLocaleString()}`, pageWidth - 14, 90, { align: 'right' });
 
-    // 3. Client Info
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(10, 25, 47);
@@ -64,14 +60,13 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
     doc.setTextColor(150);
     doc.text(`Project: ${project.name}`, 14, 75);
 
-    // 4. Payment Table
     autoTable(doc, {
-      startY: 100, // Moved down to accommodate Amount Paid
+      startY: 100,
       head: [['Description', 'Reference', 'Amount Received']],
       body: [
         [`Payment for ${project.name}`, payment.reference || 'N/A', `$${payment.amount.toLocaleString()}`]
       ],
-      theme: 'grid', // Changed to grid for better definition
+      theme: 'grid',
       headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' },
       columnStyles: {
         0: { cellWidth: 'auto' },
@@ -82,26 +77,22 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
       margin: { left: 14, right: 14 }
     });
 
-    // 5. Balance Summary
     const finalY = (doc as any).lastAutoTable.finalY + 15;
     const summaryWidth = 100;
     const summaryX = pageWidth - 14 - summaryWidth;
     const rightAlignX = pageWidth - 18;
 
-    // Background for summary
-    doc.setFillColor(248, 250, 252); // slate-50
-    doc.setDrawColor(203, 213, 225); // slate-300
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
     doc.roundedRect(summaryX, finalY, summaryWidth, 50, 2, 2, 'FD');
 
     let currentY = finalY + 12;
 
-    // Header for Summary
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(15, 23, 42);
     doc.text("ACCOUNT SUMMARY", summaryX + 5, currentY - 5);
 
-    // Contract Value
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100);
@@ -112,21 +103,18 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
 
     currentY += 10;
 
-    // Total Paid
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100);
     doc.text("Total Paid to Date:", summaryX + 5, currentY + 3);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(22, 163, 74); // Green
+    doc.setTextColor(22, 163, 74);
     doc.text(`$${project.paidAmount.toLocaleString()}`, rightAlignX, currentY + 3, { align: "right" });
 
-    // Divider line
     currentY += 8;
     doc.setDrawColor(226, 232, 240);
     doc.line(summaryX + 5, currentY, pageWidth - 18, currentY);
     currentY += 10;
 
-    // Remaining Balance
     const pending = project.totalAmount - project.paidAmount;
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
@@ -134,14 +122,13 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
     doc.text("Remaining Balance:", summaryX + 5, currentY + 3);
 
     doc.setFontSize(14);
-    if (pending > 0.01) { // Tolerance for float errors
-      doc.setTextColor(185, 28, 28); // Red
+    if (pending > 0.01) {
+      doc.setTextColor(185, 28, 28);
     } else {
-      doc.setTextColor(22, 163, 74); // Green
+      doc.setTextColor(22, 163, 74);
     }
     doc.text(`$${Math.max(0, pending).toLocaleString()}`, rightAlignX, currentY + 3, { align: "right" });
 
-    // 6. Footer
     doc.setFontSize(9);
     doc.setTextColor(150);
     doc.setFont("helvetica", "italic");
@@ -152,59 +139,98 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
-        <div className="flex items-center gap-5">
-          <div className="bg-cyan-50 p-4 rounded-2xl text-cyan-600"><ArrowUpCircle className="w-8 h-8" /></div>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+      {/* Header */}
+      <div className="bg-white p-5 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-cyan-50 p-3 md:p-4 rounded-2xl text-cyan-600"><ArrowUpCircle className="w-6 h-6 md:w-8 md:h-8" /></div>
           <div>
-            <h2 className="text-2xl font-black text-[#0a192f] uppercase tracking-tighter leading-none italic">Incoming Payments</h2>
+            <h2 className="text-xl md:text-2xl font-black text-[#0a192f] uppercase tracking-tighter leading-none italic">Incoming Payments</h2>
             <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Detailed transaction history</p>
           </div>
         </div>
-        <button className="w-full md:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-[#0a192f] text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-xl"><Download className="w-4 h-4" /> Export Ledger</button>
+        <button className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#0a192f] text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-xl">
+          <Download className="w-4 h-4" /> Export Ledger
+        </button>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left" style={{ minWidth: 640 }}>
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Project Name</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Method</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Reference</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
-                <th className="px-8 py-5"></th>
+      {/* ── MOBILE: Cards — no scrolling needed ── */}
+      <div className="md:hidden space-y-3">
+        {payments.length > 0 ? payments.map((payment) => (
+          <div key={payment.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            {/* Green accent top bar */}
+            <div className="h-1 bg-emerald-400" />
+            <div className="p-4">
+              {/* Row 1: name + amount */}
+              <div className="flex justify-between items-start gap-2 mb-3">
+                <p className="font-black text-[#0a192f] uppercase italic text-sm leading-tight flex-1 min-w-0 pr-2">{payment.projectName}</p>
+                <span className="text-lg font-black text-emerald-600 flex-shrink-0">${payment.amount.toLocaleString()}</span>
+              </div>
+              {/* Row 2: date + method */}
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs font-bold text-slate-500">{payment.date}</span>
+                </div>
+                <span className="px-2.5 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase">{payment.method}</span>
+                {payment.reference && <span className="text-[10px] font-mono text-slate-400">{payment.reference}</span>}
+              </div>
+              {/* Row 3: receipt button */}
+              <div className="flex justify-end border-t border-slate-100 pt-3">
+                <button onClick={() => generateReceiptPDF(payment)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-[#0a192f] border rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors">
+                  <Download className="w-3.5 h-3.5" /> Receipt
+                </button>
+              </div>
+            </div>
+          </div>
+        )) : (
+          <div className="text-center py-16 bg-white rounded-2xl border border-slate-100 text-slate-300 font-black uppercase tracking-widest text-sm">
+            No payments recorded yet
+          </div>
+        )}
+      </div>
+
+      {/* ── DESKTOP: Table ── */}
+      <div className="hidden md:block bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100">
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Project Name</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Method</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Reference</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
+              <th className="px-8 py-5"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {payments.length > 0 ? payments.map((payment) => (
+              <tr key={payment.id} className="hover:bg-cyan-50/30 transition-colors group">
+                <td className="px-8 py-6 flex items-center gap-3">
+                  <Calendar className="w-4 h-4 text-slate-400" />
+                  <span className="text-sm font-bold text-slate-900">{payment.date}</span>
+                </td>
+                <td className="px-8 py-6">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-black text-[#0a192f] uppercase italic">{payment.projectName}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">ID: {payment.projectId.toUpperCase()}</span>
+                  </div>
+                </td>
+                <td className="px-8 py-6"><span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase">{payment.method}</span></td>
+                <td className="px-8 py-6 text-xs font-mono font-bold text-slate-400 uppercase">{payment.reference || 'N/A'}</td>
+                <td className="px-8 py-6 text-right font-black text-emerald-600 text-lg">${payment.amount.toLocaleString()}</td>
+                <td className="px-8 py-6 text-right">
+                  <button onClick={() => generateReceiptPDF(payment)} className="p-2 text-slate-400 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100" title="Download Receipt">
+                    <Download className="w-4 h-4" />
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {payments.length > 0 ? payments.map((payment) => (
-                <tr key={payment.id} className="hover:bg-cyan-50/30 transition-colors group">
-                  <td className="px-8 py-6 flex items-center gap-3">
-                    <Calendar className="w-4 h-4 text-slate-400" />
-                    <span className="text-sm font-bold text-slate-900">{payment.date}</span>
-                  </td>
-                  <td className="px-8 py-6">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-black text-[#0a192f] uppercase italic">{payment.projectName}</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">ID: {payment.projectId.toUpperCase()}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6"><span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase">{payment.method}</span></td>
-                  <td className="px-8 py-6 text-xs font-mono font-bold text-slate-400 uppercase">{payment.reference || 'N/A'}</td>
-                  <td className="px-8 py-6 text-right font-black text-emerald-600 text-lg">${payment.amount.toLocaleString()}</td>
-                  <td className="px-8 py-6 text-right">
-                    <button onClick={() => generateReceiptPDF(payment)} className="p-2 text-slate-400 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100" title="Download Receipt">
-                      <Download className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              )) : (
-                <tr><td colSpan={6} className="py-24 text-center text-slate-300 uppercase tracking-widest font-black">No payments recorded yet</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            )) : (
+              <tr><td colSpan={6} className="py-24 text-center text-slate-300 uppercase tracking-widest font-black">No payments recorded yet</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
