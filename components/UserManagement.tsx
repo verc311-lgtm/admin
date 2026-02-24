@@ -154,7 +154,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, projects, paymen
       )}
 
       {/* Database Management Section */}
-      <div className="bg-[#0a192f] p-12 rounded-[3.5rem] shadow-2xl flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden ring-8 ring-white">
+      <div className="bg-[#0a192f] p-6 md:p-12 rounded-[2rem] md:rounded-[3.5rem] shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden ring-4 md:ring-8 ring-white">
         <div className="absolute top-0 left-0 p-10 opacity-5 pointer-events-none">
           <Database className="w-40 h-40 text-cyan-400" />
         </div>
@@ -185,7 +185,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, projects, paymen
         </div>
       </div>
 
-      <div className="bg-white p-12 rounded-[3.5rem] shadow-sm border border-slate-100 flex justify-between items-center">
+      <div className="bg-white p-5 md:p-12 rounded-[2rem] md:rounded-[3.5rem] shadow-sm border border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-6">
           <div className="bg-blue-50 p-6 rounded-3xl text-blue-600"><Users className="w-10 h-10" /></div>
           <div>
@@ -196,9 +196,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, projects, paymen
         <button onClick={() => setShowModal(true)} className="flex items-center gap-4 px-10 py-5 bg-[#0a192f] text-white font-black rounded-[2rem] text-xs uppercase shadow-2xl active:scale-95"><UserPlus className="w-6 h-6 text-cyan-400" /> ADD USER</button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-10">
         {users.map(user => (
-          <div key={user.id} className="bg-white p-12 rounded-[3.5rem] shadow-sm border border-slate-100 relative group hover:shadow-2xl transition-all duration-500">
+          <div key={user.id} className="bg-white p-6 md:p-12 rounded-[2rem] md:rounded-[3.5rem] shadow-sm border border-slate-100 relative group hover:shadow-2xl transition-all duration-500">
             <button onClick={() => onDeleteUser(user.id)} className="absolute top-8 right-8 opacity-0 group-hover:opacity-100 p-3 text-slate-300 hover:text-red-500 transition-all"><Trash2 className="w-6 h-6" /></button>
             <div className="w-24 h-24 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mb-8"><Shield className={`w-12 h-12 ${user.role === 'Admin' ? 'text-cyan-600' : 'text-slate-300'}`} /></div>
             <h3 className="text-2xl font-black text-[#0a192f] tracking-tighter uppercase italic leading-tight">{user.name}</h3>

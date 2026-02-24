@@ -200,7 +200,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
 
     return (
       <div className="space-y-8 animate-in fade-in duration-500">
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="bg-white p-5 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col gap-4">
           <div className="flex items-center gap-5">
             <div className="bg-blue-50 p-4 rounded-2xl text-blue-600"><FileText className="w-8 h-8" /></div>
             <div>
@@ -208,12 +208,12 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Pending Receivables: <span className="text-amber-600 font-black">${pendingTotal.toLocaleString()}</span></p>
             </div>
           </div>
-          <div className="flex bg-slate-100 p-1.5 rounded-2xl">
+          <div className="flex bg-slate-100 p-1.5 rounded-2xl self-start">
             {(['Pending', 'Paid', 'All'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-[#0a192f] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`px-4 md:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-[#0a192f] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
               >
                 {tab}
               </button>
@@ -232,52 +232,54 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
           />
         </div>
 
-        <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Invoice</th>
-                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Project Name</th>
-                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Date</th>
-                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
-                <th className="px-10 py-6"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {filteredInvoices.length > 0 ? filteredInvoices.map((inv) => (
-                <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-10 py-8 font-black text-[#0a192f] italic tracking-tight">{inv.invoiceNumber}</td>
-                  <td className="px-10 py-8">
-                    <p className="font-bold text-slate-700 uppercase text-xs">{inv.projectName}</p>
-                  </td>
-                  <td className="px-10 py-8 text-center text-sm font-bold text-slate-500">{inv.date}</td>
-                  <td className="px-10 py-8">
-                    <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 w-fit ${inv.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {inv.status === 'Paid' ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                      {inv.status === 'Paid' ? 'Paid' : 'Pending'}
-                    </span>
-                  </td>
-                  <td className="px-10 py-8 text-right font-black text-[#0a192f] text-xl tracking-tighter">${inv.amount.toLocaleString()}</td>
-                  <td className="px-10 py-8 text-right">
-                    <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => setHistoricalInvoice(inv)} className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:text-cyan-600"><FileText className="w-4 h-4" /></button>
-                      {inv.status !== 'Paid' && (
-                        <button
-                          onClick={() => onAddPayment(inv.projectId, inv.id)}
-                          className="bg-cyan-600 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-cyan-600/20"
-                        >
-                          Receive Payment
-                        </button>
-                      )}
-                    </div>
-                  </td>
+        <div className="bg-white rounded-[2rem] md:rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left" style={{ minWidth: 600 }}>
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Invoice</th>
+                  <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Project Name</th>
+                  <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Date</th>
+                  <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
+                  <th className="px-10 py-6"></th>
                 </tr>
-              )) : (
-                <tr><td colSpan={6} className="py-32 text-center text-slate-300 uppercase tracking-widest font-black text-sm">No {activeTab.toLowerCase()} records found</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filteredInvoices.length > 0 ? filteredInvoices.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-10 py-8 font-black text-[#0a192f] italic tracking-tight">{inv.invoiceNumber}</td>
+                    <td className="px-10 py-8">
+                      <p className="font-bold text-slate-700 uppercase text-xs">{inv.projectName}</p>
+                    </td>
+                    <td className="px-10 py-8 text-center text-sm font-bold text-slate-500">{inv.date}</td>
+                    <td className="px-10 py-8">
+                      <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 w-fit ${inv.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {inv.status === 'Paid' ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                        {inv.status === 'Paid' ? 'Paid' : 'Pending'}
+                      </span>
+                    </td>
+                    <td className="px-10 py-8 text-right font-black text-[#0a192f] text-xl tracking-tighter">${inv.amount.toLocaleString()}</td>
+                    <td className="px-10 py-8 text-right">
+                      <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setHistoricalInvoice(inv)} className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:text-cyan-600"><FileText className="w-4 h-4" /></button>
+                        {inv.status !== 'Paid' && (
+                          <button
+                            onClick={() => onAddPayment(inv.projectId, inv.id)}
+                            className="bg-cyan-600 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-cyan-600/20"
+                          >
+                            Receive Payment
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={6} className="py-32 text-center text-slate-300 uppercase tracking-widest font-black text-sm">No {activeTab.toLowerCase()} records found</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     );
