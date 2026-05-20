@@ -212,92 +212,119 @@ Return ONLY valid JSON with no other text:
         }
     };
 
-    // PDF Generation - all text is forced to black, header colors are isolated
+    // PDF Generation - Premium Modern Formal Design
     const generatePDF = () => {
         const doc = new jsPDF({ format: 'letter', unit: 'mm' });
         const width = doc.internal.pageSize.getWidth();
         const height = doc.internal.pageSize.getHeight();
-        const margin = 15;
+        const margin = 18;
         let y = 0;
 
-        const DARK_NAVY = [10, 25, 47];
-        const CYAN = [73, 204, 249];
-        const BLACK: [number, number, number] = [0, 0, 0];
-        const DARK_GRAY: [number, number, number] = [50, 50, 50];
-        const MONEY_GREEN: [number, number, number] = [0, 110, 0];
-        const LIGHT_GRAY: [number, number, number] = [120, 120, 120];
+        const NAVY: [number, number, number] = [10, 25, 47];
+        const CYAN: [number, number, number] = [0, 180, 216];
+        const BLACK: [number, number, number] = [15, 23, 42];
+        const BODY: [number, number, number] = [55, 65, 81];
+        const LABEL: [number, number, number] = [148, 163, 184];
+        const LINE: [number, number, number] = [226, 232, 240];
+        const ACCENT_GREEN: [number, number, number] = [16, 185, 129];
 
-        // Draws header and ALWAYS resets to black text before returning
+        // ── Draws compact header band ──
         const drawHeader = () => {
-            doc.setFillColor(DARK_NAVY[0], DARK_NAVY[1], DARK_NAVY[2]);
-            doc.rect(0, 0, width, 40, 'F');
+            // Dark navy band
+            doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+            doc.rect(0, 0, width, 32, 'F');
+            // Cyan accent strip at bottom of band
+            doc.setFillColor(CYAN[0], CYAN[1], CYAN[2]);
+            doc.rect(0, 32, width, 1.2, 'F');
+
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(20);
+            doc.setFontSize(16);
             doc.setTextColor(255, 255, 255);
-            doc.text("COASTAL VA MARINE CONSTRUCTION", width / 2, 18, { align: 'center' });
-            doc.setFontSize(9);
+            doc.text("COASTAL VA MARINE CONSTRUCTION", margin, 15);
+
             doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
             doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
-            doc.text("PRELIMINARY CONSTRUCTION PROPOSAL", width / 2, 27, { align: 'center' });
-            // ALWAYS reset to black immediately after header
+            doc.text("CONSTRUCTION PROPOSAL", margin, 22);
+
+            // Date on right
+            doc.setFontSize(8);
+            doc.setTextColor(148, 163, 184);
+            doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), width - margin, 15, { align: 'right' });
+
+            // Reset
             doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-            doc.setFontSize(10);
             doc.setFont("helvetica", "normal");
-            y = 52;
+            doc.setFontSize(10);
+            y = 44;
         };
 
-        // ---- PAGE 1 ----
+        // ── Draws page footer ──
+        const drawFooter = () => {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7);
+            doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
+            doc.text("Coastal VA Marine Construction  •  Preliminary Proposal  •  Confidential", width / 2, height - 8, { align: 'center' });
+        };
+
+        // ════════════════════════════════════
+        //  PAGE 1 - COVER & SCOPE
+        // ════════════════════════════════════
         drawHeader();
 
-        // Client info block
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(9);
-        doc.setTextColor(LIGHT_GRAY[0], LIGHT_GRAY[1], LIGHT_GRAY[2]);
+        // ── Client Info ──
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
         doc.text("PREPARED FOR", margin, y);
-        doc.text("DATE", width - margin - 28, y);
         y += 5;
+
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
+        doc.setFontSize(14);
         doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
         doc.text(clientName || "Valued Client", margin, y);
-        doc.text(new Date().toLocaleDateString(), width - margin - 28, y);
-        y += 5;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
-        if (clientAddress) doc.text(clientAddress, margin, y);
-        y += 12;
+        y += 6;
 
-        // Divider
-        doc.setDrawColor(210, 210, 210);
-        doc.line(margin, y, width - margin, y);
+        if (clientAddress) {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(9);
+            doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+            doc.text(clientAddress, margin, y);
+            y += 5;
+        }
         y += 8;
 
-        // ---- PROJECT SUMMARY (optional) ----
+        // Thin separator
+        doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+        doc.setLineWidth(0.3);
+        doc.line(margin, y, width - margin, y);
+        y += 10;
+
+        // ── Itemized Project Summary (only if checked) ──
         if (showProjectSummary) {
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(9);
-            doc.setTextColor(LIGHT_GRAY[0], LIGHT_GRAY[1], LIGHT_GRAY[2]);
-            doc.text("PROJECT SUMMARY", margin, y);
-            y += 6;
+            doc.setFontSize(8);
+            doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
+            doc.text("PROJECT BREAKDOWN", margin, y);
+            y += 7;
 
             sections.forEach(s => {
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(10);
-                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text(`${s.type}`, margin + 4, y);
-
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(9);
-                doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                doc.text(s.type, margin + 2, y);
+
                 let desc = s.type === "Other / Custom Project"
-                    ? `${s.dimensions} units${s.description ? ' - ' + s.description : ''}`
-                    : `${s.dimensions} ${s.type.includes('Dock') ? 'sqft' : 'lf'}${s.description ? ' - ' + s.description : ''}`;
-                if (desc.length > 60) desc = desc.substring(0, 57) + '...';
-                doc.text(desc, margin + 55, y);
+                    ? `${s.dimensions} units${s.description ? ' — ' + s.description : ''}`
+                    : `${s.dimensions} ${s.type.includes('Dock') ? 'sqft' : 'lf'}${s.description ? ' — ' + s.description : ''}`;
+                if (desc.length > 55) desc = desc.substring(0, 52) + '...';
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+                doc.text(desc, margin + 50, y);
 
                 doc.setFont("helvetica", "bold");
-                doc.setFontSize(10);
+                doc.setFontSize(9);
                 doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
                 doc.text(`$${s.price.toLocaleString()}`, width - margin, y, { align: 'right' });
                 y += 6;
@@ -306,135 +333,181 @@ Return ONLY valid JSON with no other text:
             if (otherWorkDescription && adjustments > 0) {
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(9);
-                doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
-                doc.text(`Other: ${otherWorkDescription}`, margin + 4, y);
+                doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+                doc.text(otherWorkDescription, margin + 2, y);
                 doc.setFont("helvetica", "bold");
-                doc.setFontSize(10);
                 doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
                 doc.text(`$${adjustments.toLocaleString()}`, width - margin, y, { align: 'right' });
                 y += 6;
             }
-            y += 4;
-            doc.setDrawColor(210, 210, 210);
+
+            y += 2;
+            doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
             doc.line(margin, y, width - margin, y);
             y += 10;
         }
 
-        // ---- SCOPE OF WORK ----
+        // ── Scope of Work ──
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
         doc.text("SCOPE OF WORK & SPECIFICATIONS", margin, y);
-        y += 8;
+        y += 3;
+        // Cyan underline for section heading
+        doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, margin + 60, y);
+        doc.setLineWidth(0.2);
+        y += 7;
+
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
+        doc.setFontSize(9);
+        doc.setTextColor(BODY[0], BODY[1], BODY[2]);
 
         const lines = doc.splitTextToSize(scopeOfWork, width - margin * 2);
         for (let i = 0; i < lines.length; i++) {
-            if (y > height - 35) {
+            if (y > height - 25) {
+                drawFooter();
                 doc.addPage();
                 drawHeader();
-                // Force all text settings to body style after header
                 doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
-                doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
+                doc.setFontSize(9);
+                doc.setTextColor(BODY[0], BODY[1], BODY[2]);
             }
             doc.text(lines[i], margin, y);
-            y += 5;
+            y += 4.5;
         }
 
-        // ---- INVESTMENT SUMMARY PAGE ----
+        drawFooter();
+
+        // ════════════════════════════════════
+        //  PAGE 2 - INVESTMENT SUMMARY
+        // ════════════════════════════════════
         doc.addPage();
         drawHeader();
-        // After header, force black
         doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-        y = 65;
 
+        // Center title
+        y = 60;
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(15);
+        doc.setFontSize(12);
         doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
         doc.text("INVESTMENT SUMMARY", width / 2, y, { align: 'center' });
-        y += 6;
+        y += 4;
         doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
-        doc.setLineWidth(0.5);
-        doc.line(width / 2 - 40, y, width / 2 + 40, y);
+        doc.setLineWidth(0.6);
+        doc.line(width / 2 - 30, y, width / 2 + 30, y);
         doc.setLineWidth(0.2);
-        y += 18;
+        y += 14;
 
-        // Section breakdown table (always shown on this page)
-        if (sections.length > 0) {
+        // ── Itemized breakdown (conditional) ──
+        if (showProjectSummary && sections.length > 0) {
+            // Table header
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(9);
-            doc.setTextColor(LIGHT_GRAY[0], LIGHT_GRAY[1], LIGHT_GRAY[2]);
+            doc.setFontSize(7);
+            doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
             doc.text("DESCRIPTION", margin, y);
             doc.text("AMOUNT", width - margin, y, { align: 'right' });
-            y += 4;
-            doc.setDrawColor(210, 210, 210);
+            y += 3;
+            doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
             doc.line(margin, y, width - margin, y);
             y += 6;
 
+            // Rows
             sections.forEach(s => {
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(10);
-                doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
+                doc.setTextColor(BODY[0], BODY[1], BODY[2]);
                 doc.text(s.type, margin, y);
+
                 doc.setFont("helvetica", "bold");
                 doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
                 doc.text(`$${s.price.toLocaleString()}`, width - margin, y, { align: 'right' });
-                y += 7;
+                y += 8;
             });
 
             if (adjustments > 0) {
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(10);
-                doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
-                doc.text(otherWorkDescription || 'Other', margin, y);
+                doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+                doc.text(otherWorkDescription || 'Additional Work', margin, y);
                 doc.setFont("helvetica", "bold");
                 doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
                 doc.text(`$${adjustments.toLocaleString()}`, width - margin, y, { align: 'right' });
-                y += 7;
+                y += 8;
             }
-            y += 3;
-            doc.setDrawColor(DARK_NAVY[0], DARK_NAVY[1], DARK_NAVY[2]);
+
+            y += 2;
+            doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+            doc.setLineWidth(0.4);
             doc.line(margin, y, width - margin, y);
-            y += 10;
+            doc.setLineWidth(0.2);
+            y += 16;
         }
 
-        // Total Box
-        doc.setFillColor(248, 250, 252);
-        doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
-        doc.roundedRect(width / 2 - 55, y, 110, 45, 3, 3, 'FD');
-        y += 12;
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(9);
-        doc.setTextColor(LIGHT_GRAY[0], LIGHT_GRAY[1], LIGHT_GRAY[2]);
-        doc.text("TOTAL PROPOSED INVESTMENT", width / 2, y, { align: 'center' });
-        y += 12;
-        doc.setFontSize(28);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(MONEY_GREEN[0], MONEY_GREEN[1], MONEY_GREEN[2]);
-        doc.text(`$${aiEstimatedTotal.toLocaleString()}`, width / 2, y, { align: 'center' });
-        y += 25;
+        // ── Total Box — always shown ──
+        const boxW = 130;
+        const boxH = 52;
+        const boxX = (width - boxW) / 2;
 
-        // Validity note
+        // Navy background
+        doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+        doc.roundedRect(boxX, y, boxW, boxH, 4, 4, 'F');
+
+        // Cyan accent line at top
+        doc.setFillColor(CYAN[0], CYAN[1], CYAN[2]);
+        doc.roundedRect(boxX, y, boxW, 2, 4, 4, 'F');
+        // Cover bottom rounding of accent
+        doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+        doc.rect(boxX, y + 1.5, boxW, 3, 'F');
+
+        // Label
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
+        doc.text("TOTAL PROPOSED INVESTMENT", width / 2, y + 16, { align: 'center' });
+
+        // Amount
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(32);
+        doc.setTextColor(255, 255, 255);
+        doc.text(`$${aiEstimatedTotal.toLocaleString()}`, width / 2, y + 35, { align: 'center' });
+
+        // Small note under amount
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184);
+        doc.text("All materials, labor & equipment included", width / 2, y + 43, { align: 'center' });
+
+        y += boxH + 16;
+
+        // ── Validity ──
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.setTextColor(LIGHT_GRAY[0], LIGHT_GRAY[1], LIGHT_GRAY[2]);
+        doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
         doc.text("This proposal is valid for 30 days from the date of issue.", width / 2, y, { align: 'center' });
-        y += 25;
+        y += 6;
+        doc.text("Prices are subject to change based on material availability and site conditions.", width / 2, y, { align: 'center' });
+        y += 20;
 
-        // Signature lines
-        doc.setDrawColor(BLACK[0], BLACK[1], BLACK[2]);
-        doc.setLineWidth(0.3);
-        doc.line(margin, y, margin + 75, y);
-        doc.line(width - margin - 75, y, width - margin, y);
+        // ── Signature Block ──
+        const sigLineLen = 72;
+        const sigLeftX = margin + 5;
+        const sigRightX = width - margin - sigLineLen - 5;
+
+        doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+        doc.setLineWidth(0.4);
+        doc.line(sigLeftX, y, sigLeftX + sigLineLen, y);
+        doc.line(sigRightX, y, sigRightX + sigLineLen, y);
         y += 5;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(DARK_GRAY[0], DARK_GRAY[1], DARK_GRAY[2]);
-        doc.text("CLIENT SIGNATURE & DATE", margin, y);
-        doc.text("COASTAL VA REPRESENTATIVE & DATE", width - margin - 75, y);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
+        doc.text("CLIENT SIGNATURE & DATE", sigLeftX, y);
+        doc.text("COASTAL VA REPRESENTATIVE & DATE", sigRightX, y);
+
+        drawFooter();
 
         doc.save(`Proposal_${(clientName || 'Client').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
     };
