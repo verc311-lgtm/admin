@@ -117,24 +117,47 @@ const App: React.FC = () => {
 
   // --- CRUD ACTIONS (Direct to Supabase) ---
 
-  const handleAddPayment = async (paymentData: Omit<Payment, 'id' | 'projectName'>) => {
+  const handleAddPayment = async (
+    paymentData: Omit<Payment, 'id' | 'projectName'>,
+    discountData?: { amount: number; date: string }
+  ) => {
     setIsSyncing(true);
     const project = projects.find(p => p.id === paymentData.projectId);
     if (!project) return;
 
-    const newPayment = {
-      ...paymentData,
-      id: Math.random().toString(36).substring(2, 9),
-      projectName: project.name
-    };
-
     try {
-      // 1. Insert Payment
-      const { error: payError } = await supabase.from('cva_payments').insert([newPayment]);
-      if (payError) throw payError;
+      // 1. Insert Payment(s)
+      const paymentsToInsert: any[] = [];
+
+      if (paymentData.amount > 0) {
+        paymentsToInsert.push({
+          ...paymentData,
+          id: Math.random().toString(36).substring(2, 9),
+          projectName: project.name
+        });
+      }
+
+      if (discountData && discountData.amount > 0) {
+        paymentsToInsert.push({
+          projectId: paymentData.projectId,
+          invoiceId: paymentData.invoiceId,
+          amount: discountData.amount,
+          date: discountData.date,
+          method: 'Discount',
+          reference: 'Descuento aplicado al pago',
+          id: Math.random().toString(36).substring(2, 9),
+          projectName: project.name
+        });
+      }
+
+      if (paymentsToInsert.length > 0) {
+        const { error: payError } = await supabase.from('cva_payments').insert(paymentsToInsert);
+        if (payError) throw payError;
+      }
 
       // 2. Update Project Balances
-      const newPaid = project.paidAmount + paymentData.amount;
+      const totalAmountAdded = paymentData.amount + (discountData ? discountData.amount : 0);
+      const newPaid = project.paidAmount + totalAmountAdded;
       const newBalance = project.totalAmount - newPaid;
       const newStatus = newBalance <= 0 ? 'Finished' : project.status;
 
@@ -147,7 +170,7 @@ const App: React.FC = () => {
       if (projError) throw projError;
 
       // 3. Update Invoice Status if linked
-      if (paymentData.invoiceId) {
+      if (paymentData.invoiceId && paymentData.amount > 0) {
         const { error: invError } = await supabase.from('cva_invoices').update({ status: 'Paid' }).eq('id', paymentData.invoiceId);
         if (invError) throw invError;
       }

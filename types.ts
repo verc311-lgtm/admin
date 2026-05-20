@@ -1,5 +1,5 @@
 
-export type PaymentMethod = 'Cash' | 'Bank Transfer' | 'Check' | 'Credit Card' | 'Zelle';
+export type PaymentMethod = 'Cash' | 'Bank Transfer' | 'Check' | 'Credit Card' | 'Zelle' | 'Discount';
 
 export interface Payment {
   id: string;

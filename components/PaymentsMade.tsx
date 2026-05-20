@@ -157,34 +157,45 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
 
       {/* ── MOBILE: Cards — no scrolling needed ── */}
       <div className="md:hidden space-y-3">
-        {payments.length > 0 ? payments.map((payment) => (
-          <div key={payment.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            {/* Green accent top bar */}
-            <div className="h-1 bg-emerald-400" />
-            <div className="p-4">
-              {/* Row 1: name + amount */}
-              <div className="flex justify-between items-start gap-2 mb-3">
-                <p className="font-black text-[#0a192f] uppercase italic text-sm leading-tight flex-1 min-w-0 pr-2">{payment.projectName}</p>
-                <span className="text-lg font-black text-emerald-600 flex-shrink-0">${payment.amount.toLocaleString()}</span>
-              </div>
-              {/* Row 2: date + method */}
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-xs font-bold text-slate-500">{payment.date}</span>
+        {payments.length > 0 ? payments.map((payment) => {
+          const isDiscount = payment.method === 'Discount';
+          return (
+            <div key={payment.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              {/* Accent top bar: amber for discount, emerald for payment */}
+              <div className={`h-1 ${isDiscount ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+              <div className="p-4">
+                {/* Row 1: name + amount */}
+                <div className="flex justify-between items-start gap-2 mb-3">
+                  <p className="font-black text-[#0a192f] uppercase italic text-sm leading-tight flex-1 min-w-0 pr-2">{payment.projectName}</p>
+                  <span className={`text-lg font-black flex-shrink-0 ${isDiscount ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {isDiscount ? '-' : ''}${payment.amount.toLocaleString()}
+                  </span>
                 </div>
-                <span className="px-2.5 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase">{payment.method}</span>
-                {payment.reference && <span className="text-[10px] font-mono text-slate-400">{payment.reference}</span>}
-              </div>
-              {/* Row 3: receipt button */}
-              <div className="flex justify-end border-t border-slate-100 pt-3">
-                <button onClick={() => generateReceiptPDF(payment)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-[#0a192f] border rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors">
-                  <Download className="w-3.5 h-3.5" /> Receipt
-                </button>
+                {/* Row 2: date + method */}
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-xs font-bold text-slate-500">{payment.date}</span>
+                  </div>
+                  <span className={`px-2.5 py-1 text-[10px] font-black rounded-full uppercase border ${
+                    isDiscount
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-blue-50 text-blue-600 border-transparent'
+                  }`}>{payment.method}</span>
+                  {payment.reference && <span className="text-[10px] font-mono text-slate-400">{payment.reference}</span>}
+                </div>
+                {/* Row 3: receipt button (only for real payments) */}
+                {!isDiscount && (
+                  <div className="flex justify-end border-t border-slate-100 pt-3">
+                    <button onClick={() => generateReceiptPDF(payment)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-[#0a192f] border rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors">
+                      <Download className="w-3.5 h-3.5" /> Receipt
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        )) : (
+          );
+        }) : (
           <div className="text-center py-16 bg-white rounded-2xl border border-slate-100 text-slate-300 font-black uppercase tracking-widest text-sm">
             No payments recorded yet
           </div>
@@ -205,8 +216,10 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {payments.length > 0 ? payments.map((payment) => (
-              <tr key={payment.id} className="hover:bg-cyan-50/30 transition-colors group">
+            {payments.length > 0 ? payments.map((payment) => {
+              const isDiscount = payment.method === 'Discount';
+              return (
+              <tr key={payment.id} className={`hover:bg-cyan-50/30 transition-colors group ${isDiscount ? 'bg-amber-50/20' : ''}`}>
                 <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6 flex items-center gap-3 truncate">
                   <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
                   <span className="text-sm font-bold text-slate-900 truncate">{payment.date}</span>
@@ -217,16 +230,31 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter truncate">ID: {payment.projectId.toUpperCase()}</span>
                   </div>
                 </td>
-                <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6"><span className="px-2.5 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase inline-block truncate">{payment.method}</span></td>
+                <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6">
+                  <span className={`px-2.5 py-1 text-[10px] font-black rounded-full uppercase inline-block truncate border ${
+                    isDiscount
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-blue-50 text-blue-600 border-transparent'
+                  }`}>{payment.method}</span>
+                </td>
                 <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6 text-xs font-mono font-bold text-slate-400 uppercase truncate" title={payment.reference || 'N/A'}>{payment.reference || 'N/A'}</td>
-                <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6 text-right font-black text-emerald-600 text-base lg:text-lg whitespace-nowrap">${payment.amount.toLocaleString()}</td>
+                <td className={`px-4 lg:px-6 xl:px-8 py-4 lg:py-6 text-right font-black text-base lg:text-lg whitespace-nowrap ${
+                  isDiscount ? 'text-amber-600' : 'text-emerald-600'
+                }`}>
+                  {isDiscount ? '-' : ''}${payment.amount.toLocaleString()}
+                </td>
                 <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6 text-right">
-                  <button onClick={() => generateReceiptPDF(payment)} className="p-2 text-slate-400 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100 inline-flex items-center justify-center" title="Download Receipt">
-                    <Download className="w-4 h-4" />
-                  </button>
+                  {!isDiscount ? (
+                    <button onClick={() => generateReceiptPDF(payment)} className="p-2 text-slate-400 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100 inline-flex items-center justify-center" title="Download Receipt">
+                      <Download className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider px-2">DCTO</span>
+                  )}
                 </td>
               </tr>
-            )) : (
+              );
+            }) : (
               <tr><td colSpan={6} className="py-24 text-center text-slate-300 uppercase tracking-widest font-black">No payments recorded yet</td></tr>
             )}
           </tbody>
