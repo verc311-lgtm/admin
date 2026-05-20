@@ -17,6 +17,9 @@ export const DOCK_ITEMS: PricingItem[] = [
     { id: 'nuts', label: 'Nuts 5/8', price: 1.00, category: 'material', isDefault: true, unit: 'sqf' },
     { id: 'timberbolt12', label: 'Timberbolt 5/8 x 12"', price: 1.00, category: 'material', isDefault: true, unit: 'sqf' },
     { id: 'screws', label: 'SS Screws / Fasteners', price: 3.00, category: 'material', isDefault: true, unit: 'sqf' },
+    { id: 'deck_pine', label: 'Yellow Pine Deck', price: 3.00, category: 'decking', isDefault: false, unit: 'sqf' },
+    { id: 'deck_topselect', label: 'Top Deck (0.31 CA-C)', price: 4.00, category: 'decking', isDefault: false, unit: 'sqf' },
+    { id: 'deck_composite', label: 'WearDeck (Composite)', price: 13.00, category: 'decking', isDefault: false, unit: 'sqf' },
     { id: 'labor', label: 'Installation Labor', price: 20.00, category: 'labor', isDefault: true, unit: 'sqf' },
     { id: 'equipment', label: 'Mobilization & Equipment', price: 5000.00, category: 'fee', isDefault: true, unit: 'fixed' },
 ];
@@ -55,7 +58,7 @@ export const FLOATING_DOCK_ITEMS: PricingItem[] = [
     { id: 'l_plates', label: 'L Plates', price: 1.25, category: 'material', isDefault: true, unit: 'sqf' },
     { id: 'pile_guide', label: 'Pile Guide', price: 6.25, category: 'material', isDefault: true, unit: 'sqf' },
     { id: 'pile', label: 'Pile', price: 6.00, category: 'material', isDefault: true, unit: 'sqf' },
-    { id: 'yp_deck', label: 'Yellow Pine Deck', price: 3.00, category: 'decking', isDefault: true, unit: 'sqf' },
+    { id: 'yp_deck', label: 'Yellow Pine Deck', price: 3.00, category: 'decking', isDefault: false, unit: 'sqf' },
     { id: 'weardeck', label: 'WearDeck', price: 13.00, category: 'decking', isDefault: false, unit: 'sqf' },
     { id: 'labor_fd', label: 'Installation Labor', price: 20.00, category: 'labor', isDefault: true, unit: 'sqf' },
     { id: 'machinery_fd', label: 'Mobilization & Equipment', price: 5000.00, category: 'fee', isDefault: true, unit: 'fixed' },
@@ -118,13 +121,7 @@ export const calculateInteractivePrice = (
         }
     });
 
-    // 2. Add Decking (Only for Fixed Docks - Floating has decking in items list)
-    if (type === 'dock' && deckingType) {
-        const deckOption = DECKING_OPTIONS.find(d => d.id === deckingType);
-        if (deckOption) {
-            subtotal += (deckOption.price * quantity);
-        }
-    }
+    // 2. Decking is now included in the items list for all types
 
     // 3. Add Additional Expenses
     subtotal += additionalExpenses;

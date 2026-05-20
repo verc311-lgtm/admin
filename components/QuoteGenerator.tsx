@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, FileText, Loader2, Settings, Plus, Trash2, Check, Layers, MessageSquare, Edit3 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { DOCK_ITEMS, DECKING_OPTIONS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, BULKHEAD_ITEMS, BOATLIFT_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
+import { DOCK_ITEMS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, BULKHEAD_ITEMS, BOATLIFT_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
 
 const PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Boat Lift", "Rip-Rap / Erosion Control", "Other / Custom Project"];
 
@@ -27,7 +27,6 @@ const QuoteGenerator: React.FC = () => {
     const [sections, setSections] = useState<QuoteSection[]>([]);
     const [currentType, setCurrentType] = useState(PROJECT_TYPES[0]);
     const [currentDimensions, setCurrentDimensions] = useState('');
-    const [currentDecking, setCurrentDecking] = useState(DECKING_OPTIONS[0].id);
     const [currentSelectedItems, setCurrentSelectedItems] = useState<string[]>([]);
     const [currentDescription, setCurrentDescription] = useState('');
     const [customMaterialPrice, setCustomMaterialPrice] = useState('');
@@ -89,11 +88,10 @@ const QuoteGenerator: React.FC = () => {
     };
 
     const addSection = () => {
-        const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking, customMaterialPrice, customLaborPrice);
+        const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, undefined, customMaterialPrice, customLaborPrice);
         setSections([...sections, {
             id: Date.now().toString(), type: currentType, dimensions: currentDimensions,
             selectedItems: currentSelectedItems,
-            deckingType: currentType === "Pier / Dock" ? currentDecking : undefined,
             description: currentDescription, price,
             customMaterialPrice: parseFloat(customMaterialPrice) || undefined,
             customLaborPrice: parseFloat(customLaborPrice) || undefined
@@ -132,11 +130,10 @@ const QuoteGenerator: React.FC = () => {
         let activeSections = [...sections];
         if (currentDimensions && parseFloat(currentDimensions) > 0) {
             if (window.confirm(`Did you mean to include the current "${currentType}" section in the proposal?`)) {
-                const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking, customMaterialPrice, customLaborPrice);
+                const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, undefined, customMaterialPrice, customLaborPrice);
                 activeSections.push({
                     id: Date.now().toString(), type: currentType, dimensions: currentDimensions,
                     selectedItems: currentSelectedItems,
-                    deckingType: currentType === "Pier / Dock" ? currentDecking : undefined,
                     description: currentDescription, price,
                     customMaterialPrice: parseFloat(customMaterialPrice) || undefined,
                     customLaborPrice: parseFloat(customLaborPrice) || undefined
@@ -163,10 +160,6 @@ const QuoteGenerator: React.FC = () => {
                     if (s.customLaborPrice) projectDesc += `Labor Rate: $${s.customLaborPrice}/unit\n`;
                 } else {
                     const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
-                    if (s.type === "Pier / Dock") {
-                        const deck = DECKING_OPTIONS.find(d => d.id === s.deckingType)?.label;
-                        if (deck) items.push(`Decking: ${deck}`);
-                    }
                     projectDesc += `\nSECTION ${idx + 1}: ${s.type}\n`;
                     if (s.description) projectDesc += `Note: ${s.description}\n`;
                     projectDesc += `Dimensions: ${s.dimensions} ${s.type.includes('Dock') ? 'SQF' : 'Linear Feet'}\n`;
@@ -446,7 +439,7 @@ Return ONLY valid JSON with no other text:
         doc.save(`Proposal_${(clientName || 'Client').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
-    const currentLivePrice = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, currentDecking, customMaterialPrice, customLaborPrice);
+    const currentLivePrice = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, undefined, customMaterialPrice, customLaborPrice);
     const proposalReady = scopeOfWork.trim().length > 0;
 
     return (
@@ -560,13 +553,6 @@ Return ONLY valid JSON with no other text:
                         ) : (
                             <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 max-h-56 overflow-y-auto">
                                 <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block">Specifications & Materials</label>
-                                {currentType === "Pier / Dock" && (
-                                    <div className="mb-3 grid grid-cols-2 gap-2">
-                                        {DECKING_OPTIONS.map(d => (
-                                            <div key={d.id} onClick={() => setCurrentDecking(d.id)} className={`cursor-pointer p-2 rounded-lg border text-center text-xs font-bold transition-all ${currentDecking === d.id ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-slate-50 border-slate-100 text-slate-500 hover:border-slate-300'}`}>{d.label}</div>
-                                        ))}
-                                    </div>
-                                )}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     {getItemsForType(currentType).map(item => {
                                         const sel = currentSelectedItems.includes(item.id);
