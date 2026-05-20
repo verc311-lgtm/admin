@@ -139,7 +139,7 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 px-2 sm:px-4 md:px-6">
 
       {/* Header */}
       <div className="bg-white p-5 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -192,36 +192,36 @@ const PaymentsMade: React.FC<PaymentsMadeProps> = ({ payments, projects }) => {
       </div>
 
       {/* ── DESKTOP: Table ── */}
-      <div className="hidden md:block bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full text-left">
+      <div className="hidden md:block bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-slate-100 overflow-x-auto">
+        <table className="w-full text-left table-fixed min-w-[900px] lg:min-w-full">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100">
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Project Name</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Method</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Reference</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
-              <th className="px-8 py-5"></th>
+              <th className="px-4 lg:px-6 xl:px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[14%]">Date</th>
+              <th className="px-4 lg:px-6 xl:px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[38%]">Project Name</th>
+              <th className="px-4 lg:px-6 xl:px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[12%]">Method</th>
+              <th className="px-4 lg:px-6 xl:px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[18%]">Reference</th>
+              <th className="px-4 lg:px-6 xl:px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right w-[13%]">Amount</th>
+              <th className="px-4 lg:px-6 xl:px-8 py-5 w-[5%]"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {payments.length > 0 ? payments.map((payment) => (
               <tr key={payment.id} className="hover:bg-cyan-50/30 transition-colors group">
-                <td className="px-8 py-6 flex items-center gap-3">
-                  <Calendar className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm font-bold text-slate-900">{payment.date}</span>
+                <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6 flex items-center gap-3 truncate">
+                  <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span className="text-sm font-bold text-slate-900 truncate">{payment.date}</span>
                 </td>
-                <td className="px-8 py-6">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-black text-[#0a192f] uppercase italic">{payment.projectName}</span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">ID: {payment.projectId.toUpperCase()}</span>
+                <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-black text-[#0a192f] uppercase italic truncate" title={payment.projectName}>{payment.projectName}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter truncate">ID: {payment.projectId.toUpperCase()}</span>
                   </div>
                 </td>
-                <td className="px-8 py-6"><span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase">{payment.method}</span></td>
-                <td className="px-8 py-6 text-xs font-mono font-bold text-slate-400 uppercase">{payment.reference || 'N/A'}</td>
-                <td className="px-8 py-6 text-right font-black text-emerald-600 text-lg">${payment.amount.toLocaleString()}</td>
-                <td className="px-8 py-6 text-right">
-                  <button onClick={() => generateReceiptPDF(payment)} className="p-2 text-slate-400 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100" title="Download Receipt">
+                <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6"><span className="px-2.5 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase inline-block truncate">{payment.method}</span></td>
+                <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6 text-xs font-mono font-bold text-slate-400 uppercase truncate" title={payment.reference || 'N/A'}>{payment.reference || 'N/A'}</td>
+                <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6 text-right font-black text-emerald-600 text-base lg:text-lg whitespace-nowrap">${payment.amount.toLocaleString()}</td>
+                <td className="px-4 lg:px-6 xl:px-8 py-4 lg:py-6 text-right">
+                  <button onClick={() => generateReceiptPDF(payment)} className="p-2 text-slate-400 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100 inline-flex items-center justify-center" title="Download Receipt">
                     <Download className="w-4 h-4" />
                   </button>
                 </td>
