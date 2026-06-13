@@ -459,6 +459,7 @@ const App: React.FC = () => {
           <ProjectSearch
             projects={projects}
             invoices={invoices}
+            payments={payments}
             onAddPayment={(pid, invId) => {
               const p = projects.find(proj => proj.id === pid);
               if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
