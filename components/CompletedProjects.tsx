@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Search, ChevronRight, Download, X, FileText, FilePlus, Wallet, Anchor } from 'lucide-react';
+import { Search, ChevronRight, Download, X, FileText, FilePlus, Wallet, Anchor, Printer } from 'lucide-react';
 import { Project, Invoice, Payment, ExpenseCategory } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -118,6 +118,71 @@ const CompletedProjects: React.FC<CompletedProjectsProps> = ({ projects, invoice
     doc.save(`Completed_${project.name.replace(/\s+/g, '_')}.pdf`);
   };
 
+  const handleExportListPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(10, 25, 47);
+    doc.text("COASTAL VA MARINE CONSTRUCTION", pageWidth / 2, 20, { align: 'center' });
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text("Completed Projects Report", pageWidth / 2, 28, { align: 'center' });
+    doc.text(`Report Date: ${new Date().toLocaleDateString()}`, pageWidth / 2, 34, { align: 'center' });
+
+    doc.setFillColor(248, 250, 252);
+    doc.rect(14, 40, pageWidth - 28, 20, 'F');
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(100);
+    doc.text("Total Contract Value", 20, 47);
+    doc.text("Total Received", pageWidth / 2 - 20, 47);
+    doc.text("Total Profit", pageWidth - 60, 47);
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(10, 25, 47);
+    doc.text(`$${totalContract.toLocaleString()}`, 20, 54);
+    doc.text(`$${totalReceived.toLocaleString()}`, pageWidth / 2 - 20, 54);
+    doc.text(`$${totalProfit.toLocaleString()}`, pageWidth - 60, 54);
+
+    const tableData = finishedProjects.map(project => {
+      const lastPayment = getLastPayment(project.id);
+      const profitPercent = getProfitPercent(project);
+      return [
+        project.name,
+        project.client,
+        `$${project.totalAmount.toLocaleString()}`,
+        `$${project.paidAmount.toLocaleString()}`,
+        `${profitPercent.toFixed(1)}%`,
+        lastPayment ? `${lastPayment.date} ($${lastPayment.amount.toLocaleString()})` : '—'
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 68,
+      head: [['Project', 'Client', 'Contract', 'Paid', 'Profit', 'Final Payment']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 50 },
+        1: { cellWidth: 40 },
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { cellWidth: 45 }
+      },
+      margin: { left: 14, right: 14 }
+    });
+
+    doc.save(`Completed_Projects_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   // Totals
   const totalContract = finishedProjects.reduce((s, p) => s + p.totalAmount, 0);
   const totalReceived = finishedProjects.reduce((s, p) => s + p.paidAmount, 0);
@@ -207,9 +272,17 @@ const CompletedProjects: React.FC<CompletedProjectsProps> = ({ projects, invoice
             <p className="text-emerald-600 text-[10px] font-bold uppercase tracking-widest mt-0.5">{finishedProjects.length} finished project{finishedProjects.length !== 1 ? 's' : ''}</p>
           </div>
         </div>
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-emerald-500 w-5 h-5" />
-          <input type="text" placeholder="Search by project or client..." className="w-full pl-14 pr-6 py-4 rounded-2xl bg-slate-50 outline-none font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-emerald-50 transition-all text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        <div className="relative flex-1 w-full flex flex-col md:flex-row gap-4 items-center">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-emerald-500 w-5 h-5" />
+            <input type="text" placeholder="Search by project or client..." className="w-full pl-14 pr-6 py-4 rounded-2xl bg-slate-50 outline-none font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-emerald-50 transition-all text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          </div>
+          <button 
+            onClick={handleExportListPDF} 
+            className="bg-red-600 hover:bg-red-500 text-white transition-all flex items-center justify-center gap-2 font-bold uppercase text-[10px] tracking-widest shadow-lg px-6 py-4 rounded-2xl h-full flex-shrink-0 w-full md:w-auto"
+          >
+            <Printer className="w-4 h-4" /> Print List
+          </button>
         </div>
       </div>
 
