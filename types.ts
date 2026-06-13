@@ -74,4 +74,4 @@ export interface Assignment {
   status: 'Pending' | 'Completed';
 }
 
-export type View = 'Home' | 'Quotes' | 'Invoices' | 'Payments Made' | 'New Contract' | 'Project Search' | 'User Management' | 'Schedule' | 'Completed Projects';
+export type View = 'Home' | 'Quotes' | 'Invoices' | 'Payments Made' | 'New Contract' | 'Project Search' | 'User Management' | 'Schedule' | 'Completed Projects' | 'Active Projects' | 'Pending Projects';

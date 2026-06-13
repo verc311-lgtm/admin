@@ -10,6 +10,8 @@ import InvoiceView from './components/InvoiceView.tsx';
 import PaymentForm from './components/PaymentForm.tsx';
 import Schedule from './components/Schedule.tsx';
 import CompletedProjects from './components/CompletedProjects.tsx';
+import ActiveProjects from './components/ActiveProjects.tsx';
+import PendingProjects from './components/PendingProjects.tsx';
 import { User, Project, Payment, Invoice, View, Expense, ExpenseCategory, Crew, Assignment } from './types.ts';
 import { HardDrive, ShieldCheck, Menu } from 'lucide-react';
 import { supabase } from './src/supabaseClient';
@@ -477,6 +479,36 @@ const App: React.FC = () => {
             projects={projects}
             invoices={invoices}
             payments={payments}
+          />
+        )}
+
+        {activeView === 'Active Projects' && (
+          <ActiveProjects
+            projects={projects}
+            invoices={invoices}
+            payments={payments}
+            onAddPayment={(pid, invId) => {
+              const p = projects.find(proj => proj.id === pid);
+              if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
+            }}
+            onAddExpense={handleAddExpense}
+            onChangeOrder={handleChangeOrder}
+            onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
+          />
+        )}
+
+        {activeView === 'Pending Projects' && (
+          <PendingProjects
+            projects={projects}
+            invoices={invoices}
+            payments={payments}
+            onAddPayment={(pid, invId) => {
+              const p = projects.find(proj => proj.id === pid);
+              if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
+            }}
+            onAddExpense={handleAddExpense}
+            onChangeOrder={handleChangeOrder}
+            onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
           />
         )}
 
