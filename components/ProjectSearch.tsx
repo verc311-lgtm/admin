@@ -1,14 +1,13 @@
 
 import React, { useState } from 'react';
 import { Search, TrendingUp, X, FileText, Printer, FilePlus, DollarSign, Wallet, ChevronRight, Anchor, Save, Download } from 'lucide-react';
-import { Project, Invoice, ExpenseCategory, Payment } from '../types';
+import { Project, Invoice, ExpenseCategory } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 interface ProjectSearchProps {
   projects: Project[];
   invoices: Invoice[];
-  payments: Payment[];
   onAddPayment: (projectId: string, invoiceId?: string) => void;
   onAddExpense: (projectId: string, expense: { category: ExpenseCategory, amount: number, note: string }) => void;
   onChangeOrder: (projectId: string, amount: number) => void;
@@ -17,7 +16,7 @@ interface ProjectSearchProps {
   onGenerateNewInvoice: (project: Project) => void;
 }
 
-const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, payments, onAddPayment, onAddExpense, onChangeOrder, onPrintInvoice, onViewDetails, onGenerateNewInvoice }) => {
+const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAddPayment, onAddExpense, onChangeOrder, onPrintInvoice, onViewDetails, onGenerateNewInvoice }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expenseModal, setExpenseModal] = useState<{ show: boolean, projectId: string, projectName: string, currentTotal: number }>({ show: false, projectId: '', projectName: '', currentTotal: 0 });
   const [changeOrderModal, setChangeOrderModal] = useState<{ show: boolean, projectId: string, projectName: string }>({ show: false, projectId: '', projectName: '' });
@@ -496,145 +495,6 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, payme
           <span className="text-[10px] font-bold uppercase tracking-widest mt-2">Scroll for more</span>
         </div>
       </div>
-
-      {/* ── Completed Projects Section ── */}
-      {(() => {
-        const finishedProjects = projects.filter(p => p.status === 'Finished');
-        if (finishedProjects.length === 0) return null;
-
-        return (
-          <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Section Header */}
-            <div className="p-6 md:p-8 bg-gradient-to-r from-emerald-50 to-cyan-50 border-b border-emerald-100/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="flex items-center gap-4">
-                <div className="bg-emerald-100 p-3 rounded-2xl">
-                  <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <div>
-                  <h3 className="text-xl md:text-2xl font-black text-[#0a192f] uppercase tracking-tighter leading-none italic">Completed Projects</h3>
-                  <p className="text-emerald-600 text-[10px] font-bold uppercase tracking-widest mt-1">{finishedProjects.length} project{finishedProjects.length > 1 ? 's' : ''} finished &amp; paid</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile Cards */}
-            <div className="md:hidden p-4 space-y-3">
-              {finishedProjects.map(project => {
-                const projectPayments = payments.filter(pay => pay.projectId === project.id && pay.method !== 'Discount');
-                const lastPayment = projectPayments.length > 0 ? projectPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] : null;
-                const profitPercent = project.totalAmount > 0 ? ((project.totalAmount - project.totalExpenses) / project.totalAmount * 100) : 0;
-
-                return (
-                  <div key={project.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                    <div className="h-1 bg-emerald-400" />
-                    <div className="p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex-1 min-w-0 pr-2">
-                          <p className="font-black text-[#0a192f] uppercase italic text-sm leading-tight truncate">{project.name}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{project.client}</p>
-                        </div>
-                        <span className="bg-emerald-100 text-emerald-700 text-[8px] font-black uppercase px-2.5 py-1 rounded-full tracking-wider flex-shrink-0">Finished</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        <div className="bg-slate-50 p-2.5 rounded-xl">
-                          <p className="text-[8px] font-black text-slate-400 uppercase">Contract</p>
-                          <p className="text-sm font-black text-slate-900">${project.totalAmount.toLocaleString()}</p>
-                        </div>
-                        <div className="bg-emerald-50 p-2.5 rounded-xl">
-                          <p className="text-[8px] font-black text-emerald-600 uppercase">Received</p>
-                          <p className="text-sm font-black text-emerald-700">${project.paidAmount.toLocaleString()}</p>
-                        </div>
-                      </div>
-                      {lastPayment && (
-                        <div className="border-t border-slate-100 pt-3 flex justify-between items-center">
-                          <div>
-                            <p className="text-[8px] font-black text-slate-400 uppercase">Last Payment</p>
-                            <p className="text-xs font-bold text-slate-600">{lastPayment.date} · <span className="text-blue-600">{lastPayment.method}</span></p>
-                          </div>
-                          <p className="text-sm font-black text-emerald-600">${lastPayment.amount.toLocaleString()}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100">
-                    <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Project</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Contract</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Paid</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Profit</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Final Payment</th>
-                    <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Method</th>
-                    <th className="px-6 py-5"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {finishedProjects.map(project => {
-                    const projectPayments = payments.filter(pay => pay.projectId === project.id && pay.method !== 'Discount');
-                    const lastPayment = projectPayments.length > 0 ? projectPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] : null;
-                    const profitPercent = project.totalAmount > 0 ? ((project.totalAmount - project.totalExpenses) / project.totalAmount * 100) : 0;
-
-                    return (
-                      <tr key={project.id} className="hover:bg-emerald-50/20 transition-colors group">
-                        <td className="px-8 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-black text-[#0a192f] uppercase italic truncate">{project.name}</p>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">ID: {project.id.toUpperCase()}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 text-sm font-bold text-slate-600">{project.client}</td>
-                        <td className="px-6 py-5 text-right font-black text-slate-900">${project.totalAmount.toLocaleString()}</td>
-                        <td className="px-6 py-5 text-right font-black text-emerald-600">${project.paidAmount.toLocaleString()}</td>
-                        <td className="px-6 py-5 text-right">
-                          <span className={`font-black ${profitPercent >= 30 ? 'text-emerald-600' : profitPercent >= 15 ? 'text-amber-600' : 'text-red-500'}`}>
-                            {profitPercent.toFixed(1)}%
-                          </span>
-                        </td>
-                        <td className="px-6 py-5">
-                          {lastPayment ? (
-                            <div>
-                              <p className="text-sm font-bold text-slate-700">{lastPayment.date}</p>
-                              <p className="text-[10px] text-emerald-600 font-black">${lastPayment.amount.toLocaleString()}</p>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-300">—</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-5">
-                          {lastPayment ? (
-                            <span className="px-2.5 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase border border-transparent">{lastPayment.method}</span>
-                          ) : (
-                            <span className="text-xs text-slate-300">—</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-5">
-                          <button
-                            onClick={() => setDetailsModal({ show: true, project })}
-                            className="p-2 text-slate-300 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100"
-                            title="View Details"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 };

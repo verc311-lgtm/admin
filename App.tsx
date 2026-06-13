@@ -9,6 +9,7 @@ import UserManagement from './components/UserManagement.tsx';
 import InvoiceView from './components/InvoiceView.tsx';
 import PaymentForm from './components/PaymentForm.tsx';
 import Schedule from './components/Schedule.tsx';
+import CompletedProjects from './components/CompletedProjects.tsx';
 import { User, Project, Payment, Invoice, View, Expense, ExpenseCategory, Crew, Assignment } from './types.ts';
 import { HardDrive, ShieldCheck, Menu } from 'lucide-react';
 import { supabase } from './src/supabaseClient';
@@ -459,7 +460,6 @@ const App: React.FC = () => {
           <ProjectSearch
             projects={projects}
             invoices={invoices}
-            payments={payments}
             onAddPayment={(pid, invId) => {
               const p = projects.find(proj => proj.id === pid);
               if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
@@ -469,6 +469,14 @@ const App: React.FC = () => {
             onPrintInvoice={(inv) => navigateToInvoice(undefined, inv)}
             onViewDetails={() => { }}
             onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
+          />
+        )}
+
+        {activeView === 'Completed Projects' && (
+          <CompletedProjects
+            projects={projects}
+            invoices={invoices}
+            payments={payments}
           />
         )}
 

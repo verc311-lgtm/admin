@@ -12,7 +12,8 @@ import {
   LogOut,
   ExternalLink,
   X,
-  CalendarDays
+  CalendarDays,
+  CheckCircle
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -30,6 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, u
     { id: 'Quotes', label: 'AI Estimator', icon: Calculator },
     { id: 'Invoices', label: 'Invoices', icon: FileText },
     { id: 'Payments Made', label: 'Payment History', icon: ArrowUpCircle },
+    { id: 'Completed Projects', label: 'Completed Projects', icon: CheckCircle },
     { id: 'Schedule', label: 'Schedule', icon: CalendarDays },
   ];
 
