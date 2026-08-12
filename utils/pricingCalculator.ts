@@ -68,19 +68,19 @@ export const FLOATING_DOCK_ITEMS: PricingItem[] = [
 export const BULKHEAD_ITEMS: PricingItem[] = [
     { id: 'tw95', label: 'TW-95', price: 210.00, category: 'material', isDefault: true, unit: 'lf' },
     { id: 'piles_10x20', label: 'Piles 10" x 20\'', price: 52.00, category: 'material', isDefault: true, unit: 'lf' },
-    { id: 'bulkhead_boards', label: 'Bulkhead Boards 2"x10"x16\' T&G 2.5cca', price: 84.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'bulkhead_boards', label: 'Bulkhead Boards 2"x10"x16\' T&G 2.5cca', price: 86.00, category: 'material', isDefault: true, unit: 'lf' },
     { id: 'mantaray', label: 'MantaRay', price: 40.00, category: 'material', isDefault: true, unit: 'lf' },
-    { id: 'walers', label: 'Walers 6"x6"x16\'', price: 8.00, category: 'material', isDefault: true, unit: 'lf' },
-    { id: 'filter_cloth', label: 'Filter Cloth', price: 4.00, category: 'material', isDefault: true, unit: 'lf' },
-    { id: 'top_soil_sand', label: 'Top Soil / Sand', price: 40.00, category: 'material', isDefault: true, unit: 'lf' },
-    { id: 'gravel', label: 'Gravel (Tons)', price: 40.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'walers', label: 'Walers 6"x6"x16\'', price: 9.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'filter_cloth', label: 'Filter Cloth', price: 4.75, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'top_soil_sand', label: 'Top Soil / Sand', price: 50.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'gravel', label: 'Gravel (Tons)', price: 50.00, category: 'material', isDefault: true, unit: 'lf' },
     { id: 'cap', label: 'Cap 2"x10"', price: 6.00, category: 'material', isDefault: true, unit: 'lf' },
     { id: 'jet_filter', label: 'Jet Filter', price: 10.00, category: 'material', isDefault: true, unit: 'lf' },
     { id: 'deadmens', label: 'DeadMens 8"x10\'', price: 15.00, category: 'material', isDefault: true, unit: 'lf' },
     { id: 'tie_rod', label: 'Tie Rod 5/8"x10\'', price: 15.00, category: 'material', isDefault: true, unit: 'lf' },
     { id: 'timber_bolts', label: 'Timber Bolts', price: 2.00, category: 'material', isDefault: true, unit: 'lf' },
-    { id: 'labor_bh', label: 'Installation Labor', price: 175.00, category: 'labor', isDefault: true, unit: 'lf' },
-    { id: 'machinery_bh', label: 'Mobilization & Equipment', price: 5000.00, category: 'fee', isDefault: true, unit: 'fixed' },
+    { id: 'labor_bh', label: 'Installation Labor', price: 185.00, category: 'labor', isDefault: true, unit: 'lf' },
+    { id: 'machinery_bh', label: 'Mobilization & Equipment', price: 6000.00, category: 'fee', isDefault: true, unit: 'fixed' },
 ];
 
 export const BOATLIFT_ITEMS: PricingItem[] = [
