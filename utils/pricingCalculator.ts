@@ -32,15 +32,15 @@ export const DECKING_OPTIONS = [
 
 // --- RIP-RAP ITEMS (Linear Feet) ---
 export const RIP_RAP_ITEMS: PricingItem[] = [
-    { id: 'riprap', label: 'Rip-Rap Class I', price: 140.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'riprap', label: 'Rip-Rap Class I', price: 185.00, category: 'material', isDefault: true, unit: 'lf' },
     { id: 'filter', label: 'Filter Cloth', price: 3.00, category: 'material', isDefault: true, unit: 'lf' },
-    { id: 'gravel', label: 'Gravel (Tons)', price: 18.00, category: 'material', isDefault: true, unit: 'lf' },
+    { id: 'gravel', label: 'Gravel (Tons)', price: 23.00, category: 'material', isDefault: true, unit: 'lf' },
     { id: 'pins', label: 'Anchor Pins', price: 6.00, category: 'material', isDefault: true, unit: 'lf' },
-    { id: 'labor_rr', label: 'Installation Labor', price: 100.00, category: 'labor', isDefault: true, unit: 'lf' },
+    { id: 'labor_rr', label: 'Installation Labor', price: 200.00, category: 'labor', isDefault: true, unit: 'lf' },
     // Optionally add Mobilization if needed, assuming shared or same as dock for now if user didn't specify. 
     // User didn't specify mob fee for RipRap, so I'll leave it out or add it as an option. 
     // I will add the standard Mobilization fee as an option but default to unchecked just in case.
-    { id: 'equipment_rr', label: 'Mobilization & Equipment', price: 2500.00, category: 'fee', isDefault: false, unit: 'fixed' },
+    { id: 'equipment_rr', label: 'Mobilization & Equipment', price: 5000.00, category: 'fee', isDefault: false, unit: 'fixed' },
 ];
 
 // --- FLOATING DOCK ITEMS (SQF) ---
