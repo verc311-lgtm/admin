@@ -352,6 +352,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleClearAllAssignments = async () => {
+    if (!window.confirm("Are you sure you want to clear the entire schedule? This will delete all team assignments.")) return;
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase.from('cva_assignments').delete().neq('id', '');
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error clearing schedule: " + err.message);
+      setIsSyncing(false);
+    }
+  };
+
   const navigateToInvoice = (project?: Project, invoice?: Invoice) => {
     setSelectedProjectForInvoice(project || null);
     setSelectedInvoiceForView(invoice || null);
@@ -554,6 +567,7 @@ const App: React.FC = () => {
             onAddCrew={handleAddCrew}
             onAddAssignment={handleAddAssignment}
             onDeleteAssignment={handleDeleteAssignment}
+            onClearAllAssignments={handleClearAllAssignments}
           />
         )}
       </main>

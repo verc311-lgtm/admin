@@ -14,6 +14,7 @@ interface ScheduleProps {
     onAddAssignment: (assignment: Omit<Assignment, 'id'>) => void;
     onDeleteAssignment: (id: string) => void;
     onAddCrew: (name: string) => void;
+    onClearAllAssignments?: () => void;
 }
 
 const PROJECT_COLORS = [
@@ -38,7 +39,7 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls:
 
 const Schedule: React.FC<ScheduleProps> = ({
     projects, crews, assignments = [],
-    onUpdateDates, onAddAssignment, onDeleteAssignment, onAddCrew
+    onUpdateDates, onAddAssignment, onDeleteAssignment, onAddCrew, onClearAllAssignments
 }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [viewMode, setViewMode] = useState<'Timeline' | 'Weekly'>('Timeline');
@@ -216,6 +217,17 @@ const Schedule: React.FC<ScheduleProps> = ({
                                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold tracking-wide transition-all flex-shrink-0 ${showFinished ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-white/10 border-white/10 text-slate-400 hover:text-white'}`}>
                                 {showFinished ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                                 {showFinished ? 'Hide Done' : `Show Done (${finishedCount})`}
+                            </button>
+                        )}
+
+                        {/* Clear Schedule Button */}
+                        {onClearAllAssignments && assignments.length > 0 && (
+                            <button 
+                                onClick={onClearAllAssignments}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 text-xs font-bold tracking-wide transition-all flex-shrink-0"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Clear Schedule
                             </button>
                         )}
 
