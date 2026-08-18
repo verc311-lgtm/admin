@@ -56,6 +56,8 @@ export interface Project {
   startDate: string;
   estimatedEndDate?: string;
   status: 'Draft' | 'In Progress' | 'Finished';
+  pipelineStage?: string;
+  pm_data?: string;
 }
 
 export interface Crew {

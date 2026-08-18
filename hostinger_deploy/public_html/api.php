@@ -64,10 +64,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->exec("TRUNCATE TABLE cva_users CASCADE");
         // $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
 
+        // Alter cva_projects if needed to add new PM fields
+        try {
+            $pdo->exec('ALTER TABLE "cva_projects" ADD COLUMN "pipelineStage" VARCHAR(50) DEFAULT \'NEW LEAD\'');
+        } catch (Exception $e) {}
+        try {
+            $pdo->exec('ALTER TABLE "cva_projects" ADD COLUMN "pm_data" TEXT DEFAULT NULL');
+        } catch (Exception $e) {}
+
         if (!empty($data['projects'])) {
-            $stmt = $pdo->prepare('INSERT INTO "cva_projects" ("id", "name", "client", "totalAmount", "balance", "paidAmount", "totalExpenses", "profit", "startDate", "status") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt = $pdo->prepare('INSERT INTO "cva_projects" ("id", "name", "client", "totalAmount", "balance", "paidAmount", "totalExpenses", "profit", "startDate", "status", "pipelineStage", "pm_data") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             foreach ($data['projects'] as $p) {
-                $stmt->execute([$p['id'], $p['name'], $p['client'], $p['totalAmount'], $p['balance'], $p['paidAmount'], $p['totalExpenses'] ?? 0, $p['profit'] ?? 0, $p['startDate'], $p['status']]);
+                $stmt->execute([
+                    $p['id'], 
+                    $p['name'], 
+                    $p['client'], 
+                    $p['totalAmount'], 
+                    $p['balance'], 
+                    $p['paidAmount'], 
+                    $p['totalExpenses'] ?? 0, 
+                    $p['profit'] ?? 0, 
+                    $p['startDate'], 
+                    $p['status'],
+                    $p['pipelineStage'] ?? 'NEW LEAD',
+                    $p['pm_data'] ?? null
+                ]);
             }
         }
 

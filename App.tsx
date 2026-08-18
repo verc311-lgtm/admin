@@ -278,8 +278,8 @@ const App: React.FC = () => {
       paidAmount: 0,
       totalExpenses: 0,
       profit: project.totalAmount,
-      // Remove client-only props if needed, but Supabase ignores extra fields usually if not in schema? 
-      // Better to be safe. Project type matches schema mostly.
+      pipelineStage: 'NEW LEAD',
+      pm_data: '{}'
     };
     // remove originalAmount if not in DB schema or ensure schema has it. 
     // Schema in db_setup.sql doesn't have originalAmount.
@@ -292,6 +292,37 @@ const App: React.FC = () => {
       setActiveView('Project Search');
     } catch (err: any) {
       alert("Error saving contract: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
+  };
+
+  const handleCreatePMProject = async (projectData: any) => {
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase.from('cva_projects').insert([projectData]);
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error creating lead/project: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
+  };
+
+  const handleUpdateProjectPM = async (projectId: string, stage: string, pmData: string, extraFields: Partial<Project> = {}) => {
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase.from('cva_projects').update({
+        pipelineStage: stage,
+        pm_data: pmData,
+        ...extraFields
+      }).eq('id', projectId);
+
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error updating project data: " + err.message);
       setSyncError(true);
       setIsSyncing(false);
     }
@@ -568,6 +599,8 @@ const App: React.FC = () => {
             onAddAssignment={handleAddAssignment}
             onDeleteAssignment={handleDeleteAssignment}
             onClearAllAssignments={handleClearAllAssignments}
+            onCreatePMProject={handleCreatePMProject}
+            onUpdateProjectPM={handleUpdateProjectPM}
           />
         )}
       </main>
