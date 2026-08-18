@@ -203,6 +203,9 @@ const Schedule: React.FC<ScheduleProps> = ({
 
     // 2. Modals & Forms States
     const [newLeadModal, setNewLeadModal] = useState(false);
+    const [projectTypesList, setProjectTypesList] = useState(PROJECT_TYPES);
+    const [showCustomTypeInput, setShowCustomTypeInput] = useState(false);
+    const [customTypeVal, setCustomTypeVal] = useState('');
     const [newLeadForm, setNewLeadForm] = useState({
         customerName: '', phone: '', email: '', address: '',
         projectType: 'Dock / Pier', description: '', leadSource: '',
@@ -395,12 +398,19 @@ const Schedule: React.FC<ScheduleProps> = ({
             return;
         }
 
+        const finalProjectType = showCustomTypeInput ? (customTypeVal.trim() || 'Other') : newLeadForm.projectType;
+
+        // If custom type is new, add it to list
+        if (showCustomTypeInput && finalProjectType && !projectTypesList.includes(finalProjectType)) {
+            setProjectTypesList(prev => [...prev, finalProjectType]);
+        }
+
         const nextId = getNextProjectID();
         const initialPMData: ProjectPMData = {
             phone: newLeadForm.phone,
             email: newLeadForm.email,
             address: newLeadForm.address,
-            projectType: newLeadForm.projectType,
+            projectType: finalProjectType,
             description: newLeadForm.description,
             leadSource: newLeadForm.leadSource,
             assignedEmployee: newLeadForm.assignedEmployee,
@@ -422,7 +432,7 @@ const Schedule: React.FC<ScheduleProps> = ({
         
         const dbProject = {
             id: nextId,
-            name: `${newLeadForm.projectType} for ${newLeadForm.customerName}`,
+            name: `${finalProjectType} for ${newLeadForm.customerName}`,
             client: newLeadForm.customerName,
             totalAmount: 0.00,
             balance: 0.00,
@@ -438,6 +448,8 @@ const Schedule: React.FC<ScheduleProps> = ({
         if (onCreatePMProject) {
             await onCreatePMProject(dbProject);
             setNewLeadModal(false);
+            setShowCustomTypeInput(false);
+            setCustomTypeVal('');
             setNewLeadForm({
                 customerName: '', phone: '', email: '', address: '',
                 projectType: 'Dock / Pier', description: '', leadSource: '',
@@ -2299,13 +2311,21 @@ const Schedule: React.FC<ScheduleProps> = ({
                                 <div className="space-y-1">
                                     <label className="text-slate-500 font-bold block">Project Type</label>
                                     <select 
-                                        value={newLeadForm.projectType}
-                                        onChange={(e) => setNewLeadForm(prev => ({ ...prev, projectType: e.target.value }))}
+                                        value={showCustomTypeInput ? 'ADD_CUSTOM' : newLeadForm.projectType}
+                                        onChange={(e) => {
+                                            if (e.target.value === 'ADD_CUSTOM') {
+                                                setShowCustomTypeInput(true);
+                                            } else {
+                                                setShowCustomTypeInput(false);
+                                                setNewLeadForm(prev => ({ ...prev, projectType: e.target.value }));
+                                            }
+                                        }}
                                         className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
                                     >
-                                        {PROJECT_TYPES.map(t => (
+                                        {projectTypesList.map(t => (
                                             <option key={t} value={t}>{t}</option>
                                         ))}
+                                        <option value="ADD_CUSTOM">+ Add Custom Type...</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1">
@@ -2319,6 +2339,20 @@ const Schedule: React.FC<ScheduleProps> = ({
                                     />
                                 </div>
                             </div>
+
+                            {showCustomTypeInput && (
+                                <div className="space-y-1">
+                                    <label className="text-slate-500 font-bold block">Custom Project Type Name</label>
+                                    <input 
+                                        type="text" 
+                                        value={customTypeVal}
+                                        onChange={(e) => setCustomTypeVal(e.target.value)}
+                                        className="w-full bg-slate-50 border border-cyan-400 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                                        placeholder="Enter custom project type (e.g. Floating Pier)"
+                                        required
+                                    />
+                                </div>
+                            )}
 
                             <div className="space-y-1">
                                 <label className="text-slate-500 font-bold block">Assigned Representative</label>
@@ -2337,6 +2371,16 @@ const Schedule: React.FC<ScheduleProps> = ({
                                     value={newLeadForm.description}
                                     onChange={(e) => setNewLeadForm(prev => ({ ...prev, description: e.target.value }))}
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 h-16" 
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Notes / Private Comments</label>
+                                <textarea 
+                                    value={newLeadForm.notes}
+                                    onChange={(e) => setNewLeadForm(prev => ({ ...prev, notes: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 h-16" 
+                                    placeholder="Any private comments or initial lead notes..."
                                 />
                             </div>
 
