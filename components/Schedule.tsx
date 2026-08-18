@@ -5,7 +5,7 @@ import {
     Users, FileText, Search, Plus, Trash2, Edit3, CheckSquare,
     DollarSign, Clock, MapPin, Phone, Mail, Award, ArrowRight,
     Upload, Download, FileUp, PlusCircle, CheckCircle2, AlertCircle,
-    UserCheck, ChevronLeft, ChevronRight, Check, Eye
+    UserCheck, ChevronLeft, ChevronRight, Check, Eye, X
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
