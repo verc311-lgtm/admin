@@ -128,10 +128,13 @@ interface ProjectPMData {
     };
     
     checklist?: {
-        contractSigned?: boolean;
-        depositReceived?: boolean;
-        permitReady?: boolean;
-        materialsReady?: boolean;
+        siteVisit?: boolean;
+        getMeasurements?: boolean;
+        createProposal?: boolean;
+        oscarApproval?: boolean;
+        sendProposal?: boolean;
+        reviewCustomerProposal?: boolean;
+        signContract?: boolean;
     };
     
     schedule?: {
@@ -431,10 +434,13 @@ const Schedule: React.FC<ScheduleProps> = ({
             assignedEmployee: newLeadForm.assignedEmployee,
             notes: newLeadForm.notes,
             checklist: {
-                contractSigned: false,
-                depositReceived: false,
-                permitReady: false,
-                materialsReady: false
+                siteVisit: false,
+                getMeasurements: false,
+                createProposal: false,
+                oscarApproval: false,
+                sendProposal: false,
+                reviewCustomerProposal: false,
+                signContract: false
             },
             files: [],
             dailyLogs: [],
@@ -862,8 +868,7 @@ const Schedule: React.FC<ScheduleProps> = ({
 
         pm.checklist = {
             ...pm.checklist,
-            contractSigned: true,
-            depositReceived: approvalForm.depositReceived
+            signContract: true
         };
 
         pm = logActivity(pm, `Proposal APPROVED! Contract signed by ${approvalForm.signature}. Approved Amount: $${approvalForm.approvedAmount}`);
@@ -1732,24 +1737,27 @@ const Schedule: React.FC<ScheduleProps> = ({
                                     {/* Action Checklist Column */}
                                     <div className="space-y-6">
                                         <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
-                                            <h4 className="font-extrabold text-xs text-[#0a192f] uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5"><CheckSquare className="w-4 h-4 text-emerald-500" /> PM Checklist Checklist</h4>
+                                            <h4 className="font-extrabold text-xs text-[#0a192f] uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5"><CheckSquare className="w-4 h-4 text-emerald-500" /> PM Checklist</h4>
                                             
                                             <div className="space-y-3">
                                                 {[
-                                                    { key: 'contractSigned', label: 'Contract Signed' },
-                                                    { key: 'depositReceived', label: 'Deposit Received' },
-                                                    { key: 'permitReady', label: 'Permit Ready' },
-                                                    { key: 'materialsReady', label: 'Materials Ready' }
+                                                    { key: 'siteVisit', label: 'Site Visit' },
+                                                    { key: 'getMeasurements', label: 'Get Measurements' },
+                                                    { key: 'createProposal', label: 'Create Proposal' },
+                                                    { key: 'oscarApproval', label: 'Oscar Approval' },
+                                                    { key: 'sendProposal', label: 'Send Proposal' },
+                                                    { key: 'reviewCustomerProposal', label: 'Review Customer Proposal' },
+                                                    { key: 'signContract', label: 'Sign Contract' }
                                                 ].map(item => {
                                                     const checked = getPMData(selectedProject).checklist?.[item.key as keyof Required<ProjectPMData>['checklist']];
                                                     return (
                                                         <button 
                                                             key={item.key}
                                                             onClick={() => toggleChecklist(item.key as any)}
-                                                            className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs font-bold transition-all ${checked ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                                                            className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs font-bold transition-all ${checked ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-100 text-rose-700'}`}
                                                         >
                                                             <span className="flex items-center gap-2">
-                                                                {checked ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <AlertCircle className="w-4 h-4 text-slate-400" />}
+                                                                {checked ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <AlertCircle className="w-4 h-4 text-rose-500" />}
                                                                 {item.label}
                                                             </span>
                                                             {checked ? <Check className="w-3.5 h-3.5" /> : null}
@@ -2199,14 +2207,14 @@ const Schedule: React.FC<ScheduleProps> = ({
                                         <div className="space-y-3 text-xs">
                                             <div className="flex justify-between">
                                                 <span className="text-slate-500">Contract Signed:</span>
-                                                <span className={`font-black ${getPMData(selectedProject).checklist?.contractSigned ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                                    {getPMData(selectedProject).checklist?.contractSigned ? 'YES (Approved)' : 'NO (Draft)'}
+                                                <span className={`font-black ${getPMData(selectedProject).checklist?.signContract ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                    {getPMData(selectedProject).checklist?.signContract ? 'YES (Approved)' : 'NO (Draft)'}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
-                                                <span className="text-slate-500">Deposit Received:</span>
-                                                <span className={`font-black ${getPMData(selectedProject).checklist?.depositReceived ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                                    {getPMData(selectedProject).checklist?.depositReceived ? 'YES (Paid)' : 'NO (Pending)'}
+                                                <span className="text-slate-500">Oscar Approved:</span>
+                                                <span className={`font-black ${getPMData(selectedProject).checklist?.oscarApproval ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                    {getPMData(selectedProject).checklist?.oscarApproval ? 'YES (Approved)' : 'NO (Pending)'}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
