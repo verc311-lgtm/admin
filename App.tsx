@@ -328,6 +328,23 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteProject = async (projectId: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete project ${projectId}? This will also delete any team assignments associated with it.`)) return;
+    setIsSyncing(true);
+    try {
+      const { error: projError } = await supabase.from('cva_projects').delete().eq('id', projectId);
+      if (projError) throw projError;
+
+      await supabase.from('cva_assignments').delete().eq('projectId', projectId);
+      await fetchData();
+      alert(`Project ${projectId} deleted successfully.`);
+    } catch (err: any) {
+      alert("Error deleting project: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
+  };
+
   const handleUpdateProjectDates = async (projectId: string, startDate: string, estimatedEndDate: string | undefined) => {
     setIsSyncing(true);
     try {
@@ -601,6 +618,7 @@ const App: React.FC = () => {
             onClearAllAssignments={handleClearAllAssignments}
             onCreatePMProject={handleCreatePMProject}
             onUpdateProjectPM={handleUpdateProjectPM}
+            onDeleteProject={handleDeleteProject}
           />
         )}
       </main>

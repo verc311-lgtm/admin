@@ -17,9 +17,9 @@ interface ScheduleProps {
     onUpdateDates: (projectId: string, startDate: string, endDate: string | undefined) => void;
     onAddAssignment: (assignment: Omit<Assignment, 'id'>) => void;
     onDeleteAssignment: (id: string) => void;
-    onAddCrew: (name: string) => void;
     onCreatePMProject?: (projectData: any) => Promise<void>;
     onUpdateProjectPM?: (projectId: string, stage: string, pmData: string, extraFields?: any) => Promise<void>;
+    onDeleteProject?: (projectId: string) => Promise<void>;
 }
 
 // 10 Pipeline Stages in order
@@ -192,7 +192,7 @@ interface ProjectPMData {
 const Schedule: React.FC<ScheduleProps> = ({
     projects, crews, assignments,
     onUpdateDates, onAddAssignment, onDeleteAssignment, onAddCrew,
-    onCreatePMProject, onUpdateProjectPM
+    onCreatePMProject, onUpdateProjectPM, onDeleteProject
 }) => {
     // 1. Navigation & Views States
     const [subView, setSubView] = useState<'Dashboard' | 'Projects' | 'Pipeline' | 'Calendar' | 'Customers' | 'Files'>('Dashboard');
@@ -1445,12 +1445,23 @@ const Schedule: React.FC<ScheduleProps> = ({
                                             <td className="py-3 px-4 font-bold">${(p.totalAmount || 0).toLocaleString()}</td>
                                             <td className="py-3 px-4 font-bold text-rose-500">${(p.balance || 0).toLocaleString()}</td>
                                             <td className="py-3 px-4">
-                                                <button 
-                                                    onClick={() => handleSelectProject(p)}
-                                                    className="bg-cyan-50 hover:bg-cyan-100 text-cyan-700 border border-cyan-200 px-2.5 py-1 rounded-lg text-[10px] font-bold"
-                                                >
-                                                    Open Page
-                                                </button>
+                                                <div className="flex items-center gap-1.5 justify-end">
+                                                    {onDeleteProject && p.pipelineStage === 'PROPOSAL' && (
+                                                        <button 
+                                                            onClick={() => onDeleteProject(p.id)}
+                                                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 p-1.5 rounded-lg text-[10px] font-bold"
+                                                            title="Delete Proposal Project"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                    <button 
+                                                        onClick={() => handleSelectProject(p)}
+                                                        className="bg-cyan-50 hover:bg-cyan-100 text-cyan-700 border border-cyan-200 px-2.5 py-1 rounded-lg text-[10px] font-bold"
+                                                    >
+                                                        Open Page
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -1679,6 +1690,25 @@ const Schedule: React.FC<ScheduleProps> = ({
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {/* Danger Zone (Delete) for Proposal stage */}
+                                        {onDeleteProject && selectedProject.pipelineStage === 'PROPOSAL' && (
+                                            <div className="bg-rose-50 border border-rose-100 rounded-2xl p-5 shadow-sm space-y-3">
+                                                <h4 className="font-extrabold text-xs text-rose-800 uppercase tracking-wider border-b border-rose-100 pb-2">Danger Zone</h4>
+                                                <p className="text-[10px] text-rose-600">
+                                                    This project is currently in the <strong>PROPOSAL</strong> stage. If you no longer wish to track this proposal, you can permanently delete it.
+                                                </p>
+                                                <button 
+                                                    onClick={async () => {
+                                                        await onDeleteProject(selectedProject.id);
+                                                        setSelectedProject(null); // Close modal
+                                                    }}
+                                                    className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
+                                                >
+                                                    <Trash2 className="w-4 h-4" /> Delete Project Permanently
+                                                </button>
+                                            </div>
+                                        )}
 
                                         {/* Activity Log Card */}
                                         <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-3">
