@@ -212,6 +212,19 @@ const Schedule: React.FC<ScheduleProps> = ({
         assignedEmployee: '', notes: ''
     });
 
+    // Webhook & Drag Scheduling States
+    const [zapierWebhookUrl, setZapierWebhookUrl] = useState(() => localStorage.getItem('zapier_webhook_url') || '');
+    const [showSettings, setShowSettings] = useState(false);
+    const [dragScheduleModal, setDragScheduleModal] = useState(false);
+    const [draggedProject, setDraggedProject] = useState<Project | null>(null);
+    const [dragTargetStage, setDragTargetStage] = useState('');
+    const [dragScheduleForm, setDragScheduleForm] = useState({
+        activityTitle: '',
+        date: new Date().toISOString().split('T')[0],
+        assignee: '',
+        notes: ''
+    });
+
     const [siteVisitForm, setSiteVisitForm] = useState({
         date: '', employee: '', measurements: '',
         conditions: '', notes: '', recommendations: ''
@@ -473,6 +486,28 @@ const Schedule: React.FC<ScheduleProps> = ({
         const project = projects.find(p => p.id === projectId);
         if (!project || project.pipelineStage === targetStage) return;
 
+        // If target stage is SITE VISIT, PROPOSAL, or SCHEDULED, prompt scheduling popup
+        if (['SITE VISIT', 'PROPOSAL', 'SCHEDULED'].includes(targetStage)) {
+            setDraggedProject(project);
+            setDragTargetStage(targetStage);
+            
+            // Set default values based on stage
+            let title = '';
+            if (targetStage === 'SITE VISIT') title = 'Site Inspection & Measurements';
+            else if (targetStage === 'PROPOSAL') title = 'Draft Proposal & Cost Estimation';
+            else if (targetStage === 'SCHEDULED') title = 'Construction Works Setup';
+
+            const pm = getPMData(project);
+            setDragScheduleForm({
+                activityTitle: title,
+                date: new Date().toISOString().split('T')[0],
+                assignee: pm.assignedEmployee || '',
+                notes: ''
+            });
+            setDragScheduleModal(true);
+            return;
+        }
+
         let pm = getPMData(project);
         pm = logActivity(pm, `Moved project from stage '${project.pipelineStage || 'NEW LEAD'}' to '${targetStage}'`);
         
@@ -486,6 +521,81 @@ const Schedule: React.FC<ScheduleProps> = ({
         }
 
         await savePMData(projectId, targetStage, pm, extraFields);
+    };
+
+    const handleConfirmDragSchedule = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!draggedProject || !dragTargetStage) return;
+
+        let pm = getPMData(draggedProject);
+        
+        // Save data based on stage
+        if (dragTargetStage === 'SITE VISIT') {
+            pm.siteVisit = {
+                date: dragScheduleForm.date,
+                employee: dragScheduleForm.assignee,
+                measurements: pm.siteVisit?.measurements || '',
+                conditions: pm.siteVisit?.conditions || '',
+                notes: dragScheduleForm.notes,
+                recommendations: pm.siteVisit?.recommendations || ''
+            };
+        } else if (dragTargetStage === 'PROPOSAL') {
+            const propNum = pm.proposal?.number || getNextProposalID();
+            pm.proposal = {
+                ...pm.proposal,
+                number: propNum,
+                title: dragScheduleForm.activityTitle,
+                notes: dragScheduleForm.notes,
+                price: pm.proposal?.price || draggedProject.totalAmount || 0,
+                status: 'Sent',
+                version: (pm.proposal?.version || 0) + 1
+            };
+        } else if (dragTargetStage === 'SCHEDULED') {
+            pm.schedule = {
+                startDate: dragScheduleForm.date,
+                estimatedEndDate: pm.schedule?.estimatedEndDate || '',
+                manager: dragScheduleForm.assignee,
+                crewId: pm.schedule?.crewId || '',
+                notes: dragScheduleForm.notes
+            };
+        }
+
+        pm = logActivity(pm, `Scheduled activity: '${dragScheduleForm.activityTitle}' for date ${dragScheduleForm.date} assigned to ${dragScheduleForm.assignee}`);
+
+        const extraFields: Partial<Project> = {};
+        if (dragTargetStage === 'SCHEDULED' && dragScheduleForm.date) {
+            extraFields.startDate = dragScheduleForm.date;
+        }
+
+        // Trigger Webhook to Zapier
+        if (zapierWebhookUrl) {
+            const payload = {
+                projectId: draggedProject.id,
+                customerName: draggedProject.client,
+                address: pm.address || 'No Address',
+                phone: pm.phone || 'No Phone',
+                email: pm.email || 'No Email',
+                projectType: pm.projectType || 'Other',
+                stage: dragTargetStage,
+                activityTitle: dragScheduleForm.activityTitle,
+                date: dragScheduleForm.date,
+                assignee: dragScheduleForm.assignee,
+                notes: dragScheduleForm.notes,
+                triggeredAt: new Date().toISOString()
+            };
+
+            fetch(zapierWebhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(() => console.log('Zapier Webhook fired successfully'))
+              .catch(err => console.error('Zapier Webhook error:', err));
+        }
+
+        await savePMData(draggedProject.id, dragTargetStage, pm, extraFields);
+        setDragScheduleModal(false);
+        setDraggedProject(null);
+        setDragTargetStage('');
     };
 
     // Load sub-forms when selecting/opening a project
@@ -1017,6 +1127,12 @@ const Schedule: React.FC<ScheduleProps> = ({
 
                     <div className="flex flex-wrap items-center gap-2">
                         <button 
+                            onClick={() => setShowSettings(!showSettings)} 
+                            className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs tracking-wide border border-slate-750 transition-all flex items-center gap-1.5"
+                        >
+                            ⚙️ Webhook Settings
+                        </button>
+                        <button 
                             onClick={() => setNewLeadModal(true)} 
                             className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wide shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-1.5"
                         >
@@ -1025,6 +1141,47 @@ const Schedule: React.FC<ScheduleProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* ── WEBHOOK SETTINGS PANEL ── */}
+            {showSettings && (
+                <div className="bg-slate-905 border border-cyan-500/20 rounded-2xl p-5 text-white space-y-3 shadow-lg">
+                    <div className="flex justify-between items-center">
+                        <h4 className="font-extrabold text-xs text-cyan-400 uppercase tracking-wider">Zapier Webhook Integration Settings</h4>
+                        <span className="text-[10px] text-slate-400 font-bold bg-slate-800 px-2 py-0.5 rounded">Option C Setup</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                        Paste your Zapier Catch Webhook URL below. Whenever a project card is dropped into <strong>Site Visit</strong>, <strong>Proposal</strong>, or <strong>Scheduled</strong> stages, the system will trigger a pop-up to schedule the task and instantly fire the event details to this Webhook.
+                    </p>
+                    <div className="flex gap-2">
+                        <input 
+                            type="text" 
+                            placeholder="https://hooks.zapier.com/hooks/catch/123456/abcdef/" 
+                            value={zapierWebhookUrl}
+                            onChange={(e) => {
+                                setZapierWebhookUrl(e.target.value);
+                                localStorage.setItem('zapier_webhook_url', e.target.value);
+                            }}
+                            className="flex-grow bg-slate-950 border border-slate-750 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-cyan-400 font-bold"
+                        />
+                        {zapierWebhookUrl && (
+                            <button 
+                                onClick={() => {
+                                    setZapierWebhookUrl('');
+                                    localStorage.removeItem('zapier_webhook_url');
+                                }}
+                                className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 px-3 rounded-xl text-xs font-bold"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
+                    {zapierWebhookUrl && (
+                        <div className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
+                            ✓ Integration Active. Drag project cards in pipeline to test.
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* ── SUB VIEWS SELECTOR TABS ── */}
             <div className="flex overflow-x-auto bg-slate-100 p-1.5 rounded-2xl gap-1 border border-slate-200/60 scrollbar-none">
@@ -2387,6 +2544,102 @@ const Schedule: React.FC<ScheduleProps> = ({
                             <div className="flex gap-3 justify-end pt-3">
                                 <button type="button" onClick={() => setNewLeadModal(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold">Cancel</button>
                                 <button type="submit" className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 px-5 py-2 rounded-xl font-black uppercase tracking-wider shadow">Create Lead</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── DRAG SCHEDULE MODAL ── */}
+            {dragScheduleModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="bg-[#0a192f] text-white p-5 border-b border-slate-800 flex justify-between items-center">
+                            <div>
+                                <span className="bg-cyan-500/20 text-cyan-400 text-[9px] font-black uppercase px-2 py-0.5 rounded border border-cyan-500/20">
+                                    Scheduling Next Action
+                                </span>
+                                <h3 className="font-black text-sm uppercase tracking-wide mt-1">Schedule for {draggedProject?.client}</h3>
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    setDragScheduleModal(false);
+                                    setDraggedProject(null);
+                                }} 
+                                className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <form onSubmit={handleConfirmDragSchedule} className="p-5 overflow-y-auto space-y-4 text-xs">
+                            <p className="text-slate-500 text-[10px]">
+                                Dragging this card to <strong>{dragTargetStage}</strong> requires scheduling the next milestone. Fill in the details to proceed and trigger the Zapier Webhook.
+                            </p>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Activity / Task Title *</label>
+                                <input 
+                                    type="text" 
+                                    value={dragScheduleForm.activityTitle}
+                                    onChange={(e) => setDragScheduleForm(prev => ({ ...prev, activityTitle: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                    placeholder="Task Description"
+                                    required
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-slate-500 font-bold block">Scheduled Date *</label>
+                                    <input 
+                                        type="date" 
+                                        value={dragScheduleForm.date}
+                                        onChange={(e) => setDragScheduleForm(prev => ({ ...prev, date: e.target.value }))}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-slate-500 font-bold block">Assigned Employee / Rep *</label>
+                                    <input 
+                                        type="text" 
+                                        value={dragScheduleForm.assignee}
+                                        onChange={(e) => setDragScheduleForm(prev => ({ ...prev, assignee: e.target.value }))}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                        placeholder="Assignee name"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Instruction / Scope Notes</label>
+                                <textarea 
+                                    value={dragScheduleForm.notes}
+                                    onChange={(e) => setDragScheduleForm(prev => ({ ...prev, notes: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 h-16" 
+                                    placeholder="Instructions for the assignee..."
+                                />
+                            </div>
+
+                            <div className="flex gap-3 justify-end pt-3">
+                                <button 
+                                    type="button" 
+                                    onClick={() => {
+                                        setDragScheduleModal(false);
+                                        setDraggedProject(null);
+                                    }} 
+                                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold"
+                                >
+                                    Cancel Move
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 px-5 py-2 rounded-xl font-black uppercase tracking-wider shadow"
+                                >
+                                    Confirm & Schedule
+                                </button>
                             </div>
                         </form>
                     </div>
