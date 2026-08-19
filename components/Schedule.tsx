@@ -218,6 +218,15 @@ const Schedule: React.FC<ScheduleProps> = ({
     const [zapierWebhookUrl, setZapierWebhookUrl] = useState(() => localStorage.getItem('zapier_webhook_url') || '');
     const [showSettings, setShowSettings] = useState(false);
 
+    // Site Visit Drag Scheduling States
+    const [siteVisitDragModal, setSiteVisitDragModal] = useState(false);
+    const [draggedProject, setDraggedProject] = useState<Project | null>(null);
+    const [dragVisitForm, setDragVisitForm] = useState({
+        date: new Date().toISOString().split('T')[0],
+        employee: '',
+        notes: ''
+    });
+
     const [siteVisitForm, setSiteVisitForm] = useState({
         date: '', employee: '', measurements: '',
         conditions: '', notes: '', recommendations: ''
@@ -505,6 +514,19 @@ const Schedule: React.FC<ScheduleProps> = ({
         const project = projects.find(p => p.id === projectId);
         if (!project || project.pipelineStage === targetStage) return;
 
+        // If target stage is SITE VISIT, intercept with popup modal
+        if (targetStage === 'SITE VISIT') {
+            setDraggedProject(project);
+            const pm = getPMData(project);
+            setDragVisitForm({
+                date: new Date().toISOString().split('T')[0],
+                employee: pm.assignedEmployee || '',
+                notes: ''
+            });
+            setSiteVisitDragModal(true);
+            return;
+        }
+
         let pm = getPMData(project);
         pm = logActivity(pm, `Moved project from stage '${project.pipelineStage || 'NEW LEAD'}' to '${targetStage}'`);
         
@@ -530,6 +552,8 @@ const Schedule: React.FC<ScheduleProps> = ({
                 newStage: targetStage,
                 amount: project.totalAmount || 0,
                 assignedEmployee: pm.assignedEmployee || 'Unassigned',
+                startDate: project.startDate,
+                endDate: project.estimatedEndDate || project.startDate,
                 triggeredAt: new Date().toISOString()
             };
 
@@ -542,6 +566,58 @@ const Schedule: React.FC<ScheduleProps> = ({
         }
 
         await savePMData(projectId, targetStage, pm, extraFields);
+    };
+
+    const handleConfirmSiteVisitDrag = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!draggedProject) return;
+
+        let pm = getPMData(draggedProject);
+        pm.siteVisit = {
+            date: dragVisitForm.date,
+            employee: dragVisitForm.employee,
+            measurements: pm.siteVisit?.measurements || '',
+            conditions: pm.siteVisit?.conditions || '',
+            notes: dragVisitForm.notes,
+            recommendations: pm.siteVisit?.recommendations || ''
+        };
+
+        pm = logActivity(pm, `Moved to SITE VISIT and scheduled inspection for ${dragVisitForm.date} assigned to ${dragVisitForm.employee}`);
+
+        const extraFields: Partial<Project> = {
+            estimatedEndDate: dragVisitForm.date
+        };
+
+        // Trigger Webhook to Zapier/Make
+        if (zapierWebhookUrl) {
+            const payload = {
+                projectId: draggedProject.id,
+                customerName: draggedProject.client,
+                address: pm.address || 'No Address',
+                phone: pm.phone || 'No Phone',
+                email: pm.email || 'No Email',
+                projectType: pm.projectType || 'Other',
+                previousStage: draggedProject.pipelineStage || 'NEW LEAD',
+                newStage: 'SITE VISIT',
+                amount: draggedProject.totalAmount || 0,
+                assignedEmployee: dragVisitForm.employee || 'Unassigned',
+                startDate: draggedProject.startDate,
+                endDate: dragVisitForm.date, // Site Visit Scheduled Date represents the Event/End Date
+                notes: dragVisitForm.notes,
+                triggeredAt: new Date().toISOString()
+            };
+
+            fetch(zapierWebhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(() => console.log('Zapier Webhook fired for Site Visit scheduling'))
+              .catch(err => console.error('Zapier Webhook error:', err));
+        }
+
+        await savePMData(draggedProject.id, 'SITE VISIT', pm, extraFields);
+        setSiteVisitDragModal(false);
+        setDraggedProject(null);
     };
 
     // Load sub-forms when selecting/opening a project
@@ -2489,6 +2565,85 @@ const Schedule: React.FC<ScheduleProps> = ({
                             <div className="flex gap-3 justify-end pt-3">
                                 <button type="button" onClick={() => setNewLeadModal(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold">Cancel</button>
                                 <button type="submit" className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 px-5 py-2 rounded-xl font-black uppercase tracking-wider shadow">Create Lead</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── SITE VISIT DRAG SCHEDULING MODAL ── */}
+            {siteVisitDragModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-left">
+                    <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
+                        <div className="bg-[#0a192f] text-white p-5 border-b border-slate-800 flex justify-between items-center">
+                            <div>
+                                <span className="bg-cyan-500/20 text-cyan-400 text-[9px] font-black uppercase px-2 py-0.5 rounded border border-cyan-500/20">
+                                    Schedule Site Visit
+                                </span>
+                                <h3 className="font-black text-sm uppercase tracking-wide mt-1">Schedule Visit: {draggedProject?.client}</h3>
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    setSiteVisitDragModal(false);
+                                    setDraggedProject(null);
+                                }} 
+                                className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <form onSubmit={handleConfirmSiteVisitDrag} className="p-5 space-y-4 text-xs">
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Visit Date (End Date) *</label>
+                                <input 
+                                    type="date" 
+                                    value={dragVisitForm.date}
+                                    onChange={(e) => setDragVisitForm(prev => ({ ...prev, date: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                    required
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Assigned Representative / Inspector *</label>
+                                <input 
+                                    type="text" 
+                                    value={dragVisitForm.employee}
+                                    onChange={(e) => setDragVisitForm(prev => ({ ...prev, employee: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                    placeholder="Employee name"
+                                    required
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Special Visit Notes</label>
+                                <textarea 
+                                    value={dragVisitForm.notes}
+                                    onChange={(e) => setDragVisitForm(prev => ({ ...prev, notes: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 h-16" 
+                                    placeholder="Any notes for the visit..."
+                                />
+                            </div>
+
+                            <div className="flex gap-3 justify-end pt-3">
+                                <button 
+                                    type="button" 
+                                    onClick={() => {
+                                        setSiteVisitDragModal(false);
+                                        setDraggedProject(null);
+                                    }} 
+                                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold"
+                                >
+                                    Cancel Move
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 px-5 py-2 rounded-xl font-black uppercase tracking-wider shadow"
+                                >
+                                    Confirm & Schedule
+                                </button>
                             </div>
                         </form>
                     </div>
