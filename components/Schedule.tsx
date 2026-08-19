@@ -173,7 +173,7 @@ interface ProjectPMData {
     files?: {
         id: string;
         name: string;
-        folder: 'Site Visit' | 'Photos & Videos' | 'Proposal' | 'Contract' | 'Change Orders' | 'Invoices' | 'Project Photos';
+        folder: 'Photos & Videos' | 'proposal' | 'Contract & CO' | 'Invoices';
         url: string;
         size: string;
         date: string;
@@ -453,6 +453,32 @@ const Schedule: React.FC<ScheduleProps> = ({
 
         if (onCreatePMProject) {
             await onCreatePMProject(dbProject);
+
+            // Trigger Webhook to Zapier in the background automatically on lead creation
+            if (zapierWebhookUrl) {
+                const payload = {
+                    projectId: nextId,
+                    customerName: newLeadForm.customerName,
+                    address: newLeadForm.address || 'No Address',
+                    phone: newLeadForm.phone || 'No Phone',
+                    email: newLeadForm.email || 'No Email',
+                    projectType: finalProjectType,
+                    previousStage: '',
+                    newStage: 'NEW LEAD',
+                    amount: 0,
+                    assignedEmployee: newLeadForm.assignedEmployee || 'Unassigned',
+                    notes: newLeadForm.notes,
+                    triggeredAt: new Date().toISOString()
+                };
+
+                fetch(zapierWebhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).then(() => console.log('Zapier Webhook fired automatically on lead creation'))
+                  .catch(err => console.error('Zapier Webhook error:', err));
+            }
+
             setNewLeadModal(false);
             setShowCustomTypeInput(false);
             setCustomTypeVal('');
@@ -710,13 +736,13 @@ const Schedule: React.FC<ScheduleProps> = ({
         const newFile = {
             id: Math.random().toString(36).substring(2, 9),
             name: `${prop.number}_Proposal.pdf`,
-            folder: 'Proposal' as const,
+            folder: 'proposal' as const,
             url: '#', // mock download link
             size: '115 KB',
             date: new Date().toISOString().split('T')[0]
         };
         updatedPM.files = [...(updatedPM.files || []), newFile];
-        updatedPM = logActivity(updatedPM, `Generated Proposal PDF ${prop.number} and saved to Google Drive Proposal folder`);
+        updatedPM = logActivity(updatedPM, `Generated Proposal PDF ${prop.number} and saved to Google Drive proposal folder`);
         
         savePMData(selectedProject.id, selectedProject.pipelineStage || 'PROPOSAL', updatedPM);
     };
@@ -865,7 +891,7 @@ const Schedule: React.FC<ScheduleProps> = ({
         const newFile = {
             id: Math.random().toString(36).substring(2, 9),
             name: `${coNum}_Approval_${coForm.description.replace(/\s+/g, '_').substring(0, 15)}.pdf`,
-            folder: 'Change Orders' as const,
+            folder: 'Contract & CO' as const,
             url: '#',
             size: '42 KB',
             date: new Date().toISOString().split('T')[0]
@@ -1468,7 +1494,7 @@ const Schedule: React.FC<ScheduleProps> = ({
                                         <FolderOpen className="w-8 h-8 text-amber-500 fill-amber-100" />
                                         <div>
                                             <h4 className="font-extrabold text-xs text-[#0a192f]">Projects / {p.id} - {p.client} /</h4>
-                                            <span className="text-[9px] text-slate-400 font-bold">Contains Subfolders: `Site Visit`, `Photos`, `Proposal`, `Contract`, `Invoices`...</span>
+                                            <span className="text-[9px] text-slate-400 font-bold">Contains Subfolders: `Photos & Videos`, `proposal`, `Contract & CO`, `Invoices`</span>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -1888,8 +1914,7 @@ const Schedule: React.FC<ScheduleProps> = ({
                                     {/* Google Drive Sub-folders Grid */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                         {[
-                                            'Site Visit', 'Photos & Videos', 'Proposal', 'Contract', 
-                                            'Change Orders', 'Invoices', 'Project Photos'
+                                            'Photos & Videos', 'proposal', 'Contract & CO', 'Invoices'
                                         ].map(folder => {
                                             const folderFiles = (getPMData(selectedProject).files || []).filter(f => f.folder === folder);
                                             return (
