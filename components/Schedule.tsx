@@ -1068,241 +1068,159 @@ const Schedule: React.FC<ScheduleProps> = ({
         alert('Project is now PAID / CLOSED.');
     };
 
-    // Label printing (4" x 5")
-    const handlePrintLabel = (project: Project) => {
+    // Save Project Label (4" x 5" PDF)
+    const handleSaveLabelPDF = (project: Project) => {
         const pm = getPMData(project);
-        const printWindow = window.open('', '_blank', 'width=600,height=700');
-        if (!printWindow) {
-            alert('Popup blocked. Please allow popups to print labels.');
-            return;
+        
+        // Initialize 4" x 5" jsPDF document (orientation, unit, format)
+        const doc = new jsPDF({
+            orientation: 'portrait',
+            unit: 'in',
+            format: [4, 5]
+        });
+
+        // 1. Header
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(15, 23, 42); // slate-900
+        doc.text('COASTAL VA MARINE', 2.0, 0.35, { align: 'center' });
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139); // slate-500
+        doc.text('CONSTRUCTION PROJECT LABEL', 2.0, 0.47, { align: 'center' });
+
+        // Line divider
+        doc.setLineWidth(0.02);
+        doc.setDrawColor(15, 23, 42);
+        doc.line(0.25, 0.55, 3.75, 0.55);
+
+        // 2. Project ID
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(15, 23, 42);
+        doc.text(project.id, 2.0, 0.85, { align: 'center' });
+
+        // 3. Info rows
+        const startY = 1.15;
+        const rowHeight = 0.17;
+        const rows = [
+            { label: 'CLIENT:', value: project.client },
+            { label: 'ADDRESS:', value: pm.address || 'N/A' },
+            { label: 'PHONE:', value: pm.phone || 'N/A' },
+            { label: 'EMAIL:', value: pm.email || 'N/A' },
+            { label: 'TYPE:', value: pm.projectType || 'Other' },
+            { label: 'REP:', value: pm.assignedEmployee || 'Unassigned' },
+            { label: 'CREATED:', value: project.startDate || new Date().toISOString().split('T')[0] }
+        ];
+
+        rows.forEach((row, index) => {
+            const currentY = startY + (index * rowHeight);
+            
+            // Draw label
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.setTextColor(100, 116, 139); // grey
+            doc.text(row.label, 0.25, currentY);
+
+            // Draw value
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8.5);
+            doc.setTextColor(15, 23, 42); // dark slate
+            // Truncate address if too long
+            const val = row.label === 'ADDRESS:' && row.value.length > 40
+                ? row.value.substring(0, 38) + '...'
+                : row.value;
+            doc.text(val, 1.25, currentY);
+        });
+
+        // 4. PM Checklist Section
+        const checklistY = 2.45;
+        doc.setLineWidth(0.015);
+        doc.setDrawColor(15, 23, 42);
+        doc.line(0.25, checklistY, 3.75, checklistY);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text('PM CHECKLIST STATUS', 0.25, checklistY + 0.14);
+
+        doc.line(0.25, checklistY + 0.18, 3.75, checklistY + 0.18);
+
+        // Checklist items mapping
+        const checklistItems = [
+            { key: 'siteVisit', label: 'Site Visit' },
+            { key: 'getMeasurements', label: 'Get Measurements' },
+            { key: 'createProposal', label: 'Create Proposal' },
+            { key: 'oscarApproval', label: 'Oscar Approval' },
+            { key: 'sendProposal', label: 'Send Proposal' },
+            { key: 'reviewCustomerProposal', label: 'Review Cust. Prop.' },
+            { key: 'signContract', label: 'Sign Contract' }
+        ];
+
+        const checklistStart = checklistY + 0.32;
+        const checklistRowHeight = 0.16;
+        checklistItems.forEach((item, index) => {
+            const col = index % 2; // 0 or 1
+            const row = Math.floor(index / 2);
+            
+            const x = col === 0 ? 0.25 : 2.0;
+            const y = checklistStart + (row * checklistRowHeight);
+
+            const isChecked = !!pm.checklist?.[item.key as keyof Required<ProjectPMData>['checklist']];
+
+            // Draw square checkbox
+            doc.setLineWidth(0.01);
+            doc.setDrawColor(100, 116, 139);
+            doc.rect(x, y - 0.08, 0.09, 0.09);
+
+            if (isChecked) {
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(7.5);
+                doc.setTextColor(16, 185, 129); // emerald-500
+                doc.text('X', x + 0.015, y - 0.01);
+            }
+
+            // Draw label
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.setTextColor(15, 23, 42);
+            doc.text(item.label, x + 0.14, y);
+        });
+
+        // Line divider above barcode
+        const footerY = 3.65;
+        doc.setLineWidth(0.01);
+        doc.setDrawColor(203, 213, 225); // light grey
+        doc.line(0.25, footerY, 3.75, footerY);
+
+        // 5. Simulated Barcode
+        let startX = 0.9;
+        const barcodeY = 3.9;
+        const barcodeHeight = 0.35;
+        const seedStr = project.id;
+
+        doc.setFillColor(15, 23, 42); // solid black/dark bars
+        for (let i = 0; i < 35; i++) {
+            const charCode = seedStr.charCodeAt(i % seedStr.length);
+            const isWide = ((charCode + i) % 3) === 0;
+            const isMedium = ((charCode + i) % 3) === 1;
+            const width = isWide ? 0.04 : (isMedium ? 0.02 : 0.01);
+            const gap = ((charCode * i) % 2 === 0) ? 0.025 : 0.03;
+
+            doc.rect(startX, barcodeY, width, barcodeHeight, 'F');
+            startX += width + gap;
+            if (startX > 3.1) break;
         }
 
-        // Generate a cool barcode divider
-        const barcodeLines = Array.from({ length: 35 }).map(() => {
-            const width = Math.random() > 0.4 ? (Math.random() > 0.5 ? '2px' : '4px') : '1px';
-            const gap = Math.random() > 0.5 ? '2px' : '3px';
-            return `<div style="width: ${width}; height: 35px; background: black; margin-right: ${gap}; float: left;"></div>`;
-        }).join('');
+        // Barcode text underneath
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`*${project.id}*`, 2.0, barcodeY + barcodeHeight + 0.12, { align: 'center' });
 
-        const html = `
-            <html>
-            <head>
-                <title>Print Label - ${project.id}</title>
-                <style>
-                    @page {
-                        size: 4in 5in;
-                        margin: 0;
-                    }
-                    body {
-                        margin: 0;
-                        padding: 0.25in;
-                        width: 4in;
-                        height: 5in;
-                        box-sizing: border-box;
-                        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-                        color: #0f172a;
-                        background: #ffffff;
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: space-between;
-                    }
-                    .header {
-                        border-bottom: 2px solid #0f172a;
-                        padding-bottom: 6px;
-                        text-align: center;
-                    }
-                    .header-title {
-                        font-size: 11px;
-                        font-weight: 900;
-                        letter-spacing: 1px;
-                        color: #0f172a;
-                        margin: 0;
-                        text-transform: uppercase;
-                    }
-                    .header-subtitle {
-                        font-size: 8px;
-                        color: #64748b;
-                        margin: 2px 0 0 0;
-                        text-transform: uppercase;
-                        font-weight: bold;
-                    }
-                    .project-id-section {
-                        text-align: center;
-                        margin: 10px 0;
-                    }
-                    .project-id {
-                        font-size: 20px;
-                        font-weight: 900;
-                        letter-spacing: 0.5px;
-                        margin: 0;
-                        color: #0f172a;
-                    }
-                    .info-grid {
-                        font-size: 10.5px;
-                        line-height: 1.4;
-                        margin-bottom: auto;
-                    }
-                    .info-row {
-                        margin-bottom: 7px;
-                        display: flex;
-                        align-items: flex-start;
-                    }
-                    .info-label {
-                        font-weight: bold;
-                        color: #64748b;
-                        width: 80px;
-                        flex-shrink: 0;
-                        text-transform: uppercase;
-                        font-size: 9px;
-                    }
-                    .info-value {
-                        font-weight: 700;
-                        color: #0f172a;
-                        word-break: break-word;
-                    }
-                    .footer {
-                        border-top: 1px dashed #cbd5e1;
-                        padding-top: 10px;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        gap: 4px;
-                    }
-                    .barcode-container {
-                        overflow: hidden;
-                        display: inline-block;
-                        height: 35px;
-                    }
-                    .barcode-text {
-                        font-size: 8px;
-                        font-family: monospace;
-                        letter-spacing: 2px;
-                        font-weight: bold;
-                        color: #0f172a;
-                        margin-top: 2px;
-                    }
-                    .checklist-section {
-                        border-top: 1.5px solid #0f172a;
-                        border-bottom: 1.5px solid #0f172a;
-                        padding: 5px 0;
-                        margin: 5px 0;
-                    }
-                    .checklist-title {
-                        font-size: 7.5px;
-                        font-weight: 900;
-                        text-transform: uppercase;
-                        color: #475569;
-                        margin-bottom: 3px;
-                        letter-spacing: 0.5px;
-                    }
-                    .checklist-grid {
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 2.5px 6px;
-                    }
-                    .checklist-item {
-                        font-size: 7.5px;
-                        font-weight: 700;
-                        color: #0f172a;
-                        display: flex;
-                        align-items: center;
-                    }
-                    .checkbox {
-                        font-size: 9.5px;
-                        margin-right: 3px;
-                        color: #0f172a;
-                        line-height: 1;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <div class="header-title">Coastal VA Marine</div>
-                    <div class="header-subtitle">Construction Project Label</div>
-                </div>
-
-                <div class="project-id-section">
-                    <div class="project-id">${project.id}</div>
-                </div>
-
-                <div class="info-grid">
-                    <div class="info-row">
-                        <span class="info-label">Client:</span>
-                        <span class="info-value" style="font-size: 12px;">${project.client}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Address:</span>
-                        <span class="info-value">${pm.address || 'N/A'}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Phone:</span>
-                        <span class="info-value">${pm.phone || 'N/A'}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Email:</span>
-                        <span class="info-value">${pm.email || 'N/A'}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Type:</span>
-                        <span class="info-value">${pm.projectType || 'Other'}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Rep:</span>
-                        <span class="info-value">${pm.assignedEmployee || 'Unassigned'}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Created:</span>
-                        <span class="info-value">${project.startDate || new Date().toISOString().split('T')[0]}</span>
-                    </div>
-                </div>
-
-                <div class="checklist-section">
-                    <div class="checklist-title">PM Checklist Status</div>
-                    <div class="checklist-grid">
-                        <div class="checklist-item">
-                            <span class="checkbox">${pm.checklist?.siteVisit ? '☑' : '☐'}</span> Site Visit
-                        </div>
-                        <div class="checklist-item">
-                            <span class="checkbox">${pm.checklist?.getMeasurements ? '☑' : '☐'}</span> Get Measurements
-                        </div>
-                        <div class="checklist-item">
-                            <span class="checkbox">${pm.checklist?.createProposal ? '☑' : '☐'}</span> Create Proposal
-                        </div>
-                        <div class="checklist-item">
-                            <span class="checkbox">${pm.checklist?.oscarApproval ? '☑' : '☐'}</span> Oscar Approval
-                        </div>
-                        <div class="checklist-item">
-                            <span class="checkbox">${pm.checklist?.sendProposal ? '☑' : '☐'}</span> Send Proposal
-                        </div>
-                        <div class="checklist-item">
-                            <span class="checkbox">${pm.checklist?.reviewCustomerProposal ? '☑' : '☐'}</span> Review Cust. Prop.
-                        </div>
-                        <div class="checklist-item">
-                            <span class="checkbox">${pm.checklist?.signContract ? '☑' : '☐'}</span> Sign Contract
-                        </div>
-                    </div>
-                </div>
-
-                <div class="footer">
-                    <div class="barcode-container">
-                        ${barcodeLines}
-                        <div style="clear: both;"></div>
-                    </div>
-                    <div class="barcode-text">*${project.id}*</div>
-                </div>
-
-                <script>
-                    window.onload = function() {
-                        window.print();
-                        setTimeout(function() { window.close(); }, 500);
-                    };
-                <\/script>
-            </body>
-            </html>
-        `;
-
-        printWindow.document.write(html);
-        printWindow.document.close();
+        // Save PDF file to download
+        doc.save(`Label-${project.id}.pdf`);
     };
 
     // Checklist togglers
@@ -2005,10 +1923,10 @@ const Schedule: React.FC<ScheduleProps> = ({
                                         </div>
 
                                         <button 
-                                            onClick={() => handlePrintLabel(selectedProject)}
+                                            onClick={() => handleSaveLabelPDF(selectedProject)}
                                             className="w-full bg-[#0a192f] hover:bg-[#142948] text-cyan-400 p-3.5 rounded-2xl font-black text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-2 border border-slate-800 transition-all"
                                         >
-                                            <Printer className="w-4 h-4 text-cyan-400" /> Print Project Label (4x5)
+                                            <Download className="w-4 h-4 text-cyan-400" /> Save Project Label (4x5 PDF)
                                         </button>
 
                                         {selectedProject.pipelineStage === 'COMPLETED' && selectedProject.balance === 0 && (
