@@ -5,7 +5,7 @@ import {
     Users, FileText, Search, Plus, Trash2, Edit3, CheckSquare,
     DollarSign, Clock, MapPin, Phone, Mail, Award, ArrowRight,
     Upload, Download, FileUp, PlusCircle, CheckCircle2, AlertCircle,
-    UserCheck, ChevronLeft, ChevronRight, Check, Eye, X
+    UserCheck, ChevronLeft, ChevronRight, Check, Eye, X, Printer
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -1068,6 +1068,184 @@ const Schedule: React.FC<ScheduleProps> = ({
         alert('Project is now PAID / CLOSED.');
     };
 
+    // Label printing (4" x 5")
+    const handlePrintLabel = (project: Project) => {
+        const pm = getPMData(project);
+        const printWindow = window.open('', '_blank', 'width=600,height=700');
+        if (!printWindow) {
+            alert('Popup blocked. Please allow popups to print labels.');
+            return;
+        }
+
+        // Generate a cool barcode divider
+        const barcodeLines = Array.from({ length: 35 }).map(() => {
+            const width = Math.random() > 0.4 ? (Math.random() > 0.5 ? '2px' : '4px') : '1px';
+            const gap = Math.random() > 0.5 ? '2px' : '3px';
+            return `<div style="width: ${width}; height: 35px; background: black; margin-right: ${gap}; float: left;"></div>`;
+        }).join('');
+
+        const html = `
+            <html>
+            <head>
+                <title>Print Label - ${project.id}</title>
+                <style>
+                    @page {
+                        size: 4in 5in;
+                        margin: 0;
+                    }
+                    body {
+                        margin: 0;
+                        padding: 0.25in;
+                        width: 4in;
+                        height: 5in;
+                        box-sizing: border-box;
+                        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+                        color: #0f172a;
+                        background: #ffffff;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                    }
+                    .header {
+                        border-bottom: 2px solid #0f172a;
+                        padding-bottom: 6px;
+                        text-align: center;
+                    }
+                    .header-title {
+                        font-size: 11px;
+                        font-weight: 900;
+                        letter-spacing: 1px;
+                        color: #0f172a;
+                        margin: 0;
+                        text-transform: uppercase;
+                    }
+                    .header-subtitle {
+                        font-size: 8px;
+                        color: #64748b;
+                        margin: 2px 0 0 0;
+                        text-transform: uppercase;
+                        font-weight: bold;
+                    }
+                    .project-id-section {
+                        text-align: center;
+                        margin: 10px 0;
+                    }
+                    .project-id {
+                        font-size: 20px;
+                        font-weight: 900;
+                        letter-spacing: 0.5px;
+                        margin: 0;
+                        color: #0f172a;
+                    }
+                    .info-grid {
+                        font-size: 10.5px;
+                        line-height: 1.4;
+                        margin-bottom: auto;
+                    }
+                    .info-row {
+                        margin-bottom: 7px;
+                        display: flex;
+                        align-items: flex-start;
+                    }
+                    .info-label {
+                        font-weight: bold;
+                        color: #64748b;
+                        width: 80px;
+                        flex-shrink: 0;
+                        text-transform: uppercase;
+                        font-size: 9px;
+                    }
+                    .info-value {
+                        font-weight: 700;
+                        color: #0f172a;
+                        word-break: break-word;
+                    }
+                    .footer {
+                        border-top: 1px dashed #cbd5e1;
+                        padding-top: 10px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 4px;
+                    }
+                    .barcode-container {
+                        overflow: hidden;
+                        display: inline-block;
+                        height: 35px;
+                    }
+                    .barcode-text {
+                        font-size: 9px;
+                        font-family: monospace;
+                        letter-spacing: 2px;
+                        font-weight: bold;
+                        color: #0f172a;
+                        margin-top: 2px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="header-title">Coastal VA Marine</div>
+                    <div class="header-subtitle">Construction Project Label</div>
+                </div>
+
+                <div class="project-id-section">
+                    <div class="project-id">${project.id}</div>
+                </div>
+
+                <div class="info-grid">
+                    <div class="info-row">
+                        <span class="info-label">Client:</span>
+                        <span class="info-value" style="font-size: 12px;">${project.client}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Address:</span>
+                        <span class="info-value">${pm.address || 'N/A'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Phone:</span>
+                        <span class="info-value">${pm.phone || 'N/A'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">${pm.email || 'N/A'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Type:</span>
+                        <span class="info-value">${pm.projectType || 'Other'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Rep:</span>
+                        <span class="info-value">${pm.assignedEmployee || 'Unassigned'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Created:</span>
+                        <span class="info-value">${project.startDate || new Date().toISOString().split('T')[0]}</span>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <div class="barcode-container">
+                        ${barcodeLines}
+                        <div style="clear: both;"></div>
+                    </div>
+                    <div class="barcode-text">*${project.id}*</div>
+                </div>
+
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        setTimeout(function() { window.close(); }, 500);
+                    };
+                <\/script>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.write(html);
+        printWindow.document.close();
+    };
+
     // Checklist togglers
     const toggleChecklist = async (key: keyof Required<ProjectPMData>['checklist']) => {
         if (!selectedProject) return;
@@ -1766,6 +1944,13 @@ const Schedule: React.FC<ScheduleProps> = ({
                                                 })}
                                             </div>
                                         </div>
+
+                                        <button 
+                                            onClick={() => handlePrintLabel(selectedProject)}
+                                            className="w-full bg-[#0a192f] hover:bg-[#142948] text-cyan-400 p-3.5 rounded-2xl font-black text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-2 border border-slate-800 transition-all"
+                                        >
+                                            <Printer className="w-4 h-4 text-cyan-400" /> Print Project Label (4x5)
+                                        </button>
 
                                         {selectedProject.pipelineStage === 'COMPLETED' && selectedProject.balance === 0 && (
                                             <button 
