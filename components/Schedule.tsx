@@ -1174,12 +1174,44 @@ const Schedule: React.FC<ScheduleProps> = ({
                         height: 35px;
                     }
                     .barcode-text {
-                        font-size: 9px;
+                        font-size: 8px;
                         font-family: monospace;
                         letter-spacing: 2px;
                         font-weight: bold;
                         color: #0f172a;
                         margin-top: 2px;
+                    }
+                    .checklist-section {
+                        border-top: 1.5px solid #0f172a;
+                        border-bottom: 1.5px solid #0f172a;
+                        padding: 5px 0;
+                        margin: 5px 0;
+                    }
+                    .checklist-title {
+                        font-size: 7.5px;
+                        font-weight: 900;
+                        text-transform: uppercase;
+                        color: #475569;
+                        margin-bottom: 3px;
+                        letter-spacing: 0.5px;
+                    }
+                    .checklist-grid {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 2.5px 6px;
+                    }
+                    .checklist-item {
+                        font-size: 7.5px;
+                        font-weight: 700;
+                        color: #0f172a;
+                        display: flex;
+                        align-items: center;
+                    }
+                    .checkbox {
+                        font-size: 9.5px;
+                        margin-right: 3px;
+                        color: #0f172a;
+                        line-height: 1;
                     }
                 </style>
             </head>
@@ -1221,6 +1253,33 @@ const Schedule: React.FC<ScheduleProps> = ({
                     <div class="info-row">
                         <span class="info-label">Created:</span>
                         <span class="info-value">${project.startDate || new Date().toISOString().split('T')[0]}</span>
+                    </div>
+                </div>
+
+                <div class="checklist-section">
+                    <div class="checklist-title">PM Checklist Status</div>
+                    <div class="checklist-grid">
+                        <div class="checklist-item">
+                            <span class="checkbox">${pm.checklist?.siteVisit ? '☑' : '☐'}</span> Site Visit
+                        </div>
+                        <div class="checklist-item">
+                            <span class="checkbox">${pm.checklist?.getMeasurements ? '☑' : '☐'}</span> Get Measurements
+                        </div>
+                        <div class="checklist-item">
+                            <span class="checkbox">${pm.checklist?.createProposal ? '☑' : '☐'}</span> Create Proposal
+                        </div>
+                        <div class="checklist-item">
+                            <span class="checkbox">${pm.checklist?.oscarApproval ? '☑' : '☐'}</span> Oscar Approval
+                        </div>
+                        <div class="checklist-item">
+                            <span class="checkbox">${pm.checklist?.sendProposal ? '☑' : '☐'}</span> Send Proposal
+                        </div>
+                        <div class="checklist-item">
+                            <span class="checkbox">${pm.checklist?.reviewCustomerProposal ? '☑' : '☐'}</span> Review Cust. Prop.
+                        </div>
+                        <div class="checklist-item">
+                            <span class="checkbox">${pm.checklist?.signContract ? '☑' : '☐'}</span> Sign Contract
+                        </div>
                     </div>
                 </div>
 
