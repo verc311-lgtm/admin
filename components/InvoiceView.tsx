@@ -161,20 +161,22 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       // 4. Line Items
       autoTable(doc, {
         startY: 90,
-        head: [['Description', 'Amount']],
+        head: [['Billing Phase', 'Work Description & Scope Details', 'Amount']],
         body: [
           [
-            `INVOICE MILESTONE: ${invoiceIndexText.toUpperCase()}\n\nSERVICES & CONTRACT SCOPE DESCRIPTION:\n${invoiceDescription}\n\nInfrastructure installation, marine labor, and material procurement for project "${project.name}".\nProfessional execution adhering to marine engineering safety standards.`, 
+            invoiceIndexText,
+            `${invoiceDescription}\n\nInfrastructure installation, marine labor, and material procurement for project "${project.name}".\nProfessional execution adhering to marine engineering safety standards.`, 
             `$${invoiceAmount.toLocaleString()}`
           ]
         ],
         theme: 'striped',
         headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' },
         columnStyles: {
-          0: { cellWidth: 'auto' },
-          1: { halign: 'right', fontStyle: 'bold', cellWidth: 50 }
+          0: { fontStyle: 'bold', cellWidth: 40 },
+          1: { cellWidth: 'auto' },
+          2: { halign: 'right', fontStyle: 'bold', cellWidth: 35 }
         },
-        styles: { cellPadding: 5 },
+        styles: { cellPadding: 6 },
         margin: { left: 14, right: 14 }
       });
 
@@ -370,27 +372,28 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
             <p className="text-xs font-bold text-slate-500 mt-2 italic">Project: {currentProject?.name}</p>
           </div>
 
-          <table className="w-full mb-24">
+          <table className="w-full mb-24 text-xs">
             <thead>
               <tr className="border-b-4 border-slate-900">
-                <th className="text-left py-6 text-xs font-black uppercase tracking-widest text-slate-400">Professional Marine Services</th>
-                <th className="text-right py-6 text-xs font-black uppercase tracking-widest text-slate-400">Total</th>
+                <th className="text-left py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 w-1/4">Billing Phase</th>
+                <th className="text-left py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 w-1/2">Work Description & Scope Details</th>
+                <th className="text-right py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 w-1/4">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               <tr>
-                <td className="py-14 pr-12">
-                  <p className="font-black text-2xl text-[#0a192f] italic mb-4 uppercase tracking-tight">{invoiceIndexText}</p>
-                  <p className="text-sm text-slate-500 leading-relaxed max-w-lg whitespace-pre-line">
+                <td className="py-14 font-black text-slate-900 uppercase align-top">{invoiceIndexText}</td>
+                <td className="py-14 pr-12 align-top text-slate-600">
+                  <p className="font-bold text-slate-900 text-sm whitespace-pre-line mb-3">
                     {invoiceDescription}
                   </p>
-                  <p className="text-xs text-slate-400 mt-4 leading-relaxed">
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
                     Infrastructure installation, marine labor, and material procurement for project "{currentProject?.name}".
                     Professional execution adhering to marine engineering safety standards.
                   </p>
                 </td>
                 <td className="py-14 text-right align-top">
-                  <span className="text-4xl font-black italic text-[#0a192f] tracking-tighter">${invoiceAmount.toLocaleString()}</span>
+                  <span className="text-3xl font-black italic text-[#0a192f] tracking-tighter">${invoiceAmount.toLocaleString()}</span>
                 </td>
               </tr>
             </tbody>
