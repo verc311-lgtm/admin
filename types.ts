@@ -20,6 +20,7 @@ export interface Invoice {
   amount: number;
   date: string;
   status: 'Draft' | 'Sent' | 'Paid';
+  description?: string;
 }
 
 export interface User {

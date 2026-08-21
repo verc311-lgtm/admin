@@ -171,6 +171,7 @@ interface ProjectPMData {
         amount: number;
         date: string;
         status: 'Unpaid' | 'Paid';
+        description?: string;
     }[];
     
     files?: {
@@ -262,7 +263,7 @@ const Schedule: React.FC<ScheduleProps> = ({
     });
 
     const [invoiceForm, setInvoiceForm] = useState({
-        number: '', amount: 0, date: ''
+        number: '', amount: 0, date: '', description: ''
     });
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1001,7 +1002,8 @@ const Schedule: React.FC<ScheduleProps> = ({
             number: invoiceForm.number,
             amount: invoiceForm.amount,
             date: invoiceForm.date || new Date().toISOString().split('T')[0],
-            status: 'Unpaid' as const
+            status: 'Unpaid' as const,
+            description: invoiceForm.description || 'Marine construction services and progress implementation.'
         };
 
         pm.invoices = [...invoices, newInvoice];
@@ -1020,7 +1022,7 @@ const Schedule: React.FC<ScheduleProps> = ({
         pm = logActivity(pm, `Created invoice #${invoiceForm.number} for $${invoiceForm.amount}`);
 
         await savePMData(selectedProject.id, selectedProject.pipelineStage || 'IN PROGRESS', pm);
-        setInvoiceForm({ number: '', amount: 0, date: '' });
+        setInvoiceForm({ number: '', amount: 0, date: '', description: '' });
         alert(`Invoice ${invoiceForm.number} generated!`);
     };
 
@@ -2589,6 +2591,17 @@ const Schedule: React.FC<ScheduleProps> = ({
                                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
                                                 />
                                             </div>
+                                            <div className="space-y-1">
+                                                <label className="text-slate-500 font-bold block">Detailed Invoice Description / Scope *</label>
+                                                <textarea 
+                                                    rows={2}
+                                                    required
+                                                    value={invoiceForm.description}
+                                                    onChange={(e) => setInvoiceForm(prev => ({ ...prev, description: e.target.value }))}
+                                                    placeholder="Describe the milestone or scope covered (e.g. Deposit draw, Framing complete)..."
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 resize-none" 
+                                                />
+                                            </div>
                                         </div>
 
                                         <button 
@@ -2605,18 +2618,34 @@ const Schedule: React.FC<ScheduleProps> = ({
                                             {(getPMData(selectedProject).invoices || []).length === 0 ? (
                                                 <span className="text-xs text-slate-400 block text-center py-12">No invoices created.</span>
                                             ) : (
-                                                (getPMData(selectedProject).invoices || []).map(inv => (
-                                                    <div key={inv.id} className="border border-slate-100 p-3.5 rounded-2xl text-xs flex justify-between items-center bg-slate-50">
-                                                        <div className="space-y-0.5">
-                                                            <span className="font-black text-[#0a192f]">Invoice #{inv.number}</span>
-                                                            <span className="text-[10px] text-slate-400 block">{inv.date}</span>
-                                                        </div>
-                                                        <div className="text-right shrink-0">
-                                                            <span className="font-black text-slate-700">${inv.amount.toLocaleString()}</span>
-                                                            <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded block mt-1">{inv.status}</span>
-                                                        </div>
-                                                    </div>
-                                                ))
+                                                (() => {
+                                                    const sortedInvoices = [...(getPMData(selectedProject).invoices || [])]
+                                                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                                                    return sortedInvoices.map((inv) => {
+                                                        const idx = sortedInvoices.findIndex(i => i.id === inv.id);
+                                                        const num = idx !== -1 ? idx + 1 : 1;
+                                                        const seqText = num === 1 ? '1st Progress Draw' : (num === 2 ? '2nd Progress Draw' : (num === 3 ? '3rd Progress Draw' : `${num}th Progress Draw`));
+                                                        return (
+                                                            <div key={inv.id} className="border border-slate-100 p-3.5 rounded-2xl text-xs flex flex-col gap-1.5 bg-slate-50">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="font-black text-[#0a192f]">Invoice #{inv.number} ({seqText})</span>
+                                                                        <span className="text-[10px] text-slate-400 block">{inv.date}</span>
+                                                                    </div>
+                                                                    <div className="text-right shrink-0">
+                                                                        <span className="font-black text-slate-700">${inv.amount.toLocaleString()}</span>
+                                                                        <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded block mt-1">{inv.status}</span>
+                                                                    </div>
+                                                                </div>
+                                                                {inv.description && (
+                                                                    <div className="border-t border-slate-200/60 pt-1.5 text-[10px] text-slate-500 font-bold italic">
+                                                                        {inv.description}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    });
+                                                })()
                                             )}
                                         </div>
                                     </div>

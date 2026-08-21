@@ -18,6 +18,7 @@ interface InvoiceViewProps {
 const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialInvoice, initialProject, onGenerateInvoice, onAddPayment, onClose }) => {
   const [selectedProject, setSelectedProject] = useState<Project | null>(initialProject || null);
   const [invoiceAmount, setInvoiceAmount] = useState<number>(initialProject ? initialProject.balance : 0);
+  const [invoiceDescription, setInvoiceDescription] = useState<string>('Marine construction services and progress implementation.');
   const [showPreview, setShowPreview] = useState(false);
   const [historicalInvoice, setHistoricalInvoice] = useState<Invoice | null>(initialInvoice || null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -33,6 +34,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       if (project) {
         setSelectedProject(project);
         setInvoiceAmount(initialInvoice.amount);
+        setInvoiceDescription(initialInvoice.description || 'Marine construction services and progress implementation.');
         setHistoricalInvoice(initialInvoice);
         setShowPreview(true);
         setIsSaved(true);
@@ -40,6 +42,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
     } else if (initialProject) {
       setSelectedProject(initialProject);
       setInvoiceAmount(initialProject.balance);
+      setInvoiceDescription('Marine construction services and progress implementation.');
       setShowPreview(false);
       setHistoricalInvoice(null);
       setIsSaved(false);
@@ -76,7 +79,8 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       invoiceNumber: invNum,
       amount: invoiceAmount,
       date: new Date().toISOString().split('T')[0],
-      status: 'Sent'
+      status: 'Sent',
+      description: invoiceDescription
     });
     setIsSaved(true);
     return invNum;
@@ -96,7 +100,22 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
-      const project = selectedProject || { name: 'Unknown Project', client: 'Unknown Client' } as Project;
+      const project = selectedProject || projects.find(p => p.id === historicalInvoice?.projectId) || { name: 'Unknown Project', client: 'Unknown Client' } as Project;
+
+      // Calculate invoice sequence number dynamically
+      const projectInvoices = invoices
+        .filter(inv => inv.projectId === project.id)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      let invoiceIndexText = '';
+      if (historicalInvoice) {
+        const idx = projectInvoices.findIndex(inv => inv.id === historicalInvoice.id);
+        const num = idx !== -1 ? idx + 1 : 1;
+        invoiceIndexText = num === 1 ? 'First Progress Payment' : (num === 2 ? 'Second Progress Payment' : (num === 3 ? 'Third Progress Payment' : `${num}th Progress Payment`));
+      } else {
+        const num = projectInvoices.length + 1;
+        invoiceIndexText = num === 1 ? 'First Progress Payment' : (num === 2 ? 'Second Progress Payment' : (num === 3 ? 'Third Progress Payment' : `${num}th Progress Payment`));
+      }
 
       // 1. Header (Company Info)
       doc.setFillColor(10, 25, 47); // Navy Blue Header
@@ -144,7 +163,10 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
         startY: 90,
         head: [['Description', 'Amount']],
         body: [
-          [`Marine Construction Services - ${project.name}\n(Progress Payment / Contract Services)\n\nInfrastructure installation, marine labor, and material procurement.\nProfessional implementation adhering to marine safety standards.`, `$${invoiceAmount.toLocaleString()}`]
+          [
+            `INVOICE MILESTONE: ${invoiceIndexText.toUpperCase()}\n\nSERVICES & CONTRACT SCOPE DESCRIPTION:\n${invoiceDescription}\n\nInfrastructure installation, marine labor, and material procurement for project "${project.name}".\nProfessional execution adhering to marine engineering safety standards.`, 
+            `$${invoiceAmount.toLocaleString()}`
+          ]
         ],
         theme: 'striped',
         headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' },
@@ -289,6 +311,21 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
   if (showPreview && (selectedProject || historicalInvoice)) {
     const currentProject = selectedProject || projects.find(p => p.id === historicalInvoice?.projectId);
 
+    // Calculate invoice sequence number dynamically
+    const projectInvoices = invoices
+      .filter(inv => inv.projectId === currentProject?.id)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let invoiceIndexText = '';
+    if (historicalInvoice) {
+      const idx = projectInvoices.findIndex(inv => inv.id === historicalInvoice.id);
+      const num = idx !== -1 ? idx + 1 : 1;
+      invoiceIndexText = num === 1 ? 'First Progress Payment' : (num === 2 ? 'Second Progress Payment' : (num === 3 ? 'Third Progress Payment' : `${num}th Progress Payment`));
+    } else {
+      const num = projectInvoices.length + 1;
+      invoiceIndexText = num === 1 ? 'First Progress Payment' : (num === 2 ? 'Second Progress Payment' : (num === 3 ? 'Third Progress Payment' : `${num}th Progress Payment`));
+    }
+
     return (
       <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
         <div className="flex justify-between items-center print:hidden bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
@@ -343,10 +380,13 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
             <tbody className="divide-y divide-slate-100">
               <tr>
                 <td className="py-14 pr-12">
-                  <p className="font-black text-2xl text-[#0a192f] italic mb-4 uppercase tracking-tight">Marine Construction</p>
-                  <p className="text-sm text-slate-500 leading-relaxed max-w-lg">
+                  <p className="font-black text-2xl text-[#0a192f] italic mb-4 uppercase tracking-tight">{invoiceIndexText}</p>
+                  <p className="text-sm text-slate-500 leading-relaxed max-w-lg whitespace-pre-line">
+                    {invoiceDescription}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-4 leading-relaxed">
                     Infrastructure installation, marine labor, and material procurement for project "{currentProject?.name}".
-                    Professional implementation adhering to marine safety standards.
+                    Professional execution adhering to marine engineering safety standards.
                   </p>
                 </td>
                 <td className="py-14 text-right align-top">
@@ -424,6 +464,19 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
               />
             </div>
           </div>
+
+          <div className="space-y-4">
+            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Detailed Invoice Description / Scope Details *</label>
+            <textarea
+              rows={3}
+              required
+              className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-cyan-400 outline-none text-xs font-bold text-slate-700 shadow-inner resize-none"
+              placeholder="Describe what work this invoice covers (e.g. Deposit Payment, Materials Delivered, Framing Complete)..."
+              value={invoiceDescription}
+              onChange={e => setInvoiceDescription(e.target.value)}
+            />
+          </div>
+
           <button type="submit" className="w-full py-7 bg-cyan-600 text-white rounded-[2.5rem] font-black uppercase text-xs shadow-2xl hover:bg-cyan-500 transition-all active:scale-95 shadow-cyan-600/20">Preview Invoice Document</button>
         </form>
       </div>

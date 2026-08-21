@@ -71,6 +71,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->exec('ALTER TABLE "cva_projects" ADD COLUMN "pm_data" TEXT DEFAULT NULL');
         } catch (Exception $e) {}
+        try {
+            $pdo->exec('ALTER TABLE "cva_invoices" ADD COLUMN "description" TEXT DEFAULT NULL');
+        } catch (Exception $e) {}
 
         if (!empty($data['projects'])) {
             $stmt = $pdo->prepare('INSERT INTO "cva_projects" ("id", "name", "client", "totalAmount", "balance", "paidAmount", "totalExpenses", "profit", "startDate", "status", "pipelineStage", "pm_data") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -100,9 +103,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!empty($data['invoices'])) {
-            $stmt = $pdo->prepare('INSERT INTO "cva_invoices" ("id", "projectId", "projectName", "invoiceNumber", "amount", "date", "status") VALUES (?, ?, ?, ?, ?, ?, ?)');
+            $stmt = $pdo->prepare('INSERT INTO "cva_invoices" ("id", "projectId", "projectName", "invoiceNumber", "amount", "date", "status", "description") VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
             foreach ($data['invoices'] as $inv) {
-                $stmt->execute([$inv['id'], $inv['projectId'], $inv['projectName'], $inv['invoiceNumber'], $inv['amount'], $inv['date'], $inv['status']]);
+                $stmt->execute([$inv['id'], $inv['projectId'], $inv['projectName'], $inv['invoiceNumber'], $inv['amount'], $inv['date'], $inv['status'], $inv['description'] ?? null]);
             }
         }
 
