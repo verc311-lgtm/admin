@@ -49,6 +49,19 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
     }
   }, [initialInvoice, initialProject, projects]);
 
+  useEffect(() => {
+    if (historicalInvoice) {
+      const project = projects.find(p => p.id === historicalInvoice.projectId);
+      if (project) {
+        setSelectedProject(project);
+        setInvoiceAmount(historicalInvoice.amount);
+        setInvoiceDescription(historicalInvoice.description || 'Marine construction services and progress implementation.');
+        setShowPreview(true);
+        setIsSaved(true);
+      }
+    }
+  }, [historicalInvoice, projects]);
+
   const handlePreview = (e: React.FormEvent) => {
     e.preventDefault();
     if (invoiceAmount <= 0) {

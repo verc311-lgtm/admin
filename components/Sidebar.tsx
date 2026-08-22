@@ -118,10 +118,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, u
         </nav>
 
         <div className="p-4 mt-auto border-t border-cyan-900/30 bg-black/10">
-          <div className="mb-4 px-4 text-center">
+          <div className="mb-4 px-4 text-center space-y-1">
             <a href="https://covamarineconstruction.com" target="_blank" rel="noopener noreferrer" className="text-[9px] font-black text-cyan-500 hover:text-cyan-300 uppercase tracking-widest flex items-center justify-center gap-1 transition-colors">
               covamarineconstruction.com <ExternalLink className="w-2 h-2" />
             </a>
+            <div className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">
+              Build Version v2.10
+            </div>
           </div>
           <button
             className="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"
