@@ -218,6 +218,13 @@ const Schedule: React.FC<ScheduleProps> = ({
         assignedEmployee: '', notes: ''
     });
 
+    const [editLeadModal, setEditLeadModal] = useState(false);
+    const [editLeadForm, setEditLeadForm] = useState({
+        customerName: '', phone: '', email: '', address: '',
+        projectType: 'Dock / Pier', description: '', leadSource: '',
+        assignedEmployee: '', notes: ''
+    });
+
     // Webhook Settings
     const [zapierWebhookUrl, setZapierWebhookUrl] = useState(() => localStorage.getItem('zapier_webhook_url') || '');
     const [showSettings, setShowSettings] = useState(false);
@@ -503,6 +510,79 @@ const Schedule: React.FC<ScheduleProps> = ({
                 projectType: 'Dock / Pier', description: '', leadSource: '',
                 assignedEmployee: '', notes: ''
             });
+        }
+    };
+
+    const handleOpenEditLead = () => {
+        if (!selectedProject) return;
+        const pm = getPMData(selectedProject);
+        setEditLeadForm({
+            customerName: selectedProject.client || '',
+            phone: pm.phone || '',
+            email: pm.email || '',
+            address: pm.address || selectedProject.name || '',
+            projectType: pm.projectType || 'Dock / Pier',
+            leadSource: pm.leadSource || '',
+            assignedEmployee: pm.assignedEmployee || '',
+            description: pm.description || '',
+            notes: pm.notes || ''
+        });
+        setEditLeadModal(true);
+    };
+
+    const handleUpdateLead = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedProject) return;
+
+        let pm = getPMData(selectedProject);
+        
+        // Log changes
+        const changes: string[] = [];
+        if (selectedProject.client !== editLeadForm.customerName) changes.push(`customer name`);
+        if (pm.phone !== editLeadForm.phone) changes.push(`phone`);
+        if (pm.email !== editLeadForm.email) changes.push(`email`);
+        if (pm.address !== editLeadForm.address) changes.push(`address`);
+        if (pm.projectType !== editLeadForm.projectType) changes.push(`project type`);
+        if (pm.leadSource !== editLeadForm.leadSource) changes.push(`lead source`);
+        if (pm.assignedEmployee !== editLeadForm.assignedEmployee) changes.push(`representative`);
+        if (pm.description !== editLeadForm.description) changes.push(`description`);
+        if (pm.notes !== editLeadForm.notes) changes.push(`notes`);
+
+        pm.phone = editLeadForm.phone;
+        pm.email = editLeadForm.email;
+        pm.address = editLeadForm.address;
+        pm.projectType = editLeadForm.projectType;
+        pm.leadSource = editLeadForm.leadSource;
+        pm.assignedEmployee = editLeadForm.assignedEmployee;
+        pm.description = editLeadForm.description;
+        pm.notes = editLeadForm.notes;
+
+        const actionText = changes.length > 0 ? `Updated lead details: ${changes.join(', ')}` : 'Saved lead details with no changes';
+        pm = logActivity(pm, actionText);
+
+        const newPmDataStr = JSON.stringify(pm);
+
+        if (onUpdateProjectPM) {
+            await onUpdateProjectPM(
+                selectedProject.id,
+                selectedProject.pipelineStage || 'NEW LEAD',
+                newPmDataStr,
+                {
+                    client: editLeadForm.customerName,
+                    name: `${editLeadForm.projectType} for ${editLeadForm.customerName}`
+                }
+            );
+
+            // Update local selectedProject state
+            setSelectedProject(prev => prev ? {
+                ...prev,
+                client: editLeadForm.customerName,
+                name: `${editLeadForm.projectType} for ${editLeadForm.customerName}`,
+                pm_data: newPmDataStr
+            } : null);
+
+            setEditLeadModal(false);
+            alert('Lead details updated successfully!');
         }
     };
 
@@ -1823,7 +1903,18 @@ const Schedule: React.FC<ScheduleProps> = ({
                                     <div className="md:col-span-2 space-y-6">
                                         {/* Lead Details Card */}
                                         <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
-                                            <h4 className="font-extrabold text-xs text-[#0a192f] uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5"><FileText className="w-4 h-4 text-cyan-500" /> Initial Lead Form Details</h4>
+                                            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                                                <h4 className="font-extrabold text-xs text-[#0a192f] uppercase tracking-wider flex items-center gap-1.5">
+                                                    <FileText className="w-4 h-4 text-cyan-500" /> Initial Lead Form Details
+                                                </h4>
+                                                <button 
+                                                    onClick={handleOpenEditLead}
+                                                    className="p-1.5 bg-slate-50 hover:bg-cyan-50 hover:text-cyan-600 rounded-xl text-slate-400 transition-all border border-slate-100 hover:border-cyan-100"
+                                                    title="Edit Lead Details"
+                                                >
+                                                    <Edit3 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                             
                                             <div className="grid grid-cols-2 gap-4 text-xs">
                                                 <div>
@@ -2653,6 +2744,130 @@ const Schedule: React.FC<ScheduleProps> = ({
                             )}
 
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── EDIT LEAD DIALOG / MODAL ── */}
+            {editLeadModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="bg-[#0a192f] text-white p-5 border-b border-slate-800 flex justify-between items-center">
+                            <h3 className="font-black text-sm uppercase tracking-wide">Edit Lead Details</h3>
+                            <button onClick={() => setEditLeadModal(false)} className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+                        </div>
+                        
+                        <form onSubmit={handleUpdateLead} className="p-5 overflow-y-auto space-y-4 text-xs">
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Customer Name *</label>
+                                <input 
+                                    type="text" 
+                                    value={editLeadForm.customerName}
+                                    onChange={(e) => setEditLeadForm(prev => ({ ...prev, customerName: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                    placeholder="Full name"
+                                    required
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-slate-500 font-bold block">Phone Number</label>
+                                    <input 
+                                        type="tel" 
+                                        value={editLeadForm.phone}
+                                        onChange={(e) => setEditLeadForm(prev => ({ ...prev, phone: e.target.value }))}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                        placeholder="Phone"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-slate-500 font-bold block">Email Address</label>
+                                    <input 
+                                        type="email" 
+                                        value={editLeadForm.email}
+                                        onChange={(e) => setEditLeadForm(prev => ({ ...prev, email: e.target.value }))}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                        placeholder="Email"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Project Site Address *</label>
+                                <input 
+                                    type="text" 
+                                    value={editLeadForm.address}
+                                    onChange={(e) => setEditLeadForm(prev => ({ ...prev, address: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                    placeholder="Address"
+                                    required
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-slate-500 font-bold block">Project Type</label>
+                                    <select 
+                                        value={editLeadForm.projectType}
+                                        onChange={(e) => setEditLeadForm(prev => ({ ...prev, projectType: e.target.value }))}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                                    >
+                                        {projectTypesList.map(t => (
+                                            <option key={t} value={t}>{t}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-slate-500 font-bold block">Lead Source</label>
+                                    <input 
+                                        type="text" 
+                                        value={editLeadForm.leadSource}
+                                        onChange={(e) => setEditLeadForm(prev => ({ ...prev, leadSource: e.target.value }))}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                                        placeholder="Referral, Google..." 
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Assigned Representative</label>
+                                <input 
+                                    type="text" 
+                                    value={editLeadForm.assignedEmployee}
+                                    onChange={(e) => setEditLeadForm(prev => ({ ...prev, assignedEmployee: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                                    placeholder="Employee name" 
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Project Description</label>
+                                <textarea 
+                                    rows={2}
+                                    value={editLeadForm.description}
+                                    onChange={(e) => setEditLeadForm(prev => ({ ...prev, description: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 resize-none" 
+                                    placeholder="Details about the construction layout..."
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Notes / Private comments</label>
+                                <textarea 
+                                    rows={2}
+                                    value={editLeadForm.notes}
+                                    onChange={(e) => setEditLeadForm(prev => ({ ...prev, notes: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 resize-none" 
+                                    placeholder="Any private comments or initial lead notes..."
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                                <button type="button" onClick={() => setEditLeadModal(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold">Cancel</button>
+                                <button type="submit" className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 px-5 py-2 rounded-xl font-black uppercase tracking-wider shadow">Save Changes</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
