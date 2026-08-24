@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { User } from '../types';
 import {
   Home,
   Calculator,
@@ -25,9 +26,15 @@ interface SidebarProps {
   userName: string;
   isOpen: boolean;
   onClose: () => void;
+  currentUser?: User | null;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, userName, isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, userName, isOpen, onClose, currentUser }) => {
+  const isRestrictedUser = currentUser && (
+    currentUser.username.toLowerCase() === 'alex' || 
+    currentUser.username.toLowerCase() === 'kelvin'
+  );
+
   const menuItems = [
     { id: 'Home', label: 'Dashboard', icon: Home },
     { id: 'Quotes', label: 'AI Estimator', icon: Calculator },
@@ -37,9 +44,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, u
     { id: 'Pending Projects', label: 'Pending Projects', icon: Clock },
     { id: 'Completed Projects', label: 'Completed Projects', icon: CheckCircle },
     { id: 'Schedule', label: 'Schedule', icon: CalendarDays },
-  ];
+  ].filter(item => !isRestrictedUser || item.id === 'Schedule');
 
-  const adminActions = [
+  const adminActions = isRestrictedUser ? [] : [
     { id: 'New Contract', label: 'New Contract', icon: Plus },
     { id: 'Project Search', label: 'Project Control', icon: Search },
     { id: 'User Management', label: 'User Settings', icon: Users },
@@ -99,22 +106,24 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, u
             </button>
           ))}
 
-          <div className="pt-8 pb-2">
-            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] px-4 mb-2">Administration</div>
-            {adminActions.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => { onViewChange(item.id); onClose(); }}
-                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 ${activeView === item.id
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                  : 'text-gray-400 hover:bg-white/5 hover:text-blue-400'
-                  }`}
-              >
-                <item.icon className={`w-5 h-5 ${activeView === item.id ? 'text-white' : 'text-gray-400'}`} />
-                <span className="font-medium text-sm">{item.label}</span>
-              </button>
-            ))}
-          </div>
+          {!isRestrictedUser && (
+            <div className="pt-8 pb-2">
+              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] px-4 mb-2">Administration</div>
+              {adminActions.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { onViewChange(item.id); onClose(); }}
+                  className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 ${activeView === item.id
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                    : 'text-gray-400 hover:bg-white/5 hover:text-blue-400'
+                    }`}
+                >
+                  <item.icon className={`w-5 h-5 ${activeView === item.id ? 'text-white' : 'text-gray-400'}`} />
+                  <span className="font-medium text-sm">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </nav>
 
         <div className="p-4 mt-auto border-t border-cyan-900/30 bg-black/10">

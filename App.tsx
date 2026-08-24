@@ -18,9 +18,15 @@ import { supabase } from './src/supabaseClient';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeView, setActiveView] = useState<View>('Home');
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const isRestrictedUser = currentUser && (
+    currentUser.username.toLowerCase() === 'alex' || 
+    currentUser.username.toLowerCase() === 'kelvin'
+  );
 
   // State for synchronization
   const [isSyncing, setIsSyncing] = useState(false);
@@ -109,10 +115,23 @@ const App: React.FC = () => {
     e.preventDefault();
     // Simple local check against fetched users (or hardcode admin for recovery)
     // Ideally use Supabase Auth, but keep simple migration for now
-    const user = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
+    const user = users.find(u => u.username.toLowerCase() === loginForm.username.toLowerCase() && u.password === loginForm.password);
 
-    if (user || (loginForm.username === 'admin' && loginForm.password === '1234')) {
+    if (user || (loginForm.username.toLowerCase() === 'admin' && loginForm.password === '1234')) {
+      const loggedUser = user || {
+        id: 'admin',
+        username: 'admin',
+        name: 'Local Administrator',
+        role: 'Admin' as const,
+        createdAt: new Date().toISOString()
+      };
+      setCurrentUser(loggedUser);
       setIsAuthenticated(true);
+      if (loggedUser.username.toLowerCase() === 'alex' || loggedUser.username.toLowerCase() === 'kelvin') {
+        setActiveView('Schedule');
+      } else {
+        setActiveView('Home');
+      }
     } else {
       alert('Access Denied. Invalid credentials.');
     }
@@ -456,14 +475,19 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       <Sidebar
+        currentUser={currentUser}
         activeView={activeView}
         onViewChange={(v) => {
+          if (isRestrictedUser && v !== 'Schedule') return;
           setActiveView(v);
           setSelectedInvoiceForView(null);
           setSelectedProjectForInvoice(null);
         }}
-        onLogout={() => setIsAuthenticated(false)}
-        userName="Administrator"
+        onLogout={() => {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+        }}
+        userName={currentUser?.name || 'Administrator'}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
@@ -498,115 +522,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeView === 'Home' && <Dashboard projects={projects} payments={payments} invoices={invoices} />}
-
-        {activeView === 'Invoices' && (
-          <InvoiceView
-            projects={projects}
-            invoices={invoices}
-            initialInvoice={selectedInvoiceForView}
-            initialProject={selectedProjectForInvoice}
-            onGenerateInvoice={handleGenerateInvoice}
-            onAddPayment={(pid, invId) => {
-              const p = projects.find(proj => proj.id === pid);
-              if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
-            }}
-            onClose={() => {
-              setSelectedInvoiceForView(null);
-              setSelectedProjectForInvoice(null);
-              setActiveView('Invoices');
-            }}
-          />
-        )}
-
-        {activeView === 'Project Search' && (
-          <ProjectSearch
-            projects={projects}
-            invoices={invoices}
-            onAddPayment={(pid, invId) => {
-              const p = projects.find(proj => proj.id === pid);
-              if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
-            }}
-            onAddExpense={handleAddExpense}
-            onChangeOrder={handleChangeOrder}
-            onPrintInvoice={(inv) => navigateToInvoice(undefined, inv)}
-            onViewDetails={() => { }}
-            onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
-          />
-        )}
-
-        {activeView === 'Completed Projects' && (
-          <CompletedProjects
-            projects={projects}
-            invoices={invoices}
-            payments={payments}
-          />
-        )}
-
-        {activeView === 'Active Projects' && (
-          <ActiveProjects
-            projects={projects}
-            invoices={invoices}
-            payments={payments}
-            onAddPayment={(pid, invId) => {
-              const p = projects.find(proj => proj.id === pid);
-              if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
-            }}
-            onAddExpense={handleAddExpense}
-            onChangeOrder={handleChangeOrder}
-            onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
-          />
-        )}
-
-        {activeView === 'Pending Projects' && (
-          <PendingProjects
-            projects={projects}
-            invoices={invoices}
-            payments={payments}
-            onAddPayment={(pid, invId) => {
-              const p = projects.find(proj => proj.id === pid);
-              if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
-            }}
-            onAddExpense={handleAddExpense}
-            onChangeOrder={handleChangeOrder}
-            onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
-          />
-        )}
-
-        {activeView === 'New Contract' && (
-          <NewContract
-            onSave={handleSaveNewContract}
-            onCancel={() => setActiveView('Home')}
-          />
-        )}
-
-        {activeView === 'Payments Made' && <PaymentsMade payments={payments} projects={projects} />}
-
-        {activeView === 'Quotes' && <QuoteGenerator />}
-
-        {activeView === 'User Management' && (
-          <UserManagement
-            users={users}
-            projects={projects}
-            payments={payments}
-            invoices={invoices}
-            onAddUser={async (u) => {
-              const newUser = { ...u, id: Math.random().toString(36).substring(2, 9), createdAt: new Date().toISOString() };
-              await supabase.from('cva_users').insert([newUser]);
-              fetchData();
-            }}
-            onDeleteUser={async (id) => {
-              await supabase.from('cva_users').delete().eq('id', id);
-              fetchData();
-            }}
-            onImportData={(data) => {
-              // Not implemented for direct supabase yet
-              alert("Import not supported in Direct Mode.");
-            }}
-          />
-        )}
-
-        {activeView === 'Schedule' && (
+        {isRestrictedUser ? (
           <Schedule
             projects={projects}
             crews={crews}
@@ -620,6 +536,132 @@ const App: React.FC = () => {
             onUpdateProjectPM={handleUpdateProjectPM}
             onDeleteProject={handleDeleteProject}
           />
+        ) : (
+          <>
+            {activeView === 'Home' && <Dashboard projects={projects} payments={payments} invoices={invoices} />}
+
+            {activeView === 'Invoices' && (
+              <InvoiceView
+                projects={projects}
+                invoices={invoices}
+                initialInvoice={selectedInvoiceForView}
+                initialProject={selectedProjectForInvoice}
+                onGenerateInvoice={handleGenerateInvoice}
+                onAddPayment={(pid, invId) => {
+                  const p = projects.find(proj => proj.id === pid);
+                  if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
+                }}
+                onClose={() => {
+                  setSelectedInvoiceForView(null);
+                  setSelectedProjectForInvoice(null);
+                  setActiveView('Invoices');
+                }}
+              />
+            )}
+
+            {activeView === 'Project Search' && (
+              <ProjectSearch
+                projects={projects}
+                invoices={invoices}
+                onAddPayment={(pid, invId) => {
+                  const p = projects.find(proj => proj.id === pid);
+                  if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
+                }}
+                onAddExpense={handleAddExpense}
+                onChangeOrder={handleChangeOrder}
+                onPrintInvoice={(inv) => navigateToInvoice(undefined, inv)}
+                onViewDetails={() => { }}
+                onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
+              />
+            )}
+
+            {activeView === 'Completed Projects' && (
+              <CompletedProjects
+                projects={projects}
+                invoices={invoices}
+                payments={payments}
+              />
+            )}
+
+            {activeView === 'Active Projects' && (
+              <ActiveProjects
+                projects={projects}
+                invoices={invoices}
+                payments={payments}
+                onAddPayment={(pid, invId) => {
+                  const p = projects.find(proj => proj.id === pid);
+                  if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
+                }}
+                onAddExpense={handleAddExpense}
+                onChangeOrder={handleChangeOrder}
+                onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
+              />
+            )}
+
+            {activeView === 'Pending Projects' && (
+              <PendingProjects
+                projects={projects}
+                invoices={invoices}
+                payments={payments}
+                onAddPayment={(pid, invId) => {
+                  const p = projects.find(proj => proj.id === pid);
+                  if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
+                }}
+                onAddExpense={handleAddExpense}
+                onChangeOrder={handleChangeOrder}
+                onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
+              />
+            )}
+
+            {activeView === 'New Contract' && (
+              <NewContract
+                onSave={handleSaveNewContract}
+                onCancel={() => setActiveView('Home')}
+              />
+            )}
+
+            {activeView === 'Payments Made' && <PaymentsMade payments={payments} projects={projects} />}
+
+            {activeView === 'Quotes' && <QuoteGenerator />}
+
+            {activeView === 'User Management' && (
+              <UserManagement
+                users={users}
+                projects={projects}
+                payments={payments}
+                invoices={invoices}
+                onAddUser={async (u) => {
+                  const newUser = { ...u, id: Math.random().toString(36).substring(2, 9), createdAt: new Date().toISOString() };
+                  await supabase.from('cva_users').insert([newUser]);
+                  fetchData();
+                }}
+                onDeleteUser={async (id) => {
+                  await supabase.from('cva_users').delete().eq('id', id);
+                  fetchData();
+                }}
+                onImportData={(data) => {
+                  // Not implemented for direct supabase yet
+                  alert("Import not supported in Direct Mode.");
+                }}
+              />
+            )}
+
+            {activeView === 'Schedule' && (
+              <Schedule
+                projects={projects}
+                crews={crews}
+                assignments={assignments}
+                onUpdateDates={handleUpdateProjectDates}
+                onAddCrew={handleAddCrew}
+                onAddAssignment={handleAddAssignment}
+                onDeleteAssignment={handleDeleteAssignment}
+                onClearAllAssignments={handleClearAllAssignments}
+                onCreatePMProject={handleCreatePMProject}
+                onUpdateProjectPM={handleUpdateProjectPM}
+                onDeleteProject={handleDeleteProject}
+              />
+            )}
+          </>
         )}
       </main>
     </div>
