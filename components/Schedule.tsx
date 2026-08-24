@@ -1821,11 +1821,14 @@ const Schedule: React.FC<ScheduleProps> = ({
                                 >
                                     <span className={`text-[10px] font-black self-start w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-cyan-500 text-white font-extrabold' : 'text-slate-400'}`}>{date.getDate()}</span>
                                     
-                                    <div className="space-y-1 mt-1 flex-grow overflow-y-auto max-h-20" onClick={e => e.stopPropagation()}>
+                                    <div className="space-y-1 mt-1 flex-grow overflow-y-auto max-h-20">
                                         {dayProjects.slice(0, 2).map(p => (
                                             <div 
                                                 key={p.id}
-                                                onClick={() => handleSelectProject(p)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleSelectProject(p);
+                                                }}
                                                 className="bg-[#0a192f] text-cyan-400 text-[8px] font-bold p-1 rounded border border-cyan-800/20 truncate cursor-pointer hover:bg-cyan-950 transition-all"
                                             >
                                                 {p.client} (Proj)
@@ -1835,7 +1838,10 @@ const Schedule: React.FC<ScheduleProps> = ({
                                         {dayAssignments.slice(0, 2).map(a => (
                                             <div 
                                                 key={a.id}
-                                                onClick={() => handleOpenAppointmentDetails(a)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleOpenAppointmentDetails(a);
+                                                }}
                                                 className="bg-emerald-50 text-emerald-700 text-[7.5px] font-bold p-1 rounded border border-emerald-100 truncate cursor-pointer hover:bg-emerald-100 transition-all flex items-center gap-1 shadow-sm"
                                             >
                                                 <Clock className="w-2 h-2 text-emerald-500 shrink-0" />
