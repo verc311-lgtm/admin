@@ -225,6 +225,19 @@ const Schedule: React.FC<ScheduleProps> = ({
         assignedEmployee: '', notes: ''
     });
 
+    // Appointment scheduling states
+    const [appointmentModal, setAppointmentModal] = useState(false);
+    const [selectedAppointmentDate, setSelectedAppointmentDate] = useState<Date | null>(null);
+    const [selectedProjectForAppointment, setSelectedProjectForAppointment] = useState<Project | null>(null);
+    const [appointmentForm, setAppointmentForm] = useState({
+        projectId: '',
+        time: '09:00',
+        activity: 'Site Visit',
+        crewId: '',
+        notes: ''
+    });
+    const [viewAppointmentDetails, setViewAppointmentDetails] = useState<Assignment | null>(null);
+
     // Webhook Settings
     const [zapierWebhookUrl, setZapierWebhookUrl] = useState(() => localStorage.getItem('zapier_webhook_url') || '');
     const [showSettings, setShowSettings] = useState(false);
@@ -586,7 +599,66 @@ const Schedule: React.FC<ScheduleProps> = ({
         }
     };
 
-    // Drag and Drop implementation
+    const getLocalDateString = (date: Date) => {
+        const offset = date.getTimezoneOffset();
+        const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+        return localDate.toISOString().split('T')[0];
+    };
+
+    const formatTimeString = (timeStr: string) => {
+        if (!timeStr) return '';
+        const [hourStr, minStr] = timeStr.split(':');
+        const hour = parseInt(hourStr);
+        const min = parseInt(minStr);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour % 12 || 12;
+        const displayMin = min < 10 ? `0${min}` : minStr;
+        return `${displayHour}:${displayMin} ${ampm}`;
+    };
+
+    const handleOpenScheduleAppointment = (date: Date) => {
+        setSelectedAppointmentDate(date);
+        setSelectedProjectForAppointment(null);
+        setAppointmentForm({
+            projectId: '',
+            time: '09:00',
+            activity: 'Site Visit',
+            crewId: '',
+            notes: ''
+        });
+        setAppointmentModal(true);
+    };
+
+    const handleCreateAppointment = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedAppointmentDate || !appointmentForm.projectId) return;
+
+        const dateStr = getLocalDateString(selectedAppointmentDate);
+        const formattedTime = formatTimeString(appointmentForm.time);
+        
+        // Save the details inside the assignment
+        // Activity layout: "⏰ 10:30 AM - Site Visit"
+        const finalActivity = `⏰ ${formattedTime} - ${appointmentForm.activity}`;
+        
+        const assignmentData = {
+            projectId: appointmentForm.projectId,
+            crewId: appointmentForm.crewId || 'unassigned',
+            date: dateStr,
+            activity: finalActivity,
+            workers: appointmentForm.notes || '', // Store notes here
+            status: 'Pending' as const
+        };
+
+        if (onAddAssignment) {
+            await onAddAssignment(assignmentData);
+            setAppointmentModal(false);
+            alert('Appointment scheduled successfully!');
+        }
+    };
+
+    const handleOpenAppointmentDetails = (assignment: Assignment) => {
+        setViewAppointmentDetails(assignment);
+    };
     const handleDragStart = (e: React.DragEvent, projectId: string) => {
         e.dataTransfer.setData('text/plain', projectId);
     };
@@ -1354,7 +1426,7 @@ const Schedule: React.FC<ScheduleProps> = ({
 
     // Check what projects fall on a specific date for Calendar rendering
     const getProjectsForDate = (date: Date) => {
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = getLocalDateString(date);
         return projects.filter(p => {
             if (!p.startDate) return false;
             const start = p.startDate;
@@ -1736,25 +1808,43 @@ const Schedule: React.FC<ScheduleProps> = ({
                         {calendarDays.map((date, idx) => {
                             if (!date) return <div key={`empty-${idx}`} className="bg-slate-50/50 min-h-24 rounded-lg" />;
                             
+                            const dateStr = getLocalDateString(date);
                             const dayProjects = getProjectsForDate(date);
+                            const dayAssignments = assignments.filter(a => a.date === dateStr);
                             const isToday = new Date().toDateString() === date.toDateString();
 
                             return (
-                                <div key={date.toISOString()} className={`border border-slate-100 rounded-lg p-1.5 min-h-28 flex flex-col justify-between ${isToday ? 'bg-cyan-50/30 border-cyan-200' : 'bg-white'}`}>
+                                <div 
+                                    key={date.toISOString()} 
+                                    onClick={() => handleOpenScheduleAppointment(date)}
+                                    className={`border border-slate-100 rounded-lg p-1.5 min-h-28 flex flex-col justify-between cursor-pointer hover:border-cyan-300 transition-all ${isToday ? 'bg-cyan-50/30 border-cyan-200' : 'bg-white'}`}
+                                >
                                     <span className={`text-[10px] font-black self-start w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-cyan-500 text-white font-extrabold' : 'text-slate-400'}`}>{date.getDate()}</span>
                                     
-                                    <div className="space-y-1 mt-1 flex-grow overflow-y-auto max-h-20">
-                                        {dayProjects.slice(0, 3).map(p => (
+                                    <div className="space-y-1 mt-1 flex-grow overflow-y-auto max-h-20" onClick={e => e.stopPropagation()}>
+                                        {dayProjects.slice(0, 2).map(p => (
                                             <div 
                                                 key={p.id}
                                                 onClick={() => handleSelectProject(p)}
                                                 className="bg-[#0a192f] text-cyan-400 text-[8px] font-bold p-1 rounded border border-cyan-800/20 truncate cursor-pointer hover:bg-cyan-950 transition-all"
                                             >
-                                                {p.client}
+                                                {p.client} (Proj)
                                             </div>
                                         ))}
-                                        {dayProjects.length > 3 && (
-                                            <span className="text-[7px] text-slate-400 font-bold">+{dayProjects.length - 3} more</span>
+
+                                        {dayAssignments.slice(0, 2).map(a => (
+                                            <div 
+                                                key={a.id}
+                                                onClick={() => handleOpenAppointmentDetails(a)}
+                                                className="bg-emerald-50 text-emerald-700 text-[7.5px] font-bold p-1 rounded border border-emerald-100 truncate cursor-pointer hover:bg-emerald-100 transition-all flex items-center gap-1 shadow-sm"
+                                            >
+                                                <Clock className="w-2 h-2 text-emerald-500 shrink-0" />
+                                                <span>{a.activity}</span>
+                                            </div>
+                                        ))}
+
+                                        {(dayProjects.length + dayAssignments.length) > 4 && (
+                                            <span className="text-[7px] text-slate-400 font-bold">+{dayProjects.length + dayAssignments.length - 4} more</span>
                                         )}
                                     </div>
                                 </div>
@@ -2747,6 +2837,213 @@ const Schedule: React.FC<ScheduleProps> = ({
                     </div>
                 </div>
             )}
+
+            {/* ── SCHEDULE APPOINTMENT DIALOG / MODAL ── */}
+            {appointmentModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="bg-[#0a192f] text-white p-5 border-b border-slate-800 flex justify-between items-center">
+                            <h3 className="font-black text-sm uppercase tracking-wide">Schedule Calendar Appointment</h3>
+                            <button onClick={() => setAppointmentModal(false)} className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+                        </div>
+                        
+                        <form onSubmit={handleCreateAppointment} className="p-5 overflow-y-auto space-y-4 text-xs">
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Selected Date</label>
+                                <input 
+                                    type="text" 
+                                    value={selectedAppointmentDate ? selectedAppointmentDate.toLocaleDateString('default', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : ''}
+                                    className="w-full bg-slate-100 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-500" 
+                                    readOnly
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Select Project *</label>
+                                <select 
+                                    value={appointmentForm.projectId}
+                                    onChange={(e) => {
+                                        const pid = e.target.value;
+                                        const proj = projects.find(p => p.id === pid) || null;
+                                        setSelectedProjectForAppointment(proj);
+                                        setAppointmentForm(prev => ({ ...prev, projectId: pid }));
+                                    }}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                                    required
+                                >
+                                    <option value="">Choose a project...</option>
+                                    {projects.map(p => (
+                                        <option key={p.id} value={p.id}>{p.client} - {p.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {selectedProjectForAppointment && (() => {
+                                const pm = getPMData(selectedProjectForAppointment);
+                                return (
+                                    <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 text-[11px] space-y-1.5 shadow-inner">
+                                        <p className="font-extrabold text-[#0a192f] uppercase tracking-wider text-[9px] border-b pb-1">Auto-loaded Project Info</p>
+                                        <p className="text-slate-600"><strong>Site Address:</strong> {pm.address || selectedProjectForAppointment.name || 'Not Provided'}</p>
+                                        <p className="text-slate-600"><strong>Contact Phone:</strong> {pm.phone || 'Not Provided'}</p>
+                                        <p className="text-slate-600"><strong>Contact Email:</strong> {pm.email || 'Not Provided'}</p>
+                                        <p className="text-slate-600"><strong>Lead Representative:</strong> {pm.assignedEmployee || 'Unassigned'}</p>
+                                    </div>
+                                );
+                            })()}
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-slate-500 font-bold block">Appointment Time *</label>
+                                    <input 
+                                        type="time" 
+                                        value={appointmentForm.time}
+                                        onChange={(e) => setAppointmentForm(prev => ({ ...prev, time: e.target.value }))}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-slate-500 font-bold block">Event / Activity Type</label>
+                                    <select
+                                        value={appointmentForm.activity}
+                                        onChange={(e) => setAppointmentForm(prev => ({ ...prev, activity: e.target.value }))}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                                    >
+                                        <option value="Site Visit">Site Visit & Measurements</option>
+                                        <option value="Proposal Review">Proposal Review</option>
+                                        <option value="Contract Signing">Contract Signing</option>
+                                        <option value="Construction Check">Construction Inspection</option>
+                                        <option value="General Meeting">General Meeting</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Assign Crew (Optional)</label>
+                                <select 
+                                    value={appointmentForm.crewId}
+                                    onChange={(e) => setAppointmentForm(prev => ({ ...prev, crewId: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                                >
+                                    <option value="">Select Crew...</option>
+                                    {crews.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-slate-500 font-bold block">Appointment Notes / Planning details</label>
+                                <textarea 
+                                    rows={3}
+                                    value={appointmentForm.notes}
+                                    onChange={(e) => setAppointmentForm(prev => ({ ...prev, notes: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 resize-none" 
+                                    placeholder="Enter planning details, meeting objectives, or instructions..."
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                                <button type="button" onClick={() => setAppointmentModal(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold">Cancel</button>
+                                <button type="submit" className="bg-[#0a192f] hover:bg-slate-800 text-white px-5 py-2 rounded-xl font-black uppercase tracking-wider shadow">Save Appointment</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── VIEW APPOINTMENT DETAILS DIALOG / MODAL ── */}
+            {viewAppointmentDetails && (() => {
+                const proj = projects.find(p => p.id === viewAppointmentDetails.projectId);
+                const crew = crews.find(c => c.id === viewAppointmentDetails.crewId);
+                const pm = proj ? getPMData(proj) : null;
+                return (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
+                            <div className="bg-emerald-600 text-white p-5 border-b border-emerald-700 flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <Clock className="w-5 h-5 text-emerald-100" />
+                                    <h3 className="font-black text-sm uppercase tracking-wide">Appointment Scheduled</h3>
+                                </div>
+                                <button onClick={() => setViewAppointmentDetails(null)} className="p-1 hover:bg-white/10 rounded-lg text-emerald-100 hover:text-white"><X className="w-5 h-5" /></button>
+                            </div>
+                            
+                            <div className="p-6 space-y-4 text-xs">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Scheduled Event</span>
+                                    <span className="text-sm font-black text-[#0a192f] block bg-slate-50 p-2.5 rounded-xl border border-slate-100">{viewAppointmentDetails.activity}</span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Date</span>
+                                        <span className="text-slate-700 font-bold block">{viewAppointmentDetails.date}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Assigned Crew</span>
+                                        <span className="text-slate-700 font-bold block">{crew ? crew.name : 'Unassigned / Rep Only'}</span>
+                                    </div>
+                                </div>
+
+                                {proj && (
+                                    <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 text-[11px] space-y-2 shadow-inner">
+                                        <p className="font-extrabold text-[#0a192f] uppercase tracking-wider text-[9px] border-b pb-1">Linked Project Info</p>
+                                        <p className="text-slate-700"><strong>Customer Name:</strong> {proj.client}</p>
+                                        <p className="text-slate-700"><strong>Site Address:</strong> {pm?.address || proj.name || 'Not Provided'}</p>
+                                        <p className="text-slate-700"><strong>Client Phone:</strong> {pm?.phone || 'Not Provided'}</p>
+                                        <p className="text-slate-700"><strong>Client Email:</strong> {pm?.email || 'Not Provided'}</p>
+                                    </div>
+                                )}
+
+                                {viewAppointmentDetails.workers && (
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Planning / Notes</span>
+                                        <p className="text-slate-600 bg-amber-50/30 border border-amber-100 p-2.5 rounded-xl whitespace-pre-wrap">{viewAppointmentDetails.workers}</p>
+                                    </div>
+                                )}
+
+                                <div className="flex flex-col gap-2 pt-4 border-t border-slate-100">
+                                    {proj && (
+                                        <button 
+                                            onClick={() => {
+                                                handleSelectProject(proj);
+                                                setViewAppointmentDetails(null);
+                                            }}
+                                            className="w-full bg-[#0a192f] hover:bg-slate-800 text-white py-2.5 rounded-xl font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                                        >
+                                            <FileText className="w-4 h-4" /> Open Project Details
+                                        </button>
+                                    )}
+                                    <div className="flex justify-between gap-3 mt-1">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setViewAppointmentDetails(null)} 
+                                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold flex-1"
+                                        >
+                                            Close
+                                        </button>
+                                        {onDeleteAssignment && (
+                                            <button 
+                                                type="button" 
+                                                onClick={async () => {
+                                                    if (confirm("Are you sure you want to cancel and delete this appointment?")) {
+                                                        await onDeleteAssignment(viewAppointmentDetails.id);
+                                                        setViewAppointmentDetails(null);
+                                                        alert("Appointment deleted successfully.");
+                                                    }
+                                                }} 
+                                                className="bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-600 px-4 py-2 rounded-xl font-bold"
+                                            >
+                                                Cancel Appointment
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* ── EDIT LEAD DIALOG / MODAL ── */}
             {editLeadModal && (
