@@ -23,6 +23,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
   const [historicalInvoice, setHistoricalInvoice] = useState<Invoice | null>(initialInvoice || null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [savedInvoiceNumber, setSavedInvoiceNumber] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'Pending' | 'Paid' | 'All'>('Pending');
 
@@ -36,6 +37,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
         setInvoiceAmount(initialInvoice.amount);
         setInvoiceDescription(initialInvoice.description || 'Marine construction services and progress implementation.');
         setHistoricalInvoice(initialInvoice);
+        setSavedInvoiceNumber(initialInvoice.invoiceNumber);
         setShowPreview(true);
         setIsSaved(true);
       }
@@ -43,6 +45,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       setSelectedProject(initialProject);
       setInvoiceAmount(initialProject.balance);
       setInvoiceDescription('Marine construction services and progress implementation.');
+      setSavedInvoiceNumber('');
       setShowPreview(false);
       setHistoricalInvoice(null);
       setIsSaved(false);
@@ -56,6 +59,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
         setSelectedProject(project);
         setInvoiceAmount(historicalInvoice.amount);
         setInvoiceDescription(historicalInvoice.description || 'Marine construction services and progress implementation.');
+        setSavedInvoiceNumber(historicalInvoice.invoiceNumber);
         setShowPreview(true);
         setIsSaved(true);
       }
@@ -96,17 +100,20 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       description: invoiceDescription
     });
     setIsSaved(true);
+    setSavedInvoiceNumber(invNum);
     return invNum;
   };
 
-  const downloadPDF = async () => {
-    // Auto-save if not already saved to ensure tracking (except if just previewing before saving)
-    // Note: User can "Export PDF" without saving if they want a draft, but typically we want a record.
-    // However, keeping logic simple: If it has an ID/Number, use it. If not, mark as "DRAFT".
-
-    // We don't force save here to allow printing drafts, but we'll use the current state.
-    const isDraft = !historicalInvoice && !isSaved;
-    const invNumber = historicalInvoice?.invoiceNumber || (isSaved ? invoiceRef.current?.innerText.match(/CVA-\d+/) || 'REGISTERED' : 'DRAFT');
+  const handleSaveInvoiceAndDownload = async () => {
+    if (!selectedProject || isSaved) return;
+    const invNum = handleSaveInvoice();
+    if (invNum) {
+      await downloadPDF(invNum);
+    }
+  };
+  const downloadPDF = async (forcedInvNum?: string) => {
+    const isDraft = !historicalInvoice && !isSaved && !forcedInvNum;
+    const invNumber = forcedInvNum || savedInvoiceNumber || historicalInvoice?.invoiceNumber || (isSaved ? 'REGISTERED' : 'DRAFT');
 
     setIsGeneratingPDF(true);
 
@@ -130,87 +137,162 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
         invoiceIndexText = num === 1 ? 'First Progress Payment' : (num === 2 ? 'Second Progress Payment' : (num === 3 ? 'Third Progress Payment' : `${num}th Progress Payment`));
       }
 
-      // 1. Header (Company Info)
-      doc.setFillColor(10, 25, 47); // Navy Blue Header
-      doc.rect(0, 0, pageWidth, 40, 'F');
+      // --- NEW LOGO HEADER DESIGN ---
+      // Draw cyan anchor icon
+      doc.setFillColor(14, 165, 233); // cyan-500 (#0ea5e9)
+      
+      // Top circle ring of anchor
+      doc.setDrawColor(14, 165, 233);
+      doc.setLineWidth(1.2);
+      doc.circle(24, 20, 2.5, 'S');
+      
+      // Stem of anchor
+      doc.line(24, 22.5, 24, 34);
+      
+      // Crossbar
+      doc.line(19, 26, 29, 26);
+      
+      // Crescent at the bottom
+      doc.ellipse(24, 34, 6, 3, 'S');
+      // Anchor arrow-tips/ticks at ends of crescent
+      doc.line(18, 34, 18, 32);
+      doc.line(30, 34, 30, 32);
 
-      doc.setFontSize(22);
+      // Logo Text (Navy/Bold)
+      doc.setTextColor(10, 25, 47); // #0a192f
+      doc.setFontSize(26);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(255, 255, 255);
-      doc.text("COASTAL VA MARINE CONSTRUCTION", pageWidth / 2, 20, { align: 'center' });
+      doc.text("COASTAL VA", 36, 24);
 
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(73, 204, 249); // Cyan accent
-      doc.text("Marine Operations & Engineering", pageWidth / 2, 28, { align: 'center' });
-
-      // 2. Invoice Details
-      doc.setTextColor(0);
-      doc.setFontSize(30);
+      // Sub-logo Text (Cyan/Uppercase)
+      doc.setTextColor(14, 165, 233); // cyan-500
+      doc.setFontSize(8);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(200, 200, 200);
-      doc.text("INVOICE", pageWidth - 14, 60, { align: 'right' });
+      doc.text("MARINE CONSTRUCTION", 36, 29);
 
+      // Company info details below logo (Y = 40)
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("CHESAPEAKE, VIRGINIA", 20, 42);
+      doc.text("MARINE CONSTRUCTION", 20, 46);
+      doc.text("WWW.COVAMARINECONSTRUCTION.COM", 20, 50);
+
+      // --- INVOICE INFO (Right aligned) ---
+      doc.setTextColor(241, 245, 249); // slate-100/200 for watermarked big title
+      doc.setFontSize(36);
+      doc.setFont("helvetica", "bolditalic");
+      doc.text("INVOICE", pageWidth - 20, 26, { align: 'right' });
+
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text("INVOICE #", pageWidth - 20, 34, { align: 'right' });
+
+      doc.setTextColor(10, 25, 47); // Navy
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bolditalic");
+      doc.text(invNumber, pageWidth - 20, 40, { align: 'right' });
+
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text("DATE", pageWidth - 20, 48, { align: 'right' });
+
+      doc.setTextColor(51, 65, 85); // slate-700
       doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      const dateText = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      doc.text(dateText, pageWidth - 20, 53, { align: 'right' });
+
+      // --- BILL TO ACCENT SECTION ---
+      // Accent cyan block
+      doc.setFillColor(14, 165, 233);
+      doc.rect(20, 68, 2, 22, 'F');
+
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text("BILL TO:", 26, 72);
+
+      doc.setTextColor(10, 25, 47); // Navy
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text(project.client.toUpperCase(), 26, 80);
+
       doc.setTextColor(100);
-      doc.text(`Invoice #: ${invNumber}`, pageWidth - 14, 70, { align: 'right' });
-      doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - 14, 75, { align: 'right' });
-      doc.text(`Status: ${isDraft ? 'Draft' : 'Sent'}`, pageWidth - 14, 80, { align: 'right' });
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bolditalic");
+      doc.text(`Project: ${project.name}`, 26, 86);
 
-      // 3. Bill To
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(10, 25, 47);
-      doc.text("Bill To:", 14, 60);
-
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "normal");
-      doc.text(project.client, 14, 68);
-
-      doc.setFontSize(10);
-      doc.setTextColor(150);
-      doc.text(`Project: ${project.name}`, 14, 75);
-
-      // 4. Line Items
+      // --- LINE ITEMS TABLE ---
       autoTable(doc, {
-        startY: 90,
-        head: [['Billing Phase', 'Work Description & Scope Details', 'Amount']],
+        startY: 98,
+        head: [['BILLING PHASE', 'WORK DESCRIPTION & SCOPE DETAILS', 'TOTAL']],
         body: [
           [
-            invoiceIndexText,
+            invoiceIndexText.toUpperCase(),
             `${invoiceDescription}\n\nInfrastructure installation, marine labor, and material procurement for project "${project.name}".\nProfessional execution adhering to marine engineering safety standards.`, 
             `$${invoiceAmount.toLocaleString()}`
           ]
         ],
-        theme: 'striped',
-        headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' },
-        columnStyles: {
-          0: { fontStyle: 'bold', cellWidth: 40 },
-          1: { cellWidth: 'auto' },
-          2: { halign: 'right', fontStyle: 'bold', cellWidth: 35 }
+        theme: 'plain',
+        headStyles: { 
+          textColor: [148, 163, 184], 
+          fontSize: 8, 
+          fontStyle: 'bold', 
+          cellPadding: { top: 8, bottom: 8, left: 0, right: 0 },
+          lineColor: [15, 23, 42], 
+          lineWidth: { bottom: 2 } 
         },
-        styles: { cellPadding: 6 },
-        margin: { left: 14, right: 14 }
+        bodyStyles: {
+          cellPadding: { top: 14, bottom: 14, left: 0, right: 0 },
+          fontSize: 9.5,
+          textColor: [71, 85, 105] // slate-600
+        },
+        columnStyles: {
+          0: { fontStyle: 'bold', textColor: [15, 23, 42], cellWidth: 45 },
+          1: { cellWidth: 'auto' },
+          2: { halign: 'right', fontStyle: 'bolditalic', textColor: [10, 25, 47], cellWidth: 32, fontSize: 18 }
+        },
+        margin: { left: 20, right: 20 }
       });
 
-      // 5. Total
-      const finalY = (doc as any).lastAutoTable.finalY + 10;
-      doc.setFillColor(248, 250, 252); // slate-50
-      doc.rect(pageWidth - 80, finalY, 66, 20, 'F');
+      // --- TOTALS & NOTE ---
+      const finalY = (doc as any).lastAutoTable.finalY;
+      const cardY = finalY + 12;
 
-      doc.setFontSize(12);
-      doc.setTextColor(10, 25, 47);
-      doc.text("Total Due:", pageWidth - 75, finalY + 13);
-
-      doc.setFontSize(16);
+      // Note text (Left side)
+      doc.setFontSize(7.5);
       doc.setFont("helvetica", "bold");
-      doc.text(`$${invoiceAmount.toLocaleString()}`, pageWidth - 20, finalY + 13, { align: 'right' });
+      doc.setTextColor(148, 163, 184); // slate-400
+      const noteText = "PLEASE REFERENCE THE INVOICE NUMBER IN YOUR PAYMENT. COASTAL VA APPRECIATES YOUR BUSINESS AND TRUST IN OUR ENGINEERING.";
+      const lines = doc.splitTextToSize(noteText, 85);
+      doc.text(lines, 20, cardY + 6);
 
-      // 6. Footer
-      doc.setFontSize(9);
-      doc.setTextColor(150);
+      // Total Due Card (Right side)
+      doc.setFillColor(248, 250, 252); // slate-50
+      doc.rect(pageWidth - 85, cardY, 65, 22, 'F');
+      
+      doc.setDrawColor(241, 245, 249); // slate-100 border
+      doc.setLineWidth(0.5);
+      doc.rect(pageWidth - 85, cardY, 65, 22, 'S');
+
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(14, 165, 233); // cyan-600
+      doc.text("TOTAL DUE", pageWidth - 80, cardY + 9);
+
+      doc.setFontSize(20);
+      doc.setFont("helvetica", "bolditalic");
+      doc.setTextColor(10, 25, 47); // Navy
+      doc.text(`$${invoiceAmount.toLocaleString()}`, pageWidth - 25, cardY + 16, { align: 'right' });
+
+      // --- FOOTER ---
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
       doc.setFont("helvetica", "italic");
-      const footerY = doc.internal.pageSize.getHeight() - 20;
+      const footerY = doc.internal.pageSize.getHeight() - 15;
       doc.text("Thank you for your business. Please make checks payable to Coastal VA Marine Construction.", pageWidth / 2, footerY, { align: 'center' });
 
       doc.save(`CoastalVA_Invoice_${invNumber}.pdf`);
@@ -373,7 +455,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
             <div className="text-right">
               <h2 className="text-6xl font-black text-slate-100 uppercase italic tracking-tighter mb-4">INVOICE</h2>
               <p className="text-[10px] font-black uppercase text-slate-400">Invoice #</p>
-              <p className="text-2xl font-black text-[#0a192f] italic">{historicalInvoice?.invoiceNumber || (isSaved ? 'REGISTERED' : 'DRAFT')}</p>
+              <p className="text-2xl font-black text-[#0a192f] italic">{historicalInvoice?.invoiceNumber || savedInvoiceNumber || (isSaved ? 'REGISTERED' : 'DRAFT')}</p>
               <p className="text-[10px] font-black uppercase text-slate-400 pt-3">Date</p>
               <p className="text-sm font-bold">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
@@ -430,7 +512,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
         {!isSaved && (
           <div className="pb-20 print:hidden">
             <button
-              onClick={handleSaveInvoice}
+              onClick={handleSaveInvoiceAndDownload}
               className="w-full bg-cyan-600 text-white py-7 rounded-[2.5rem] font-black uppercase text-sm shadow-2xl hover:bg-cyan-500 transition-all flex items-center justify-center gap-3 shadow-cyan-600/20 active:scale-95"
             >
               <Save className="w-6 h-6" /> Save Invoice & Register Debt
