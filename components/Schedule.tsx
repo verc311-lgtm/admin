@@ -237,6 +237,8 @@ const Schedule: React.FC<ScheduleProps> = ({
         notes: ''
     });
     const [viewAppointmentDetails, setViewAppointmentDetails] = useState<Assignment | null>(null);
+    const [projectSearchQuery, setProjectSearchQuery] = useState('');
+    const [showProjectSearchDropdown, setShowProjectSearchDropdown] = useState(false);
 
     // Webhook Settings
     const [zapierWebhookUrl, setZapierWebhookUrl] = useState(() => localStorage.getItem('zapier_webhook_url') || '');
@@ -619,6 +621,8 @@ const Schedule: React.FC<ScheduleProps> = ({
     const handleOpenScheduleAppointment = (date: Date) => {
         setSelectedAppointmentDate(date);
         setSelectedProjectForAppointment(null);
+        setProjectSearchQuery('');
+        setShowProjectSearchDropdown(false);
         setAppointmentForm({
             projectId: '',
             time: '09:00',
@@ -631,7 +635,10 @@ const Schedule: React.FC<ScheduleProps> = ({
 
     const handleCreateAppointment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedAppointmentDate || !appointmentForm.projectId) return;
+        if (!selectedAppointmentDate || !appointmentForm.projectId) {
+            alert("Please search and select a valid project from the list.");
+            return;
+        }
 
         const dateStr = getLocalDateString(selectedAppointmentDate);
         const formattedTime = formatTimeString(appointmentForm.time);
@@ -2864,24 +2871,77 @@ const Schedule: React.FC<ScheduleProps> = ({
                                 />
                             </div>
 
-                            <div className="space-y-1">
+                            <div className="space-y-1 relative">
                                 <label className="text-slate-500 font-bold block">Select Project *</label>
-                                <select 
-                                    value={appointmentForm.projectId}
-                                    onChange={(e) => {
-                                        const pid = e.target.value;
-                                        const proj = projects.find(p => p.id === pid) || null;
-                                        setSelectedProjectForAppointment(proj);
-                                        setAppointmentForm(prev => ({ ...prev, projectId: pid }));
-                                    }}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
-                                    required
-                                >
-                                    <option value="">Choose a project...</option>
-                                    {projects.map(p => (
-                                        <option key={p.id} value={p.id}>{p.client} - {p.name}</option>
-                                    ))}
-                                </select>
+                                <div className="relative z-10">
+                                    <input 
+                                        type="text"
+                                        placeholder="🔍 Type client name or site address to filter..."
+                                        value={projectSearchQuery}
+                                        onFocus={() => setShowProjectSearchDropdown(true)}
+                                        onChange={(e) => {
+                                            setProjectSearchQuery(e.target.value);
+                                            setShowProjectSearchDropdown(true);
+                                            if (!e.target.value) {
+                                                setSelectedProjectForAppointment(null);
+                                                setAppointmentForm(prev => ({ ...prev, projectId: '' }));
+                                            }
+                                        }}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 pr-10 outline-none font-bold text-slate-700 placeholder-slate-400"
+                                        required
+                                    />
+                                    {appointmentForm.projectId && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedProjectForAppointment(null);
+                                                setAppointmentForm(prev => ({ ...prev, projectId: '' }));
+                                                setProjectSearchQuery('');
+                                                setShowProjectSearchDropdown(false);
+                                            }}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-650 p-1"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {showProjectSearchDropdown && (
+                                    <>
+                                        <div 
+                                            className="fixed inset-0 z-20 cursor-default" 
+                                            onClick={() => setShowProjectSearchDropdown(false)} 
+                                        />
+                                        <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl max-h-48 overflow-y-auto z-30 divide-y divide-slate-100">
+                                            {(() => {
+                                                const filtered = projects.filter(p => 
+                                                    p.client.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
+                                                    p.name.toLowerCase().includes(projectSearchQuery.toLowerCase())
+                                                );
+                                                
+                                                if (filtered.length === 0) {
+                                                    return <div className="p-3 text-slate-400 text-center font-medium">No projects found.</div>;
+                                                }
+                                                
+                                                return filtered.map(p => (
+                                                    <div 
+                                                        key={p.id}
+                                                        onClick={() => {
+                                                            setSelectedProjectForAppointment(p);
+                                                            setAppointmentForm(prev => ({ ...prev, projectId: p.id }));
+                                                            setProjectSearchQuery(`${p.client} - ${p.name}`);
+                                                            setShowProjectSearchDropdown(false);
+                                                        }}
+                                                        className="p-3 hover:bg-cyan-50/50 cursor-pointer transition-all flex flex-col gap-0.5 text-left"
+                                                    >
+                                                        <span className="font-extrabold text-[#0a192f]">{p.client}</span>
+                                                        <span className="text-[10px] text-slate-400 font-bold">{p.name}</span>
+                                                    </div>
+                                                ));
+                                            })()}
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {selectedProjectForAppointment && (() => {
