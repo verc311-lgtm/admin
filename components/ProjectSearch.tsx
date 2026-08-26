@@ -16,6 +16,23 @@ interface ProjectSearchProps {
   onGenerateNewInvoice: (project: Project) => void;
 }
 
+const getProjectAddress = (p: Project | null): string => {
+  if (!p || !p.pm_data) return '';
+  try {
+    const pm = typeof p.pm_data === 'string' ? JSON.parse(p.pm_data) : p.pm_data;
+    if (!pm || typeof pm !== 'object') return '';
+    const addr = pm.address;
+    if (addr === null || addr === undefined) return '';
+    if (typeof addr === 'string') return addr;
+    if (typeof addr === 'object') {
+      return addr.formatted || addr.street || JSON.stringify(addr);
+    }
+    return String(addr);
+  } catch (e) {
+    return '';
+  }
+};
+
 const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAddPayment, onAddExpense, onChangeOrder, onPrintInvoice, onViewDetails, onGenerateNewInvoice }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expenseModal, setExpenseModal] = useState<{ show: boolean, projectId: string, projectName: string, currentTotal: number }>({ show: false, projectId: '', projectName: '', currentTotal: 0 });
@@ -38,23 +55,6 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
   const calculateProfitPercent = (p: Project) => {
     if (p.totalAmount === 0) return 0;
     return ((p.totalAmount - p.totalExpenses) / p.totalAmount) * 100;
-  };
-
-  const getProjectAddress = (p: Project | null): string => {
-    if (!p || !p.pm_data) return '';
-    try {
-      const pm = typeof p.pm_data === 'string' ? JSON.parse(p.pm_data) : p.pm_data;
-      if (!pm || typeof pm !== 'object') return '';
-      const addr = pm.address;
-      if (addr === null || addr === undefined) return '';
-      if (typeof addr === 'string') return addr;
-      if (typeof addr === 'object') {
-        return addr.formatted || addr.street || JSON.stringify(addr);
-      }
-      return String(addr);
-    } catch (e) {
-      return '';
-    }
   };
 
   const getExpensesByCategory = (expenses: { category: ExpenseCategory, amount: number }[]) => {
