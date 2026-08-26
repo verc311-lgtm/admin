@@ -27,11 +27,13 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory>('Miscellaneous');
   const [expenseNote, setExpenseNote] = useState('');
 
-  const filteredProjects = projects.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    getProjectAddress(p).toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProjects = projects.filter(p => {
+    const name = (p.name || '').toLowerCase();
+    const client = (p.client || '').toLowerCase();
+    const address = getProjectAddress(p).toLowerCase();
+    const term = (searchTerm || '').toLowerCase();
+    return name.includes(term) || client.includes(term) || address.includes(term);
+  });
 
   const calculateProfitPercent = (p: Project) => {
     if (p.totalAmount === 0) return 0;
@@ -42,7 +44,14 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
     if (!p || !p.pm_data) return '';
     try {
       const pm = typeof p.pm_data === 'string' ? JSON.parse(p.pm_data) : p.pm_data;
-      return pm.address || '';
+      if (!pm || typeof pm !== 'object') return '';
+      const addr = pm.address;
+      if (addr === null || addr === undefined) return '';
+      if (typeof addr === 'string') return addr;
+      if (typeof addr === 'object') {
+        return addr.formatted || addr.street || JSON.stringify(addr);
+      }
+      return String(addr);
     } catch (e) {
       return '';
     }
