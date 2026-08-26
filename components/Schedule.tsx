@@ -5,7 +5,7 @@ import {
     Users, FileText, Search, Plus, Trash2, Edit3, CheckSquare,
     DollarSign, Clock, MapPin, Phone, Mail, Award, ArrowRight,
     Upload, Download, FileUp, PlusCircle, CheckCircle2, AlertCircle,
-    UserCheck, ChevronLeft, ChevronRight, Check, Eye, X, Printer
+    UserCheck, ChevronLeft, ChevronRight, Check, Eye, X, Printer, Briefcase
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -202,7 +202,7 @@ const Schedule: React.FC<ScheduleProps> = ({
     const [subView, setSubView] = useState<'Dashboard' | 'Projects' | 'Pipeline' | 'Calendar' | 'Customers' | 'Files'>('Dashboard');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-    const [projectDetailTab, setProjectDetailTab] = useState<'Overview' | 'Site Visit' | 'Proposal' | 'Files' | 'Schedule' | 'Daily Logs' | 'Change Orders' | 'Invoices'>('Overview');
+    const [projectDetailTab, setProjectDetailTab] = useState<'Overview' | 'Site Visit' | 'Proposal' | 'Contract' | 'Files' | 'Schedule' | 'Daily Logs' | 'Change Orders' | 'Invoices'>('Overview');
     
     // Calendar month navigator
     const [calendarDate, setCalendarDate] = useState(new Date());
@@ -1389,9 +1389,15 @@ const Schedule: React.FC<ScheduleProps> = ({
         if (!selectedProject) return;
         let pm = getPMData(selectedProject);
         if (!pm.checklist) pm.checklist = {};
-        pm.checklist[key] = !pm.checklist[key];
+        const newChecked = !pm.checklist[key];
+        pm.checklist[key] = newChecked;
 
-        pm = logActivity(pm, `Toggled checklist item '${key}' to ${pm.checklist[key] ? 'Checked' : 'Unchecked'}`);
+        pm = logActivity(pm, `Toggled checklist item '${key}' to ${newChecked ? 'Checked' : 'Unchecked'}`);
+
+        if (key === 'signContract' && newChecked) {
+            setProjectDetailTab('Contract');
+            alert("Contract marked as Signed! Please enter the contract amount and other details in the 'Contract' tab.");
+        }
 
         await savePMData(selectedProject.id, selectedProject.pipelineStage || 'NEW LEAD', pm);
     };
@@ -1986,7 +1992,7 @@ const Schedule: React.FC<ScheduleProps> = ({
 
                         {/* Navigation Tabs */}
                         <div className="flex overflow-x-auto bg-white border-b border-slate-200/60 p-2 gap-1 scrollbar-none">
-                            {(['Overview', 'Site Visit', 'Proposal', 'Files', 'Schedule', 'Daily Logs', 'Change Orders', 'Invoices'] as const).map(tab => (
+                            {(['Overview', 'Site Visit', 'Proposal', 'Contract', 'Files', 'Schedule', 'Daily Logs', 'Change Orders', 'Invoices'] as const).map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setProjectDetailTab(tab)}
@@ -2375,6 +2381,89 @@ const Schedule: React.FC<ScheduleProps> = ({
                                 </div>
                             )}
 
+                            {/* CONTRACT TAB */}
+                            {projectDetailTab === 'Contract' && (
+                                <div className="space-y-6">
+                                    <form onSubmit={handleApproveProject} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
+                                        <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                                            <h4 className="font-extrabold text-xs text-[#0a192f] uppercase tracking-wider flex items-center gap-1.5">
+                                                <Briefcase className="w-4 h-4 text-cyan-500" /> Contract & Sign-Off Details
+                                            </h4>
+                                            {getPMData(selectedProject).checklist?.signContract && (
+                                                <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full border border-emerald-200">
+                                                    Signed & Active
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="grid md:grid-cols-3 gap-4 text-xs">
+                                            <div className="space-y-1">
+                                                <label className="text-slate-500 font-bold block">Signing / Approval Date *</label>
+                                                <input 
+                                                    type="date" 
+                                                    value={approvalForm.approvedDate}
+                                                    onChange={(e) => setApprovalForm(prev => ({ ...prev, approvedDate: e.target.value }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 focus:bg-white focus:border-cyan-500 transition-all" 
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-slate-500 font-bold block">Contract Amount ($) *</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={approvalForm.approvedAmount || ''}
+                                                    onChange={(e) => setApprovalForm(prev => ({ ...prev, approvedAmount: parseFloat(e.target.value) || 0 }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-900 focus:bg-white focus:border-cyan-500 transition-all text-sm" 
+                                                    placeholder="0.00"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-slate-500 font-bold block">Client Signature / Signoff *</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={approvalForm.signature}
+                                                    onChange={(e) => setApprovalForm(prev => ({ ...prev, signature: e.target.value }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 focus:bg-white focus:border-cyan-500 transition-all" 
+                                                    placeholder="Client signature text"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-slate-500 font-bold block">Deposit Amount Required ($)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={approvalForm.depositRequired || ''}
+                                                    onChange={(e) => setApprovalForm(prev => ({ ...prev, depositRequired: parseFloat(e.target.value) || 0 }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 focus:bg-white focus:border-cyan-500 transition-all" 
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                            <div className="space-y-1 flex items-center pt-5">
+                                                <label className="flex items-center gap-2 text-slate-650 font-bold cursor-pointer select-none">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={approvalForm.depositReceived}
+                                                        onChange={(e) => setApprovalForm(prev => ({ ...prev, depositReceived: e.target.checked }))}
+                                                        className="w-4 h-4 rounded border-slate-350 text-cyan-600 focus:ring-cyan-500" 
+                                                    />
+                                                    Deposit Received & Cleared
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-end pt-4 border-t border-slate-100">
+                                            <button 
+                                                type="submit" 
+                                                className="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-cyan-600/10 active:scale-95 transition-all"
+                                            >
+                                                {getPMData(selectedProject).checklist?.signContract ? 'Update Contract Details' : 'Sign & Register Contract'}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
+
                             {/* FILES TAB (GOOGLE DRIVE INTEGRATION) */}
                             {projectDetailTab === 'Files' && (
                                 <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
@@ -2429,136 +2518,69 @@ const Schedule: React.FC<ScheduleProps> = ({
                             {/* SCHEDULE TAB */}
                             {projectDetailTab === 'Schedule' && (
                                 <div className="grid md:grid-cols-2 gap-6">
-                                    {/* Action approval box (if not approved yet) */}
-                                    {selectedProject.pipelineStage && ['NEW LEAD', 'SITE VISIT', 'PROPOSAL', 'PROPOSAL SENT'].includes(selectedProject.pipelineStage) ? (
-                                        <form onSubmit={handleApproveProject} className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 space-y-4 md:col-span-2">
-                                            <h4 className="font-extrabold text-xs text-emerald-800 uppercase tracking-wider border-b border-emerald-100 pb-2">Contract Acceptance & Signature (Approval Required)</h4>
-                                            
-                                            <div className="grid md:grid-cols-3 gap-4 text-xs">
-                                                <div className="space-y-1">
-                                                    <label className="text-emerald-700 font-bold block">Approval Date</label>
-                                                    <input 
-                                                        type="date" 
-                                                        value={approvalForm.approvedDate}
-                                                        onChange={(e) => setApprovalForm(prev => ({ ...prev, approvedDate: e.target.value }))}
-                                                        className="w-full bg-white border border-emerald-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-emerald-700 font-bold block">Approved Amount ($)</label>
-                                                    <input 
-                                                        type="number" 
-                                                        value={approvalForm.approvedAmount}
-                                                        onChange={(e) => setApprovalForm(prev => ({ ...prev, approvedAmount: parseFloat(e.target.value) || 0 }))}
-                                                        className="w-full bg-white border border-emerald-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-emerald-700 font-bold block">Customer Signature / Typed Signoff</label>
-                                                    <input 
-                                                        type="text" 
-                                                        value={approvalForm.signature}
-                                                        onChange={(e) => setApprovalForm(prev => ({ ...prev, signature: e.target.value }))}
-                                                        className="w-full bg-white border border-emerald-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
-                                                        placeholder="Client signature text"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-emerald-700 font-bold block">Deposit Amount Required ($)</label>
-                                                    <input 
-                                                        type="number" 
-                                                        value={approvalForm.depositRequired}
-                                                        onChange={(e) => setApprovalForm(prev => ({ ...prev, depositRequired: parseFloat(e.target.value) || 0 }))}
-                                                        className="w-full bg-white border border-emerald-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
-                                                    />
-                                                </div>
-                                                <div className="space-y-1 flex items-center pt-5">
-                                                    <label className="flex items-center gap-2 text-emerald-700 font-bold cursor-pointer">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={approvalForm.depositReceived}
-                                                            onChange={(e) => setApprovalForm(prev => ({ ...prev, depositReceived: e.target.checked }))}
-                                                            className="w-4 h-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500" 
-                                                        />
-                                                        Deposit Received & Cleared
-                                                    </label>
-                                                </div>
+                                    <form onSubmit={handleSaveSchedule} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
+                                        <h4 className="font-extrabold text-xs text-[#0a192f] uppercase tracking-wider border-b border-slate-100 pb-2">Calendar Schedule Settings</h4>
+                                        
+                                        <div className="grid md:grid-cols-2 gap-4 text-xs">
+                                            <div className="space-y-1">
+                                                <label className="text-slate-500 font-bold block">Start Date</label>
+                                                <input 
+                                                    type="date" 
+                                                    value={scheduleForm.startDate}
+                                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, startDate: e.target.value }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                                />
                                             </div>
-
-                                            <div className="flex justify-end pt-2">
-                                                <button 
-                                                    type="submit" 
-                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider"
+                                            <div className="space-y-1">
+                                                <label className="text-slate-500 font-bold block">Estimated Completion Date</label>
+                                                <input 
+                                                    type="date" 
+                                                    value={scheduleForm.estimatedEndDate}
+                                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, estimatedEndDate: e.target.value }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-slate-500 font-bold block">Project Manager</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={scheduleForm.manager}
+                                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, manager: e.target.value }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-slate-500 font-bold block">Assigned Crew</label>
+                                                <select 
+                                                    value={scheduleForm.crewId}
+                                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, crewId: e.target.value }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
                                                 >
-                                                    Sign & Approve Contract
-                                                </button>
+                                                    <option value="">Unassigned</option>
+                                                    {crews.map(c => (
+                                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                                    ))}
+                                                </select>
                                             </div>
-                                        </form>
-                                    ) : (
-                                        <form onSubmit={handleSaveSchedule} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
-                                            <h4 className="font-extrabold text-xs text-[#0a192f] uppercase tracking-wider border-b border-slate-100 pb-2">Calendar Schedule Settings</h4>
-                                            
-                                            <div className="grid md:grid-cols-2 gap-4 text-xs">
-                                                <div className="space-y-1">
-                                                    <label className="text-slate-500 font-bold block">Start Date</label>
-                                                    <input 
-                                                        type="date" 
-                                                        value={scheduleForm.startDate}
-                                                        onChange={(e) => setScheduleForm(prev => ({ ...prev, startDate: e.target.value }))}
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-slate-500 font-bold block">Estimated Completion Date</label>
-                                                    <input 
-                                                        type="date" 
-                                                        value={scheduleForm.estimatedEndDate}
-                                                        onChange={(e) => setScheduleForm(prev => ({ ...prev, estimatedEndDate: e.target.value }))}
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-slate-500 font-bold block">Project Manager</label>
-                                                    <input 
-                                                        type="text" 
-                                                        value={scheduleForm.manager}
-                                                        onChange={(e) => setScheduleForm(prev => ({ ...prev, manager: e.target.value }))}
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700" 
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-slate-500 font-bold block">Assigned Crew</label>
-                                                    <select 
-                                                        value={scheduleForm.crewId}
-                                                        onChange={(e) => setScheduleForm(prev => ({ ...prev, crewId: e.target.value }))}
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
-                                                    >
-                                                        <option value="">Unassigned</option>
-                                                        {crews.map(c => (
-                                                            <option key={c.id} value={c.id}>{c.name}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                <div className="col-span-2 space-y-1">
-                                                    <label className="text-slate-500 font-bold block">Schedule Notes / Planning details</label>
-                                                    <textarea 
-                                                        value={scheduleForm.notes}
-                                                        onChange={(e) => setScheduleForm(prev => ({ ...prev, notes: e.target.value }))}
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 h-16"
-                                                    />
-                                                </div>
+                                            <div className="col-span-2 space-y-1">
+                                                <label className="text-slate-500 font-bold block">Schedule Notes / Planning details</label>
+                                                <textarea 
+                                                    value={scheduleForm.notes}
+                                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, notes: e.target.value }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700 h-16"
+                                                />
                                             </div>
+                                        </div>
 
-                                            <div className="flex justify-end pt-2">
-                                                <button 
-                                                    type="submit" 
-                                                    className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider"
-                                                >
-                                                    Save Schedule
-                                                </button>
-                                            </div>
-                                        </form>
-                                    )}
+                                        <div className="flex justify-end pt-2">
+                                            <button 
+                                                type="submit" 
+                                                className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider"
+                                            >
+                                                Save Schedule
+                                            </button>
+                                        </div>
+                                    </form>
 
                                     <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-3">
                                         <h4 className="font-extrabold text-xs text-[#0a192f] uppercase tracking-wider border-b border-slate-100 pb-2">Contract Milestone Details</h4>

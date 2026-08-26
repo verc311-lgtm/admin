@@ -29,12 +29,23 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
 
   const filteredProjects = projects.filter(p =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.client.toLowerCase().includes(searchTerm.toLowerCase())
+    p.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    getProjectAddress(p).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const calculateProfitPercent = (p: Project) => {
     if (p.totalAmount === 0) return 0;
     return ((p.totalAmount - p.totalExpenses) / p.totalAmount) * 100;
+  };
+
+  const getProjectAddress = (p: Project | null): string => {
+    if (!p || !p.pm_data) return '';
+    try {
+      const pm = typeof p.pm_data === 'string' ? JSON.parse(p.pm_data) : p.pm_data;
+      return pm.address || '';
+    } catch (e) {
+      return '';
+    }
   };
 
   const getExpensesByCategory = (expenses: { category: ExpenseCategory, amount: number }[]) => {
@@ -341,7 +352,9 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
           <div className="bg-white rounded-[3.5rem] w-full max-w-4xl p-14 shadow-2xl relative max-h-[90vh] overflow-y-auto border-8 border-cyan-50">
             <div className="flex justify-between items-start mb-12 border-b pb-8">
               <div>
-                <h3 className="text-4xl font-black text-[#0a192f] tracking-tighter uppercase italic">{detailsModal.project.name}</h3>
+                <h3 className="text-4xl font-black text-[#0a192f] tracking-tighter uppercase italic" title={getProjectAddress(detailsModal.project) || detailsModal.project.name}>
+                  {getProjectAddress(detailsModal.project) || detailsModal.project.name}
+                </h3>
                 <p className="text-cyan-600 font-bold uppercase tracking-widest text-[10px] mt-2">Financial History & Documents</p>
               </div>
               <div className="flex gap-4">
@@ -446,7 +459,9 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
               <div className="p-8 flex-1">
                 <div className="flex justify-between items-center mb-6">
                   <div>
-                    <h3 className="text-2xl font-black text-[#0a192f] uppercase italic leading-none group-hover:text-cyan-600 transition-colors truncate max-w-[180px]">{project.name}</h3>
+                    <h3 className="text-2xl font-black text-[#0a192f] uppercase italic leading-none group-hover:text-cyan-600 transition-colors truncate max-w-[240px]" title={getProjectAddress(project) || project.name}>
+                      {getProjectAddress(project) || project.name}
+                    </h3>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{project.client}</p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${project.status === 'Finished' ? 'bg-emerald-100 text-emerald-700' : 'bg-cyan-100 text-cyan-700'}`}>{project.status}</span>
