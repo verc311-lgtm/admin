@@ -62,6 +62,14 @@ CREATE TABLE IF NOT EXISTS `cva_expenses` (
   KEY `projectId` (`projectId`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `cva_settings` (
+  `key` varchar(100) NOT NULL,
+  `value` text NOT NULL,
+  PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO `cva_settings` (`key`, `value`) VALUES ('zapier_webhook_url', '');
+
 -- Insertar usuario administrador por defecto (admin / 1234)
 INSERT IGNORE INTO `cva_users` (`id`, `username`, `password`, `name`, `role`, `createdAt`) 
 VALUES ('1', 'admin', '1234', 'Coastal Admin', 'Admin', NOW());

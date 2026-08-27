@@ -64,6 +64,13 @@ CREATE TABLE IF NOT EXISTS "cva_expenses" (
 
 CREATE INDEX IF NOT EXISTS "idx_expenses_projectId" ON "cva_expenses" ("projectId");
 
+CREATE TABLE IF NOT EXISTS "cva_settings" (
+  "key" varchar(100) NOT NULL PRIMARY KEY,
+  "value" text NOT NULL
+);
+
+INSERT INTO "cva_settings" ("key", "value") VALUES ('zapier_webhook_url', '') ON CONFLICT ("key") DO NOTHING;
+
 -- Insert default admin user
 INSERT INTO "cva_users" ("id", "username", "password", "name", "role", "createdAt") 
 VALUES ('1', 'admin', '1234', 'Coastal Admin', 'Admin', NOW())

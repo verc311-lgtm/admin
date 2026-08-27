@@ -45,6 +45,17 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [crews, setCrews] = useState<Crew[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [zapierWebhookUrl, setZapierWebhookUrl] = useState(() => localStorage.getItem('zapier_webhook_url') || '');
+
+  const handleUpdateWebhookUrl = async (newUrl: string) => {
+    setZapierWebhookUrl(newUrl);
+    localStorage.setItem('zapier_webhook_url', newUrl);
+    try {
+      await supabase.from('cva_settings').upsert({ key: 'zapier_webhook_url', value: newUrl });
+    } catch (err) {
+      console.error("Error saving webhook to Supabase settings:", err);
+    }
+  };
 
   // 1. Fetch Data on Load (Real-time from Supabase)
   const fetchData = async () => {
@@ -95,6 +106,15 @@ const App: React.FC = () => {
 
       const { data: assignData } = await supabase.from('cva_assignments').select('*');
       setAssignments(assignData || []);
+
+      const { data: settingsData } = await supabase.from('cva_settings').select('*');
+      if (settingsData) {
+        const webhookSetting = settingsData.find((s: any) => s.key === 'zapier_webhook_url');
+        if (webhookSetting) {
+          setZapierWebhookUrl(webhookSetting.value || '');
+          localStorage.setItem('zapier_webhook_url', webhookSetting.value || '');
+        }
+      }
 
       setLastSync(new Date());
 
@@ -535,6 +555,8 @@ const App: React.FC = () => {
             onCreatePMProject={handleCreatePMProject}
             onUpdateProjectPM={handleUpdateProjectPM}
             onDeleteProject={handleDeleteProject}
+            zapierWebhookUrl={zapierWebhookUrl}
+            onUpdateWebhookUrl={handleUpdateWebhookUrl}
           />
         ) : (
           <>
@@ -659,6 +681,8 @@ const App: React.FC = () => {
                 onCreatePMProject={handleCreatePMProject}
                 onUpdateProjectPM={handleUpdateProjectPM}
                 onDeleteProject={handleDeleteProject}
+                zapierWebhookUrl={zapierWebhookUrl}
+                onUpdateWebhookUrl={handleUpdateWebhookUrl}
               />
             )}
           </>

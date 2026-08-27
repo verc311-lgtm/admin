@@ -20,6 +20,8 @@ interface ScheduleProps {
     onCreatePMProject?: (projectData: any) => Promise<void>;
     onUpdateProjectPM?: (projectId: string, stage: string, pmData: string, extraFields?: any) => Promise<void>;
     onDeleteProject?: (projectId: string) => Promise<void>;
+    zapierWebhookUrl?: string;
+    onUpdateWebhookUrl?: (url: string) => void;
 }
 
 // 10 Pipeline Stages in order
@@ -196,7 +198,8 @@ interface ProjectPMData {
 const Schedule: React.FC<ScheduleProps> = ({
     projects, crews, assignments,
     onUpdateDates, onAddAssignment, onDeleteAssignment, onAddCrew,
-    onCreatePMProject, onUpdateProjectPM, onDeleteProject
+    onCreatePMProject, onUpdateProjectPM, onDeleteProject,
+    zapierWebhookUrl: propWebhookUrl, onUpdateWebhookUrl
 }) => {
     // 1. Navigation & Views States
     const [subView, setSubView] = useState<'Dashboard' | 'Projects' | 'Pipeline' | 'Calendar' | 'Customers' | 'Files'>('Dashboard');
@@ -241,7 +244,14 @@ const Schedule: React.FC<ScheduleProps> = ({
     const [showProjectSearchDropdown, setShowProjectSearchDropdown] = useState(false);
 
     // Webhook Settings
-    const [zapierWebhookUrl, setZapierWebhookUrl] = useState(() => localStorage.getItem('zapier_webhook_url') || '');
+    const [zapierWebhookUrl, setZapierWebhookUrl] = useState(() => propWebhookUrl || localStorage.getItem('zapier_webhook_url') || '');
+
+    React.useEffect(() => {
+        if (propWebhookUrl !== undefined) {
+            setZapierWebhookUrl(propWebhookUrl);
+        }
+    }, [propWebhookUrl]);
+
     const [showSettings, setShowSettings] = useState(false);
 
     // Site Visit Drag Scheduling States
@@ -1509,6 +1519,7 @@ const Schedule: React.FC<ScheduleProps> = ({
                             onChange={(e) => {
                                 setZapierWebhookUrl(e.target.value);
                                 localStorage.setItem('zapier_webhook_url', e.target.value);
+                                if (onUpdateWebhookUrl) onUpdateWebhookUrl(e.target.value);
                             }}
                             className="flex-grow bg-slate-950 border border-slate-750 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-cyan-400 font-bold"
                         />
@@ -1517,6 +1528,7 @@ const Schedule: React.FC<ScheduleProps> = ({
                                 onClick={() => {
                                     setZapierWebhookUrl('');
                                     localStorage.removeItem('zapier_webhook_url');
+                                    if (onUpdateWebhookUrl) onUpdateWebhookUrl('');
                                 }}
                                 className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 px-3 rounded-xl text-xs font-bold"
                             >
