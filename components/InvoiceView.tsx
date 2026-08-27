@@ -138,45 +138,25 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       }
 
       // --- NEW LOGO HEADER DESIGN ---
-      // Draw cyan anchor icon
-      doc.setFillColor(14, 165, 233); // cyan-500 (#0ea5e9)
-      
-      // Top circle ring of anchor
-      doc.setDrawColor(14, 165, 233);
-      doc.setLineWidth(1.2);
-      doc.circle(24, 20, 2.5, 'S');
-      
-      // Stem of anchor
-      doc.line(24, 22.5, 24, 34);
-      
-      // Crossbar
-      doc.line(19, 26, 29, 26);
-      
-      // Crescent at the bottom
-      doc.ellipse(24, 34, 6, 3, 'S');
-      // Anchor arrow-tips/ticks at ends of crescent
-      doc.line(18, 34, 18, 32);
-      doc.line(30, 34, 30, 32);
-
       // Logo Text (Navy/Bold)
       doc.setTextColor(10, 25, 47); // #0a192f
       doc.setFontSize(26);
       doc.setFont("helvetica", "bold");
-      doc.text("COASTAL VA", 36, 24);
+      doc.text("COASTAL VA", 20, 24);
 
       // Sub-logo Text (Cyan/Uppercase)
       doc.setTextColor(14, 165, 233); // cyan-500
       doc.setFontSize(8);
       doc.setFont("helvetica", "bold");
-      doc.text("MARINE CONSTRUCTION", 36, 29);
+      doc.text("MARINE CONSTRUCTION", 20, 29);
 
-      // Company info details below logo (Y = 40)
+      // Company info details below logo (Y = 36)
       doc.setTextColor(148, 163, 184); // slate-400
       doc.setFontSize(7.5);
       doc.setFont("helvetica", "bold");
-      doc.text("CHESAPEAKE, VIRGINIA", 20, 42);
-      doc.text("MARINE CONSTRUCTION", 20, 46);
-      doc.text("WWW.COVAMARINECONSTRUCTION.COM", 20, 50);
+      doc.text("CHESAPEAKE, VIRGINIA", 20, 36);
+      doc.text("MARINE CONSTRUCTION", 20, 40);
+      doc.text("WWW.COVAMARINECONSTRUCTION.COM", 20, 44);
 
       // --- INVOICE INFO (Right aligned) ---
       doc.setTextColor(241, 245, 249); // slate-100/200 for watermarked big title
@@ -439,12 +419,9 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
           <div className="absolute top-0 left-0 w-full h-5 bg-[#0a192f]"></div>
           <div className="flex justify-between items-start mb-16 mt-10">
             <div>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="bg-[#0a192f] p-3 rounded-xl"><Anchor className="text-cyan-400 w-10 h-10" /></div>
-                <div>
-                  <h1 className="text-4xl font-black text-[#0a192f] italic uppercase tracking-tighter leading-none">COASTAL VA</h1>
-                  <p className="text-[10px] font-black text-cyan-600 uppercase tracking-widest mt-1">Marine Construction</p>
-                </div>
+              <div className="mb-6">
+                <h1 className="text-4xl font-black text-[#0a192f] italic uppercase tracking-tighter leading-none">COASTAL VA</h1>
+                <p className="text-[10px] font-black text-cyan-600 uppercase tracking-widest mt-1">Marine Construction</p>
               </div>
               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
                 Chesapeake, Virginia<br />
