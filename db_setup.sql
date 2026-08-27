@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS `cva_settings` (
   PRIMARY KEY (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT IGNORE INTO `cva_settings` (`key`, `value`) VALUES ('zapier_webhook_url', '');
+INSERT IGNORE INTO `cva_settings` (`key`, `value`) VALUES ('zapier_webhook_url', 'https://hook.us2.make.com/okn4zyfheui85ridi34byrx0e5dwasoy');
 
 -- Insertar usuario administrador por defecto (admin / 1234)
 INSERT IGNORE INTO `cva_users` (`id`, `username`, `password`, `name`, `role`, `createdAt`) 
