@@ -8,7 +8,7 @@ import {
     UserCheck, ChevronLeft, ChevronRight, Check, Eye, X, Printer, Briefcase
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 interface ScheduleProps {
     projects: Project[];
@@ -1394,6 +1394,133 @@ const Schedule: React.FC<ScheduleProps> = ({
         doc.save(`Label-${project.id}.pdf`);
     };
 
+    // Export Pipeline Sales Report PDF
+    const handleExportPipelineReportPDF = () => {
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.width;
+        
+        // --- 1. Header design ---
+        doc.setFillColor(10, 25, 47); // Dark navy (#0a192f)
+        doc.rect(0, 0, pageWidth, 40, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont("helvetica", "bold");
+        doc.text("COASTAL VA MARINE CONSTRUCTION", 15, 18);
+        
+        doc.setTextColor(14, 165, 233); // Cyan-500
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.text("PIPELINE & SALES STATUS REPORT", 15, 25);
+        
+        doc.setTextColor(148, 163, 184); // Slate-400
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        const reportDateText = new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', month: 'long', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+        doc.text(`Generated: ${reportDateText}`, 15, 31);
+        
+        // --- 2. Summary Statistics Table ---
+        doc.setTextColor(10, 25, 47);
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("Executive Summary Statistics", 15, 52);
+        
+        const summaryData = [
+            ["Active Projects", String(stats.active), "In Progress Stages", String(stats.inProgress)],
+            ["Pending Proposals", String(stats.pendingProposals), "Completed Projects", String(stats.completed)],
+            ["Approved Contracts", String(stats.approved), "Outstanding Balance", `$${stats.outstandingBalance.toLocaleString()}`]
+        ];
+        
+        autoTable(doc, {
+            startY: 56,
+            head: [],
+            body: summaryData,
+            theme: 'plain',
+            styles: {
+                fontSize: 9,
+                cellPadding: 3,
+                font: 'helvetica',
+            },
+            columnStyles: {
+                0: { fontStyle: 'bold', textColor: [100, 116, 139] },
+                1: { fontStyle: 'bold', textColor: [14, 165, 233] },
+                2: { fontStyle: 'bold', textColor: [100, 116, 139] },
+                3: { fontStyle: 'bold', textColor: [10, 25, 47] }
+            }
+        });
+        
+        let currentY = (doc as any).lastAutoTable.finalY + 12;
+        
+        // --- 3. Render each Pipeline Stage ---
+        PIPELINE_STAGES.forEach(stage => {
+            const stageProjects = projectsByStage[stage] || [];
+            if (stageProjects.length === 0) return; // Skip empty stages for cleaner report
+            
+            // Check page height limit to prevent overflow before writing header
+            if (currentY > 250) {
+                doc.addPage();
+                currentY = 20;
+            }
+            
+            doc.setFillColor(248, 250, 252); // light background gray
+            doc.rect(15, currentY - 5, pageWidth - 30, 8, 'F');
+            
+            doc.setTextColor(10, 25, 47);
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.text(`${stage} (${stageProjects.length} Projects)`, 17, currentY);
+            
+            currentY += 4;
+            
+            const tableBody = stageProjects.map(p => {
+                const pm = getPMData(p);
+                return [
+                    p.id.replace('PROJECT-', ''),
+                    p.client || 'N/A',
+                    pm.address || 'No Address Registered',
+                    pm.projectType || 'Standard',
+                    `$${(p.totalAmount || 0).toLocaleString()}`,
+                    `$${(p.balance || 0).toLocaleString()}`
+                ];
+            });
+            
+            autoTable(doc, {
+                startY: currentY,
+                head: [["ID", "Customer", "Site Address", "Type", "Contract Price", "Balance"]],
+                body: tableBody,
+                theme: 'striped',
+                headStyles: {
+                    fillColor: [10, 25, 47],
+                    textColor: [255, 255, 255],
+                    fontSize: 7.5,
+                    fontStyle: 'bold',
+                    cellPadding: 2
+                },
+                styles: {
+                    fontSize: 7.5,
+                    cellPadding: 2
+                },
+                columnStyles: {
+                    0: { cellWidth: 15 },
+                    1: { cellWidth: 35, fontStyle: 'bold' },
+                    2: { cellWidth: 55 },
+                    3: { cellWidth: 25 },
+                    4: { cellWidth: 25, halign: 'right' },
+                    5: { cellWidth: 25, halign: 'right' }
+                },
+                margin: { left: 15, right: 15 }
+            });
+            
+            currentY = (doc as any).lastAutoTable.finalY + 12;
+        });
+        
+        // Save PDF file
+        doc.save(`CoastalVA_Pipeline_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
     // Checklist togglers
     const toggleChecklist = async (key: keyof Required<ProjectPMData>['checklist']) => {
         if (!selectedProject) return;
@@ -1485,6 +1612,12 @@ const Schedule: React.FC<ScheduleProps> = ({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                        <button 
+                            onClick={handleExportPipelineReportPDF}
+                            className="bg-slate-800 hover:bg-slate-700 text-cyan-400 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wide border border-slate-750 transition-all flex items-center gap-1.5"
+                        >
+                            <FileText className="w-4 h-4 text-cyan-400" /> Export Pipeline PDF
+                        </button>
                         <button 
                             onClick={() => setShowSettings(!showSettings)} 
                             className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs tracking-wide border border-slate-750 transition-all flex items-center gap-1.5"
