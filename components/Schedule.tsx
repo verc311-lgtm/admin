@@ -5,7 +5,7 @@ import {
     Users, FileText, Search, Plus, Trash2, Edit3, CheckSquare,
     DollarSign, Clock, MapPin, Phone, Mail, Award, ArrowRight,
     Upload, Download, FileUp, PlusCircle, CheckCircle2, AlertCircle,
-    UserCheck, ChevronLeft, ChevronRight, Check, Eye, X, Printer, Briefcase
+    UserCheck, ChevronLeft, ChevronRight, Check, Eye, X, Printer, Briefcase, Loader2
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -253,6 +253,9 @@ const Schedule: React.FC<ScheduleProps> = ({
     }, [propWebhookUrl]);
 
     const [showSettings, setShowSettings] = useState(false);
+    const [isCreatingLead, setIsCreatingLead] = useState(false);
+    const creatingLeadLockRef = useRef(false);
+    const sentLeadWebhooksRef = useRef<Set<string>>(new Set());
 
     // Site Visit Drag Scheduling States
     const [siteVisitDragModal, setSiteVisitDragModal] = useState(false);
@@ -444,97 +447,114 @@ const Schedule: React.FC<ScheduleProps> = ({
     // Lead Form Submitter
     const handleCreateLead = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isCreatingLead || creatingLeadLockRef.current) return;
+
         if (!newLeadForm.customerName || !newLeadForm.address) {
             alert('Customer Name and Project Address are required.');
             return;
         }
 
-        const finalProjectType = showCustomTypeInput ? (customTypeVal.trim() || 'Other') : newLeadForm.projectType;
+        creatingLeadLockRef.current = true;
+        setIsCreatingLead(true);
 
-        // If custom type is new, add it to list
-        if (showCustomTypeInput && finalProjectType && !projectTypesList.includes(finalProjectType)) {
-            setProjectTypesList(prev => [...prev, finalProjectType]);
-        }
+        try {
+            const finalProjectType = showCustomTypeInput ? (customTypeVal.trim() || 'Other') : newLeadForm.projectType;
 
-        const nextId = getNextProjectID();
-        const initialPMData: ProjectPMData = {
-            phone: newLeadForm.phone,
-            email: newLeadForm.email,
-            address: newLeadForm.address,
-            projectType: finalProjectType,
-            description: newLeadForm.description,
-            leadSource: newLeadForm.leadSource,
-            assignedEmployee: newLeadForm.assignedEmployee,
-            notes: newLeadForm.notes,
-            checklist: {
-                siteVisit: false,
-                getMeasurements: false,
-                createProposal: false,
-                oscarApproval: false,
-                sendProposal: false,
-                reviewCustomerProposal: false,
-                signContract: false
-            },
-            files: [],
-            dailyLogs: [],
-            changeOrders: [],
-            invoices: [],
-            activityHistory: []
-        };
-
-        const loggedPM = logActivity(initialPMData, `Lead created with ID ${nextId} assigned to ${newLeadForm.assignedEmployee || 'Unassigned'}`);
-        
-        const dbProject = {
-            id: nextId,
-            name: `${finalProjectType} for ${newLeadForm.customerName}`,
-            client: newLeadForm.customerName,
-            totalAmount: 0.00,
-            balance: 0.00,
-            paidAmount: 0.00,
-            totalExpenses: 0.00,
-            profit: 0.00,
-            startDate: new Date().toISOString().split('T')[0],
-            status: 'Draft',
-            pipelineStage: 'NEW LEAD',
-            pm_data: JSON.stringify(loggedPM)
-        };
-
-        if (onCreatePMProject) {
-            await onCreatePMProject(dbProject);
-
-            // Trigger Webhook to Zapier in the background automatically on lead creation
-            if (zapierWebhookUrl) {
-                const payload = {
-                    projectId: nextId,
-                    customerName: newLeadForm.customerName,
-                    address: newLeadForm.address || 'No Address',
-                    phone: newLeadForm.phone || 'No Phone',
-                    email: newLeadForm.email || 'No Email',
-                    projectType: finalProjectType,
-                    previousStage: '',
-                    newStage: 'NEW LEAD',
-                    amount: 0,
-                    assignedEmployee: newLeadForm.assignedEmployee || 'Unassigned',
-                    notes: newLeadForm.notes,
-                    triggeredAt: new Date().toISOString()
-                };
-
-                fetch(zapierWebhookUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                }).then(() => console.log('Zapier Webhook fired automatically on lead creation'))
-                  .catch(err => console.error('Zapier Webhook error:', err));
+            // If custom type is new, add it to list
+            if (showCustomTypeInput && finalProjectType && !projectTypesList.includes(finalProjectType)) {
+                setProjectTypesList(prev => [...prev, finalProjectType]);
             }
 
-            setNewLeadModal(false);
-            setShowCustomTypeInput(false);
-            setCustomTypeVal('');
-            setNewLeadForm({
-                customerName: '', phone: '', email: '', address: '',
-                projectType: 'Dock / Pier', description: '', leadSource: '',
-                assignedEmployee: '', notes: ''
-            });
+            const nextId = getNextProjectID();
+            const initialPMData: ProjectPMData = {
+                phone: newLeadForm.phone,
+                email: newLeadForm.email,
+                address: newLeadForm.address,
+                projectType: finalProjectType,
+                description: newLeadForm.description,
+                leadSource: newLeadForm.leadSource,
+                assignedEmployee: newLeadForm.assignedEmployee,
+                notes: newLeadForm.notes,
+                checklist: {
+                    siteVisit: false,
+                    getMeasurements: false,
+                    createProposal: false,
+                    oscarApproval: false,
+                    sendProposal: false,
+                    reviewCustomerProposal: false,
+                    signContract: false
+                },
+                files: [],
+                dailyLogs: [],
+                changeOrders: [],
+                invoices: [],
+                activityHistory: []
+            };
+
+            const loggedPM = logActivity(initialPMData, `Lead created with ID ${nextId} assigned to ${newLeadForm.assignedEmployee || 'Unassigned'}`);
+            
+            const dbProject = {
+                id: nextId,
+                name: `${finalProjectType} for ${newLeadForm.customerName}`,
+                client: newLeadForm.customerName,
+                totalAmount: 0.00,
+                balance: 0.00,
+                paidAmount: 0.00,
+                totalExpenses: 0.00,
+                profit: 0.00,
+                startDate: new Date().toISOString().split('T')[0],
+                status: 'Draft',
+                pipelineStage: 'NEW LEAD',
+                pm_data: JSON.stringify(loggedPM)
+            };
+
+            if (onCreatePMProject) {
+                await onCreatePMProject(dbProject);
+
+                // Trigger Webhook to Make/Zapier in the background automatically on lead creation ONLY ONCE
+                if (zapierWebhookUrl && !sentLeadWebhooksRef.current.has(nextId)) {
+                    sentLeadWebhooksRef.current.add(nextId);
+                    const payload = {
+                        action: 'CREATE_LEAD',
+                        event: 'lead_created',
+                        folderName: newLeadForm.address || newLeadForm.customerName,
+                        projectId: nextId,
+                        customerName: newLeadForm.customerName,
+                        address: newLeadForm.address || 'No Address',
+                        phone: newLeadForm.phone || 'No Phone',
+                        email: newLeadForm.email || 'No Email',
+                        projectType: finalProjectType,
+                        previousStage: '',
+                        newStage: 'NEW LEAD',
+                        amount: 0,
+                        assignedEmployee: newLeadForm.assignedEmployee || 'Unassigned',
+                        notes: newLeadForm.notes,
+                        triggeredAt: new Date().toISOString()
+                    };
+
+                    fetch(zapierWebhookUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    }).then(() => console.log('Make Webhook fired successfully for single Google Drive folder creation'))
+                      .catch(err => console.error('Make Webhook error:', err));
+                }
+
+                setNewLeadModal(false);
+                setShowCustomTypeInput(false);
+                setCustomTypeVal('');
+                setNewLeadForm({
+                    customerName: '', phone: '', email: '', address: '',
+                    projectType: 'Dock / Pier', description: '', leadSource: '',
+                    assignedEmployee: '', notes: ''
+                });
+            }
+        } catch (err: any) {
+            console.error('Error creating lead:', err);
+            alert('Error creating lead: ' + (err?.message || 'Unknown error'));
+        } finally {
+            setIsCreatingLead(false);
+            creatingLeadLockRef.current = false;
         }
     };
 
@@ -715,8 +735,8 @@ const Schedule: React.FC<ScheduleProps> = ({
             extraFields.status = 'Draft';
         }
 
-        // Trigger Webhook to Zapier in the background automatically
-        if (zapierWebhookUrl) {
+        // Trigger Webhook to Zapier in the background automatically (ONLY for Zapier tasks, NEVER for Make Google Drive creation)
+        if (zapierWebhookUrl && !zapierWebhookUrl.includes('make.com')) {
             const payload = {
                 projectId: project.id,
                 customerName: project.client,
@@ -764,8 +784,8 @@ const Schedule: React.FC<ScheduleProps> = ({
             estimatedEndDate: dragVisitForm.date
         };
 
-        // Trigger Webhook to Zapier/Make
-        if (zapierWebhookUrl) {
+        // Trigger Webhook to Zapier/Make (ONLY for Zapier tasks, NEVER for Make Google Drive creation)
+        if (zapierWebhookUrl && !zapierWebhookUrl.includes('make.com')) {
             const payload = {
                 projectId: draggedProject.id,
                 customerName: draggedProject.client,
@@ -1638,11 +1658,11 @@ const Schedule: React.FC<ScheduleProps> = ({
             {showSettings && (
                 <div className="bg-slate-905 border border-cyan-500/20 rounded-2xl p-5 text-white space-y-3 shadow-lg">
                     <div className="flex justify-between items-center">
-                        <h4 className="font-extrabold text-xs text-cyan-400 uppercase tracking-wider">Zapier Webhook Integration Settings</h4>
-                        <span className="text-[10px] text-slate-400 font-bold bg-slate-800 px-2 py-0.5 rounded">Option C Setup</span>
+                        <h4 className="font-extrabold text-xs text-cyan-400 uppercase tracking-wider">Make & Google Drive Webhook Settings</h4>
+                        <span className="text-[10px] text-slate-400 font-bold bg-slate-800 px-2 py-0.5 rounded">Lead Creation Trigger</span>
                     </div>
                     <p className="text-[10px] text-slate-400">
-                        Paste your Zapier Catch Webhook URL below. Whenever a project card is dropped into <strong>Site Visit</strong>, <strong>Proposal</strong>, or <strong>Scheduled</strong> stages, the system will trigger a pop-up to schedule the task and instantly fire the event details to this Webhook.
+                        Paste your Make / Zapier Catch Webhook URL below. When a new project lead is created, the system triggers this webhook <strong>strictly once</strong> to create the project folders in Google Drive. Moving project cards between stages in the pipeline will not re-trigger Google Drive folder creation to prevent duplicates.
                     </p>
                     <div className="flex gap-2">
                         <input 
@@ -3537,8 +3557,28 @@ const Schedule: React.FC<ScheduleProps> = ({
                             </div>
 
                             <div className="flex gap-3 justify-end pt-3">
-                                <button type="button" onClick={() => setNewLeadModal(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold">Cancel</button>
-                                <button type="submit" className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 px-5 py-2 rounded-xl font-black uppercase tracking-wider shadow">Create Lead</button>
+                                <button 
+                                    type="button" 
+                                    disabled={isCreatingLead}
+                                    onClick={() => setNewLeadModal(false)} 
+                                    className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 px-4 py-2 rounded-xl font-bold"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    disabled={isCreatingLead}
+                                    className="bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 px-5 py-2 rounded-xl font-black uppercase tracking-wider shadow flex items-center gap-2"
+                                >
+                                    {isCreatingLead ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <span>Creating Lead...</span>
+                                        </>
+                                    ) : (
+                                        <span>Create Lead</span>
+                                    )}
+                                </button>
                             </div>
                         </form>
                     </div>
