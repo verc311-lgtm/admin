@@ -13,13 +13,42 @@ import CompletedProjects from './components/CompletedProjects.tsx';
 import ActiveProjects from './components/ActiveProjects.tsx';
 import PendingProjects from './components/PendingProjects.tsx';
 import { User, Project, Payment, Invoice, View, Expense, ExpenseCategory, Crew, Assignment } from './types.ts';
-import { HardDrive, ShieldCheck, Menu } from 'lucide-react';
+import { HardDrive, ShieldCheck, Menu, RotateCw } from 'lucide-react';
 import { supabase } from './src/supabaseClient';
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeView, setActiveView] = useState<View>('Home');
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('cva_logged_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return !!localStorage.getItem('cva_logged_user');
+    } catch {
+      return false;
+    }
+  });
+
+  const [activeView, setActiveView] = useState<View>(() => {
+    try {
+      const savedUser = localStorage.getItem('cva_logged_user');
+      if (savedUser) {
+        const u = JSON.parse(savedUser);
+        if (u.username?.toLowerCase() === 'alex' || u.username?.toLowerCase() === 'kelvin') {
+          return 'Schedule';
+        }
+      }
+      return (localStorage.getItem('cva_active_view') as View) || 'Home';
+    } catch {
+      return 'Home';
+    }
+  });
+
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -58,12 +87,10 @@ const App: React.FC = () => {
   };
 
   // 1. Fetch Data on Load (Real-time from Supabase)
-  const fetchData = async () => {
-    setIsSyncing(true);
+  const fetchData = async (isBackground = false) => {
+    if (!isBackground) setIsSyncing(true);
     setSyncError(false);
     try {
-      console.log("Fetching from Supabase...");
-
       const { data: projectsData, error: projError } = await supabase.from('cva_projects').select('*');
       if (projError) throw projError;
 
@@ -120,14 +147,42 @@ const App: React.FC = () => {
 
     } catch (error) {
       console.error("Error connecting to Supabase:", error);
-      setSyncError(true);
+      if (!isBackground) setSyncError(true);
     } finally {
-      setIsSyncing(false);
+      if (!isBackground) setIsSyncing(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    // Initial fetch
+    fetchData(false);
+
+    // Auto-refresh interval (polling every 10 seconds in background)
+    const pollInterval = setInterval(() => {
+      fetchData(true);
+    }, 10000);
+
+    // Supabase realtime channel subscription for live updates
+    const channel = supabase
+      .channel('db-live-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cva_projects' }, () => {
+        fetchData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cva_payments' }, () => {
+        fetchData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cva_invoices' }, () => {
+        fetchData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cva_assignments' }, () => {
+        fetchData(true);
+      })
+      .subscribe();
+
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Login Handler
@@ -147,11 +202,13 @@ const App: React.FC = () => {
       };
       setCurrentUser(loggedUser);
       setIsAuthenticated(true);
-      if (loggedUser.username.toLowerCase() === 'alex' || loggedUser.username.toLowerCase() === 'kelvin') {
-        setActiveView('Schedule');
-      } else {
-        setActiveView('Home');
-      }
+      localStorage.setItem('cva_logged_user', JSON.stringify(loggedUser));
+
+      const targetView: View = (loggedUser.username.toLowerCase() === 'alex' || loggedUser.username.toLowerCase() === 'kelvin')
+        ? 'Schedule'
+        : 'Home';
+      setActiveView(targetView);
+      localStorage.setItem('cva_active_view', targetView);
     } else {
       alert('Access Denied. Invalid credentials.');
     }
@@ -500,12 +557,15 @@ const App: React.FC = () => {
         onViewChange={(v) => {
           if (isRestrictedUser && v !== 'Schedule') return;
           setActiveView(v);
+          localStorage.setItem('cva_active_view', v);
           setSelectedInvoiceForView(null);
           setSelectedProjectForInvoice(null);
         }}
         onLogout={() => {
           setIsAuthenticated(false);
           setCurrentUser(null);
+          localStorage.removeItem('cva_logged_user');
+          localStorage.removeItem('cva_active_view');
         }}
         userName={currentUser?.name || 'Administrator'}
         isOpen={isSidebarOpen}
@@ -524,10 +584,15 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest ${syncError ? 'bg-red-100 border-red-200 text-red-600' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
-              <HardDrive className={`w-3 h-3 ${isSyncing ? 'animate-pulse text-yellow-500' : (syncError ? 'text-red-500' : 'text-green-500')}`} />
-              {isSyncing ? 'SYNCING...' : (syncError ? 'SYNC ERROR' : 'SUPABASE CONNECTED')}
-            </div>
+            <button 
+              onClick={() => fetchData(false)}
+              disabled={isSyncing}
+              title="Click to refresh data now"
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all hover:bg-slate-200 cursor-pointer ${syncError ? 'bg-red-100 border-red-200 text-red-600' : 'bg-slate-100 border-slate-200 text-slate-600'}`}
+            >
+              <RotateCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-cyan-600' : (syncError ? 'text-red-500' : 'text-emerald-500')}`} />
+              {isSyncing ? 'SYNCING...' : (syncError ? 'SYNC ERROR' : 'LIVE SYNC ACTIVE')}
+            </button>
           </div>
         </header>
 
