@@ -27,7 +27,7 @@ interface ScheduleProps {
 // 10 Pipeline Stages in order
 const PIPELINE_STAGES = [
     'NEW LEAD',
-    'SITE VISIT',
+    'AWAITING PROPOSAL',
     'PROPOSAL',
     'OSCAR APPROVED',
     'PROPOSAL SENT',
@@ -40,6 +40,7 @@ const PIPELINE_STAGES = [
 
 const STAGE_COLORS: Record<string, string> = {
     'NEW LEAD': 'bg-slate-100 text-slate-700 border-slate-200',
+    'AWAITING PROPOSAL': 'bg-indigo-100 text-indigo-700 border-indigo-200',
     'SITE VISIT': 'bg-indigo-100 text-indigo-700 border-indigo-200',
     'PROPOSAL': 'bg-pink-100 text-pink-700 border-pink-200',
     'OSCAR APPROVED': 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200',
@@ -359,7 +360,8 @@ const Schedule: React.FC<ScheduleProps> = ({
         const counts: Record<string, number> = {};
         PIPELINE_STAGES.forEach(s => counts[s] = 0);
         projects.forEach(p => {
-            const stage = p.pipelineStage || 'NEW LEAD';
+            let stage = p.pipelineStage || 'NEW LEAD';
+            if (stage === 'SITE VISIT') stage = 'AWAITING PROPOSAL';
             counts[stage] = (counts[stage] || 0) + 1;
         });
         return counts;
@@ -370,7 +372,8 @@ const Schedule: React.FC<ScheduleProps> = ({
         const grouped: Record<string, Project[]> = {};
         PIPELINE_STAGES.forEach(s => { grouped[s] = []; });
         projects.forEach(p => {
-            const stage = p.pipelineStage || 'NEW LEAD';
+            let stage = p.pipelineStage || 'NEW LEAD';
+            if (stage === 'SITE VISIT') stage = 'AWAITING PROPOSAL';
             if (grouped[stage]) grouped[stage].push(p);
         });
         return grouped;
@@ -710,8 +713,8 @@ const Schedule: React.FC<ScheduleProps> = ({
         const project = projects.find(p => p.id === projectId);
         if (!project || project.pipelineStage === targetStage) return;
 
-        // If target stage is SITE VISIT, intercept with popup modal
-        if (targetStage === 'SITE VISIT') {
+        // If target stage is AWAITING PROPOSAL / SITE VISIT, intercept with popup modal
+        if (targetStage === 'AWAITING PROPOSAL' || targetStage === 'SITE VISIT') {
             setDraggedProject(project);
             const pm = getPMData(project);
             setDragVisitForm({
@@ -778,7 +781,7 @@ const Schedule: React.FC<ScheduleProps> = ({
             recommendations: pm.siteVisit?.recommendations || ''
         };
 
-        pm = logActivity(pm, `Moved to SITE VISIT and scheduled inspection for ${dragVisitForm.date} assigned to ${dragVisitForm.employee}`);
+        pm = logActivity(pm, `Moved to AWAITING PROPOSAL and scheduled inspection for ${dragVisitForm.date} assigned to ${dragVisitForm.employee}`);
 
         const extraFields: Partial<Project> = {
             estimatedEndDate: dragVisitForm.date
@@ -794,7 +797,7 @@ const Schedule: React.FC<ScheduleProps> = ({
                 email: pm.email || 'No Email',
                 projectType: pm.projectType || 'Other',
                 previousStage: draggedProject.pipelineStage || 'NEW LEAD',
-                newStage: 'SITE VISIT',
+                newStage: 'AWAITING PROPOSAL',
                 amount: draggedProject.totalAmount || 0,
                 assignedEmployee: dragVisitForm.employee || 'Unassigned',
                 startDate: draggedProject.startDate,
@@ -811,7 +814,7 @@ const Schedule: React.FC<ScheduleProps> = ({
               .catch(err => console.error('Zapier Webhook error:', err));
         }
 
-        await savePMData(draggedProject.id, 'SITE VISIT', pm, extraFields);
+        await savePMData(draggedProject.id, 'AWAITING PROPOSAL', pm, extraFields);
         setSiteVisitDragModal(false);
         setDraggedProject(null);
     };
@@ -879,7 +882,7 @@ const Schedule: React.FC<ScheduleProps> = ({
 
         // Automatically progress stage if in NEW LEAD
         const currentStage = selectedProject.pipelineStage || 'NEW LEAD';
-        const targetStage = currentStage === 'NEW LEAD' ? 'SITE VISIT' : currentStage;
+        const targetStage = currentStage === 'NEW LEAD' ? 'AWAITING PROPOSAL' : currentStage;
 
         await savePMData(selectedProject.id, targetStage, pm);
         alert('Site visit information saved successfully.');
@@ -916,9 +919,9 @@ const Schedule: React.FC<ScheduleProps> = ({
 
         pm = logActivity(pm, `Created/Updated Proposal version ${pm.proposal.version} (Number: ${propNum}) for amount $${proposalForm.price}`);
 
-        // Automatically progress to PROPOSAL stage if in SITE VISIT
+        // Automatically progress to PROPOSAL stage if in AWAITING PROPOSAL / SITE VISIT
         const currentStage = selectedProject.pipelineStage || 'NEW LEAD';
-        const targetStage = currentStage === 'SITE VISIT' ? 'PROPOSAL' : currentStage;
+        const targetStage = (currentStage === 'AWAITING PROPOSAL' || currentStage === 'SITE VISIT') ? 'PROPOSAL' : currentStage;
 
         await savePMData(selectedProject.id, targetStage, pm);
         alert(`Proposal ${propNum} saved successfully!`);
