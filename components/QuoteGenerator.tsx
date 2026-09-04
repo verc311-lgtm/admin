@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, FileText, Loader2, Settings, Plus, Trash2, Check, Layers, MessageSquare, Edit3 } from 'lucide-react';
+import { Bot, FileText, Loader2, Settings, Plus, Trash2, Check, Layers, MessageSquare, Edit3, X, RotateCcw, DollarSign, Save, Sparkles } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { DOCK_ITEMS, RIP_RAP_ITEMS, FLOATING_DOCK_ITEMS, BULKHEAD_ITEMS, BOATLIFT_ITEMS, calculateInteractivePrice } from '../utils/pricingCalculator';
+import { PricingItem, DEFAULT_CATALOG, getDefaultCatalog, calculateInteractivePrice } from '../utils/pricingCalculator';
+import { supabase } from '../src/supabaseClient';
 
 const PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Boat Lift", "Rip-Rap / Erosion Control", "Other / Custom Project"];
 
@@ -20,6 +21,29 @@ interface QuoteSection {
 const QuoteGenerator: React.FC = () => {
     const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
     const [showSettings, setShowSettings] = useState(false);
+
+    // Dynamic Pricing & Materials Catalog State
+    const [catalog, setCatalog] = useState<Record<string, PricingItem[]>>(() => {
+        try {
+            const saved = localStorage.getItem('cva_pricing_catalog');
+            if (saved) return JSON.parse(saved);
+        } catch (e) {
+            console.error('Error loading local catalog:', e);
+        }
+        return getDefaultCatalog();
+    });
+
+    const [showCatalogModal, setShowCatalogModal] = useState(false);
+    const [catalogActiveType, setCatalogActiveType] = useState<string>("Bulkhead");
+    const [catalogSaveSuccess, setCatalogSaveSuccess] = useState(false);
+    const [isSavingCatalog, setIsSavingCatalog] = useState(false);
+
+    // New item form state
+    const [newItemLabel, setNewItemLabel] = useState('');
+    const [newItemPrice, setNewItemPrice] = useState('');
+    const [newItemUnit, setNewItemUnit] = useState('lf');
+    const [newItemCategory, setNewItemCategory] = useState<'material' | 'labor' | 'fee' | 'decking'>('material');
+    const [newItemIsDefault, setNewItemIsDefault] = useState(false);
 
     const [clientName, setClientName] = useState('');
     const [clientAddress, setClientAddress] = useState('');
@@ -44,6 +68,25 @@ const QuoteGenerator: React.FC = () => {
     const [manualMode, setManualMode] = useState(false);
     const [showProjectSummary, setShowProjectSummary] = useState(true);
 
+    // Fetch remote catalog from Supabase on mount
+    useEffect(() => {
+        const fetchCatalogFromDB = async () => {
+            try {
+                const { data } = await supabase.from('cva_settings').select('value').eq('key', 'ai_estimator_pricing_catalog').single();
+                if (data && data.value) {
+                    const parsed = JSON.parse(data.value);
+                    if (parsed && typeof parsed === 'object') {
+                        setCatalog(parsed);
+                        localStorage.setItem('cva_pricing_catalog', data.value);
+                    }
+                }
+            } catch (err) {
+                // Settings key might not exist yet; ignore and keep local
+            }
+        };
+        fetchCatalogFromDB();
+    }, []);
+
     useEffect(() => {
         const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
         setCurrentSelectedItems(defaults);
@@ -51,17 +94,10 @@ const QuoteGenerator: React.FC = () => {
             setCustomMaterialPrice('');
             setCustomLaborPrice('');
         }
-    }, [currentType]);
+    }, [currentType, catalog]);
 
-    const getItemsForType = (type: string) => {
-        switch (type) {
-            case "Pier / Dock": return DOCK_ITEMS;
-            case "Floating Dock": return FLOATING_DOCK_ITEMS;
-            case "Bulkhead": return BULKHEAD_ITEMS;
-            case "Boat Lift": return BOATLIFT_ITEMS;
-            case "Rip-Rap / Erosion Control": return RIP_RAP_ITEMS;
-            default: return [];
-        }
+    const getItemsForType = (type: string): PricingItem[] => {
+        return catalog[type] || [];
     };
 
     const calculateSectionPrice = (type: string, dims: string, items: string[], decking?: string, customMat?: string, customLab?: string) => {
@@ -75,12 +111,98 @@ const QuoteGenerator: React.FC = () => {
         else if (type === 'Boat Lift') calcType = 'boat_lift';
         else if (type === 'Rip-Rap / Erosion Control') calcType = 'riprap';
         const effectiveQty = (calcType === 'boat_lift' && qty === 0) ? 1 : qty;
-        return calculateInteractivePrice(calcType, effectiveQty, items, decking, 0);
+        
+        const catalogItems = getItemsForType(type);
+        return calculateInteractivePrice(calcType, effectiveQty, items, decking, 0, catalogItems);
     };
 
     const handleSaveKey = () => {
         localStorage.setItem('openai_api_key', apiKey);
         setShowSettings(false);
+    };
+
+    // Catalog item modifications
+    const handleUpdateCatalogItem = (sectionType: string, itemId: string, field: keyof PricingItem, value: any) => {
+        setCatalog(prev => {
+            const list = prev[sectionType] || [];
+            const updated = list.map(item => {
+                if (item.id === itemId) {
+                    return {
+                        ...item,
+                        [field]: field === 'price' ? (parseFloat(value) || 0) : value
+                    };
+                }
+                return item;
+            });
+            return { ...prev, [sectionType]: updated };
+        });
+    };
+
+    const handleAddCatalogItem = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newItemLabel.trim()) {
+            alert('Please enter a name for the material or option.');
+            return;
+        }
+        const priceNum = parseFloat(newItemPrice) || 0;
+        const newItem: PricingItem = {
+            id: 'custom_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
+            label: newItemLabel.trim(),
+            price: priceNum,
+            unit: newItemUnit,
+            category: newItemCategory,
+            isDefault: newItemIsDefault
+        };
+
+        setCatalog(prev => {
+            const currentList = prev[catalogActiveType] || [];
+            return {
+                ...prev,
+                [catalogActiveType]: [...currentList, newItem]
+            };
+        });
+
+        // Reset add form
+        setNewItemLabel('');
+        setNewItemPrice('');
+        setNewItemIsDefault(false);
+    };
+
+    const handleDeleteCatalogItem = (sectionType: string, itemId: string) => {
+        if (!window.confirm('Are you sure you want to remove this item from the catalog?')) return;
+        setCatalog(prev => {
+            const list = prev[sectionType] || [];
+            return {
+                ...prev,
+                [sectionType]: list.filter(i => i.id !== itemId)
+            };
+        });
+        setCurrentSelectedItems(prev => prev.filter(id => id !== itemId));
+    };
+
+    const handleResetCatalogDefaults = async () => {
+        if (!window.confirm('Reset all prices and materials back to default original Coastal VA rates?')) return;
+        const defaultCat = getDefaultCatalog();
+        setCatalog(defaultCat);
+        localStorage.removeItem('cva_pricing_catalog');
+        await saveCatalogToCloud(defaultCat);
+    };
+
+    const saveCatalogToCloud = async (catToSave = catalog) => {
+        setIsSavingCatalog(true);
+        try {
+            localStorage.setItem('cva_pricing_catalog', JSON.stringify(catToSave));
+            await supabase.from('cva_settings').upsert({
+                key: 'ai_estimator_pricing_catalog',
+                value: JSON.stringify(catToSave)
+            });
+            setCatalogSaveSuccess(true);
+            setTimeout(() => setCatalogSaveSuccess(false), 3000);
+        } catch (err) {
+            console.error('Error saving catalog to Supabase:', err);
+        } finally {
+            setIsSavingCatalog(false);
+        }
     };
 
     const toggleCurrentItem = (id: string) => {
@@ -532,11 +654,30 @@ Return ONLY valid JSON with no other text:
             </div>
 
             {showSettings && (
-                <div className="bg-slate-800 p-6 rounded-2xl text-white animate-in slide-in-from-top duration-200">
-                    <label className="text-xs font-bold uppercase mb-2 block text-slate-400">OpenAI API Key</label>
-                    <div className="flex gap-2">
-                        <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} className="flex-1 bg-slate-900 border border-slate-700 px-4 py-2 rounded-lg focus:border-cyan-500 outline-none" />
-                        <button onClick={handleSaveKey} className="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-lg font-bold text-xs uppercase transition-colors">Save</button>
+                <div className="bg-slate-800 p-6 rounded-2xl text-white animate-in slide-in-from-top duration-200 space-y-4">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-700">
+                        <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Settings & Pricing Catalog</span>
+                        <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white"><X className="w-4 h-4" /></button>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold uppercase mb-2 block text-slate-400">OpenAI API Key</label>
+                        <div className="flex gap-2">
+                            <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} className="flex-1 bg-slate-900 border border-slate-700 px-4 py-2 rounded-lg focus:border-cyan-500 outline-none text-xs" />
+                            <button onClick={handleSaveKey} className="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-lg font-bold text-xs uppercase transition-colors">Save Key</button>
+                        </div>
+                    </div>
+                    <div className="pt-2">
+                        <button 
+                            type="button" 
+                            onClick={() => {
+                                setCatalogActiveType(currentType);
+                                setShowCatalogModal(true);
+                                setShowSettings(false);
+                            }}
+                            className="w-full bg-slate-700 hover:bg-slate-600 text-cyan-300 font-bold px-4 py-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all border border-cyan-500/30 shadow-md"
+                        >
+                            <Edit3 className="w-4 h-4" /> Modificar Catálogo de Precios y Materiales
+                        </button>
                     </div>
                 </div>
             )}
@@ -624,8 +765,20 @@ Return ONLY valid JSON with no other text:
                                 <p className="mt-2 text-xs text-slate-400 italic">Total = (Qty x Material) + (Qty x Labor)</p>
                             </div>
                         ) : (
-                            <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 max-h-56 overflow-y-auto">
-                                <label className="text-[10px] font-bold uppercase text-slate-400 mb-2 block">Specifications & Materials</label>
+                            <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 max-h-64 overflow-y-auto">
+                                <div className="flex justify-between items-center mb-3">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 block">Specifications & Materials</label>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            setCatalogActiveType(currentType);
+                                            setShowCatalogModal(true);
+                                        }}
+                                        className="text-[11px] font-bold text-cyan-700 bg-cyan-50 hover:bg-cyan-100 hover:border-cyan-300 border border-cyan-200 px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                                    >
+                                        <Edit3 className="w-3.5 h-3.5 text-cyan-600" /> Modificar Precios y Opciones
+                                    </button>
+                                </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     {getItemsForType(currentType).map(item => {
                                         const sel = currentSelectedItems.includes(item.id);
@@ -780,6 +933,269 @@ Return ONLY valid JSON with no other text:
                     </div>
                 </div>
             </div>
+
+            {/* ── MODAL: PRICING & MATERIALS CATALOG MANAGER ── */}
+            {showCatalogModal && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+                        {/* Modal Header */}
+                        <div className="bg-[#0a192f] p-6 text-white flex justify-between items-center border-b border-slate-800">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 p-1.5 rounded-lg">
+                                        <DollarSign className="w-5 h-5" />
+                                    </span>
+                                    <h3 className="font-extrabold text-lg tracking-tight">Catálogo de Precios y Opciones</h3>
+                                </div>
+                                <p className="text-xs text-slate-400 mt-1 font-medium">
+                                    Modifique los precios base por unidad o agregue nuevos materiales para cada tipo de proyecto.
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setShowCatalogModal(false)}
+                                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Section Type Tabs */}
+                        <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex gap-2 overflow-x-auto">
+                            {PROJECT_TYPES.filter(t => t !== "Other / Custom Project").map(type => {
+                                const isActive = catalogActiveType === type;
+                                const count = (catalog[type] || []).length;
+                                return (
+                                    <button
+                                        key={type}
+                                        type="button"
+                                        onClick={() => setCatalogActiveType(type)}
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+                                            isActive 
+                                                ? 'bg-[#0a192f] text-cyan-400 shadow-sm' 
+                                                : 'bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200'
+                                        }`}
+                                    >
+                                        <span>{type}</span>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-extrabold ${isActive ? 'bg-cyan-900/60 text-cyan-300' : 'bg-slate-100 text-slate-500'}`}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                            {/* Section info banner */}
+                            <div className="bg-cyan-50/70 border border-cyan-200/80 rounded-2xl p-4 text-xs text-cyan-900 flex justify-between items-center">
+                                <div>
+                                    <span className="font-bold uppercase tracking-wide text-[10px] text-cyan-700 block mb-0.5">Tipo de Sección Activa: {catalogActiveType}</span>
+                                    <p className="text-slate-600 font-medium">
+                                        {catalogActiveType === 'Pier / Dock' && 'Unidad principal: SQF (Pies cuadrados). Las cotizaciones aplican 10% de margen operativo.'}
+                                        {catalogActiveType === 'Floating Dock' && 'Unidad principal: SQF (Pies cuadrados). Las cotizaciones aplican 10% de margen operativo.'}
+                                        {catalogActiveType === 'Bulkhead' && 'Unidad principal: LF (Pies lineales). Las cotizaciones aplican 10% de margen operativo.'}
+                                        {catalogActiveType === 'Boat Lift' && 'Unidad principal: Fixed (Precio fijo por elevador). Las cotizaciones aplican 10% de margen operativo.'}
+                                        {catalogActiveType === 'Rip-Rap / Erosion Control' && 'Unidad principal: LF (Pies lineales). Las cotizaciones aplican 10% de margen operativo.'}
+                                    </p>
+                                </div>
+                                <span className="text-[10px] font-black uppercase tracking-wider bg-white px-3 py-1.5 rounded-lg border border-cyan-200 text-cyan-800 shadow-sm">
+                                    {(catalog[catalogActiveType] || []).length} Opciones
+                                </span>
+                            </div>
+
+                            {/* Existing Materials List */}
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                                    Materiales y Tarifas Actuales ({catalogActiveType})
+                                </h4>
+                                <div className="border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden bg-white shadow-sm">
+                                    {(catalog[catalogActiveType] || []).map((item, idx) => (
+                                        <div key={item.id} className="p-3.5 hover:bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors">
+                                            {/* Item Label & Default toggle */}
+                                            <div className="flex items-center gap-3 flex-1">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={item.isDefault}
+                                                    onChange={e => handleUpdateCatalogItem(catalogActiveType, item.id, 'isDefault', e.target.checked)}
+                                                    title="Seleccionar por defecto al añadir este tipo de sección"
+                                                    className="w-4 h-4 text-cyan-600 rounded cursor-pointer flex-shrink-0"
+                                                />
+                                                <input 
+                                                    type="text"
+                                                    value={item.label}
+                                                    onChange={e => handleUpdateCatalogItem(catalogActiveType, item.id, 'label', e.target.value)}
+                                                    className="w-full bg-slate-50 border border-slate-200 focus:border-cyan-400 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 outline-none"
+                                                />
+                                            </div>
+
+                                            {/* Pricing & Unit controls */}
+                                            <div className="flex items-center gap-2">
+                                                <div className="relative w-28">
+                                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">$</span>
+                                                    <input 
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={item.price}
+                                                        onChange={e => handleUpdateCatalogItem(catalogActiveType, item.id, 'price', e.target.value)}
+                                                        className="w-full bg-slate-50 border border-slate-200 focus:border-cyan-400 rounded-lg pl-6 pr-2.5 py-1.5 text-xs font-black text-slate-800 outline-none"
+                                                    />
+                                                </div>
+
+                                                <select
+                                                    value={item.unit || 'lf'}
+                                                    onChange={e => handleUpdateCatalogItem(catalogActiveType, item.id, 'unit', e.target.value)}
+                                                    className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-slate-600 outline-none"
+                                                >
+                                                    <option value="lf">/ LF</option>
+                                                    <option value="sqf">/ SQF</option>
+                                                    <option value="fixed">Fixed</option>
+                                                    <option value="unit">Unit</option>
+                                                </select>
+
+                                                <span className="text-[10px] font-extrabold uppercase px-2 py-1 bg-slate-100 text-slate-500 rounded-md">
+                                                    {item.category}
+                                                </span>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteCatalogItem(catalogActiveType, item.id)}
+                                                    className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                                                    title="Eliminar opción"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Form to Add New Item */}
+                            <form onSubmit={handleAddCatalogItem} className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-5 space-y-4">
+                                <h4 className="text-xs font-black uppercase text-slate-600 tracking-wider flex items-center gap-1.5">
+                                    <Plus className="w-4 h-4 text-cyan-600" /> Agregar Nueva Opción o Material a {catalogActiveType}
+                                </h4>
+
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                    <div className="md:col-span-2">
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Nombre / Descripción del Material *</label>
+                                        <input 
+                                            type="text"
+                                            required
+                                            placeholder="ej. Heavy Duty Filter Fabric 300g"
+                                            value={newItemLabel}
+                                            onChange={e => setNewItemLabel(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 focus:border-cyan-400 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Precio Unitario ($) *</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">$</span>
+                                            <input 
+                                                type="number"
+                                                step="0.01"
+                                                required
+                                                placeholder="0.00"
+                                                value={newItemPrice}
+                                                onChange={e => setNewItemPrice(e.target.value)}
+                                                className="w-full bg-white border border-slate-200 focus:border-cyan-400 rounded-xl pl-6 pr-3 py-2 text-xs font-black text-slate-800 outline-none"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Unidad</label>
+                                        <select
+                                            value={newItemUnit}
+                                            onChange={e => setNewItemUnit(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 focus:border-cyan-400 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none"
+                                        >
+                                            <option value="lf">Linear Feet (LF)</option>
+                                            <option value="sqf">Square Feet (SQF)</option>
+                                            <option value="fixed">Fixed / Monto Fijo</option>
+                                            <option value="unit">Por Unidad</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                                    <div className="flex items-center gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Categoría</label>
+                                            <select
+                                                value={newItemCategory}
+                                                onChange={e => setNewItemCategory(e.target.value as any)}
+                                                className="bg-white border border-slate-200 focus:border-cyan-400 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none"
+                                            >
+                                                <option value="material">Material</option>
+                                                <option value="labor">Mano de Obra (Labor)</option>
+                                                <option value="fee">Cuota / Equipo (Fee)</option>
+                                                <option value="decking">Decking / Tablado</option>
+                                            </select>
+                                        </div>
+
+                                        <label className="flex items-center gap-2 cursor-pointer mt-4 select-none">
+                                            <input 
+                                                type="checkbox"
+                                                checked={newItemIsDefault}
+                                                onChange={e => setNewItemIsDefault(e.target.checked)}
+                                                className="w-4 h-4 text-cyan-600 rounded cursor-pointer"
+                                            />
+                                            <span className="text-xs font-bold text-slate-600">Incluir seleccionado por defecto</span>
+                                        </label>
+                                    </div>
+
+                                    <button 
+                                        type="submit"
+                                        className="bg-slate-800 hover:bg-slate-700 text-cyan-400 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-sm"
+                                    >
+                                        <Plus className="w-4 h-4" /> Agregar Opción
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleResetCatalogDefaults}
+                                    className="text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+                                >
+                                    <RotateCcw className="w-3.5 h-3.5" /> Restablecer Fábrica
+                                </button>
+                                {catalogSaveSuccess && (
+                                    <span className="text-emerald-600 text-xs font-bold flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg animate-in fade-in">
+                                        <Check className="w-4 h-4 text-emerald-500" /> ¡Guardado con éxito en la nube!
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCatalogModal(false)}
+                                    className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold transition-colors"
+                                >
+                                    Cerrar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isSavingCatalog}
+                                    onClick={() => saveCatalogToCloud()}
+                                    className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-cyan-600/20 transition-all cursor-pointer"
+                                >
+                                    {isSavingCatalog ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                    <span>{isSavingCatalog ? 'Guardando...' : 'Guardar y Sincronizar'}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

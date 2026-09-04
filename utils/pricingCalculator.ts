@@ -94,21 +94,36 @@ export const BOATLIFT_ITEMS: PricingItem[] = [
     { id: 'machinery_lift', label: 'Mobilization & Equipment', price: 3000.00, category: 'fee', isDefault: true, unit: 'fixed' },
 ];
 
+export const DEFAULT_CATALOG: Record<string, PricingItem[]> = {
+    "Pier / Dock": DOCK_ITEMS,
+    "Floating Dock": FLOATING_DOCK_ITEMS,
+    "Bulkhead": BULKHEAD_ITEMS,
+    "Boat Lift": BOATLIFT_ITEMS,
+    "Rip-Rap / Erosion Control": RIP_RAP_ITEMS
+};
+
+export const getDefaultCatalog = (): Record<string, PricingItem[]> => {
+    return JSON.parse(JSON.stringify(DEFAULT_CATALOG));
+};
+
 export const calculateInteractivePrice = (
     type: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead' | 'boat_lift',
     quantity: number, // sqf or lf or 1 for lift
     selectedItemIds: string[],
     deckingType?: string,
-    additionalExpenses: number = 0
+    additionalExpenses: number = 0,
+    customItems?: PricingItem[]
 ): number => {
     let subtotal = 0;
-    let items: PricingItem[] = [];
+    let items: PricingItem[] = (customItems && customItems.length > 0) ? customItems : [];
 
-    if (type === 'dock') items = DOCK_ITEMS;
-    else if (type === 'riprap') items = RIP_RAP_ITEMS;
-    else if (type === 'floating_dock') items = FLOATING_DOCK_ITEMS;
-    else if (type === 'bulkhead') items = BULKHEAD_ITEMS;
-    else if (type === 'boat_lift') items = BOATLIFT_ITEMS;
+    if (items.length === 0) {
+        if (type === 'dock') items = DOCK_ITEMS;
+        else if (type === 'riprap') items = RIP_RAP_ITEMS;
+        else if (type === 'floating_dock') items = FLOATING_DOCK_ITEMS;
+        else if (type === 'bulkhead') items = BULKHEAD_ITEMS;
+        else if (type === 'boat_lift') items = BOATLIFT_ITEMS;
+    }
 
     // 1. Sum Selected Standard Items
     items.forEach(item => {
