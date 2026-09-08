@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf';
 import { PricingItem, DEFAULT_CATALOG, getDefaultCatalog, calculateInteractivePrice } from '../utils/pricingCalculator';
 import { supabase } from '../src/supabaseClient';
 
-const PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Boat Lift", "Rip-Rap / Erosion Control", "Other / Custom Project"];
+const DEFAULT_PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Boat Lift", "Rip-Rap / Erosion Control", "Other / Custom Project"];
 
 interface QuoteSection {
     id: string;
@@ -21,6 +21,23 @@ interface QuoteSection {
 const QuoteGenerator: React.FC = () => {
     const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
     const [showSettings, setShowSettings] = useState(false);
+
+    // Dynamic Project Types State
+    const [projectTypes, setProjectTypes] = useState<string[]>(() => {
+        try {
+            const saved = localStorage.getItem('cva_project_types');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+        } catch (e) {
+            console.error('Error loading project types:', e);
+        }
+        return DEFAULT_PROJECT_TYPES;
+    });
+
+    const [showNewTypeModal, setShowNewTypeModal] = useState(false);
+    const [newTypeName, setNewTypeName] = useState('');
 
     // Dynamic Pricing & Materials Catalog State
     const [catalog, setCatalog] = useState<Record<string, PricingItem[]>>(() => {
@@ -49,7 +66,7 @@ const QuoteGenerator: React.FC = () => {
     const [clientAddress, setClientAddress] = useState('');
 
     const [sections, setSections] = useState<QuoteSection[]>([]);
-    const [currentType, setCurrentType] = useState(PROJECT_TYPES[0]);
+    const [currentType, setCurrentType] = useState(DEFAULT_PROJECT_TYPES[0]);
     const [currentDimensions, setCurrentDimensions] = useState('');
     const [currentSelectedItems, setCurrentSelectedItems] = useState<string[]>([]);
     const [currentDescription, setCurrentDescription] = useState('');
@@ -68,7 +85,7 @@ const QuoteGenerator: React.FC = () => {
     const [manualMode, setManualMode] = useState(false);
     const [showProjectSummary, setShowProjectSummary] = useState(true);
 
-    // Fetch remote catalog from Supabase on mount
+    // Fetch remote catalog and project types from Supabase on mount
     useEffect(() => {
         const fetchCatalogFromDB = async () => {
             try {
@@ -78,6 +95,15 @@ const QuoteGenerator: React.FC = () => {
                     if (parsed && typeof parsed === 'object') {
                         setCatalog(parsed);
                         localStorage.setItem('cva_pricing_catalog', data.value);
+                    }
+                }
+
+                const { data: typesData } = await supabase.from('cva_settings').select('value').eq('key', 'ai_estimator_project_types').single();
+                if (typesData && typesData.value) {
+                    const parsedTypes = JSON.parse(typesData.value);
+                    if (Array.isArray(parsedTypes) && parsedTypes.length > 0) {
+                        setProjectTypes(parsedTypes);
+                        localStorage.setItem('cva_project_types', typesData.value);
                     }
                 }
             } catch (err) {
@@ -180,22 +206,86 @@ const QuoteGenerator: React.FC = () => {
         setCurrentSelectedItems(prev => prev.filter(id => id !== itemId));
     };
 
-    const handleResetCatalogDefaults = async () => {
-        if (!window.confirm('Reset all prices and materials back to default original Coastal VA rates?')) return;
-        const defaultCat = getDefaultCatalog();
-        setCatalog(defaultCat);
-        localStorage.removeItem('cva_pricing_catalog');
-        await saveCatalogToCloud(defaultCat);
+    const handleAddSectionType = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = newTypeName.trim();
+        if (!trimmed) return;
+
+        if (projectTypes.map(t => t.toLowerCase()).includes(trimmed.toLowerCase())) {
+            alert('Este tipo de sección ya existe.');
+            return;
+        }
+
+        const updatedTypes = [...projectTypes];
+        const otherIndex = updatedTypes.indexOf("Other / Custom Project");
+        if (otherIndex !== -1) {
+            updatedTypes.splice(otherIndex, 0, trimmed);
+        } else {
+            updatedTypes.push(trimmed);
+        }
+
+        const updatedCatalog = {
+            ...catalog,
+            [trimmed]: catalog[trimmed] || []
+        };
+
+        setProjectTypes(updatedTypes);
+        setCatalog(updatedCatalog);
+        setCatalogActiveType(trimmed);
+        setCurrentType(trimmed);
+        setNewTypeName('');
+        setShowNewTypeModal(false);
+
+        await saveCatalogToCloud(updatedCatalog, updatedTypes);
     };
 
-    const saveCatalogToCloud = async (catToSave = catalog) => {
+    const handleDeleteSectionType = async (typeToDelete: string) => {
+        if (DEFAULT_PROJECT_TYPES.includes(typeToDelete)) {
+            alert('No se pueden eliminar los tipos de sección base predeterminados.');
+            return;
+        }
+
+        if (!window.confirm(`¿Está seguro de eliminar el tipo de trabajo "${typeToDelete}" y todas sus opciones configuradas?`)) {
+            return;
+        }
+
+        const updatedTypes = projectTypes.filter(t => t !== typeToDelete);
+        const updatedCatalog = { ...catalog };
+        delete updatedCatalog[typeToDelete];
+
+        setProjectTypes(updatedTypes);
+        setCatalog(updatedCatalog);
+
+        const nextActive = updatedTypes[0] || "Pier / Dock";
+        setCatalogActiveType(nextActive);
+        if (currentType === typeToDelete) {
+            setCurrentType(nextActive);
+        }
+
+        await saveCatalogToCloud(updatedCatalog, updatedTypes);
+    };
+
+    const handleResetCatalogDefaults = async () => {
+        if (!window.confirm('¿Desea restablecer todos los tipos de sección, precios y materiales a los valores de fábrica originales de Coastal VA?')) return;
+        const defaultCat = getDefaultCatalog();
+        setCatalog(defaultCat);
+        setProjectTypes(DEFAULT_PROJECT_TYPES);
+        setCatalogActiveType("Bulkhead");
+        setCurrentType(DEFAULT_PROJECT_TYPES[0]);
+        localStorage.removeItem('cva_pricing_catalog');
+        localStorage.removeItem('cva_project_types');
+        await saveCatalogToCloud(defaultCat, DEFAULT_PROJECT_TYPES);
+    };
+
+    const saveCatalogToCloud = async (catToSave = catalog, typesToSave = projectTypes) => {
         setIsSavingCatalog(true);
         try {
             localStorage.setItem('cva_pricing_catalog', JSON.stringify(catToSave));
-            await supabase.from('cva_settings').upsert({
-                key: 'ai_estimator_pricing_catalog',
-                value: JSON.stringify(catToSave)
-            });
+            localStorage.setItem('cva_project_types', JSON.stringify(typesToSave));
+            await supabase.from('cva_settings').upsert([
+                { key: 'ai_estimator_pricing_catalog', value: JSON.stringify(catToSave) },
+                { key: 'ai_estimator_project_types', value: JSON.stringify(typesToSave) }
+            ]);
             setCatalogSaveSuccess(true);
             setTimeout(() => setCatalogSaveSuccess(false), 3000);
         } catch (err) {
@@ -731,9 +821,18 @@ Return ONLY valid JSON with no other text:
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Section Type</label>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 block">Section Type</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowNewTypeModal(true)}
+                                        className="text-[10px] font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1 cursor-pointer transition-colors"
+                                    >
+                                        <Plus className="w-3 h-3" /> + Nuevo Tipo
+                                    </button>
+                                </div>
                                 <select value={currentType} onChange={e => setCurrentType(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400">
-                                    {PROJECT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                    {projectTypes.map(t => <option key={t} value={t}>{t}</option>)}
                                 </select>
                             </div>
                             <div>
@@ -960,28 +1059,51 @@ Return ONLY valid JSON with no other text:
                         </div>
 
                         {/* Section Type Tabs */}
-                        <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex gap-2 overflow-x-auto">
-                            {PROJECT_TYPES.filter(t => t !== "Other / Custom Project").map(type => {
+                        <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex items-center gap-2 overflow-x-auto">
+                            {projectTypes.filter(t => t !== "Other / Custom Project").map(type => {
                                 const isActive = catalogActiveType === type;
                                 const count = (catalog[type] || []).length;
+                                const isCustom = !DEFAULT_PROJECT_TYPES.includes(type);
                                 return (
-                                    <button
-                                        key={type}
-                                        type="button"
-                                        onClick={() => setCatalogActiveType(type)}
-                                        className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
-                                            isActive 
-                                                ? 'bg-[#0a192f] text-cyan-400 shadow-sm' 
-                                                : 'bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200'
-                                        }`}
-                                    >
-                                        <span>{type}</span>
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-extrabold ${isActive ? 'bg-cyan-900/60 text-cyan-300' : 'bg-slate-100 text-slate-500'}`}>
-                                            {count}
-                                        </span>
-                                    </button>
+                                    <div key={type} className="flex items-center">
+                                        <button
+                                            type="button"
+                                            onClick={() => setCatalogActiveType(type)}
+                                            className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+                                                isActive 
+                                                    ? 'bg-[#0a192f] text-cyan-400 shadow-sm' 
+                                                    : 'bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200'
+                                            }`}
+                                        >
+                                            <span>{type}</span>
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-extrabold ${isActive ? 'bg-cyan-900/60 text-cyan-300' : 'bg-slate-100 text-slate-500'}`}>
+                                                {count}
+                                            </span>
+                                            {isCustom && (
+                                                <span
+                                                    role="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteSectionType(type);
+                                                    }}
+                                                    className="ml-1 text-slate-400 hover:text-red-500 p-0.5 rounded hover:bg-slate-200/50"
+                                                    title={`Eliminar tipo ${type}`}
+                                                >
+                                                    <X className="w-3 h-3" />
+                                                </span>
+                                            )}
+                                        </button>
+                                    </div>
                                 );
                             })}
+
+                            <button
+                                type="button"
+                                onClick={() => setShowNewTypeModal(true)}
+                                className="px-3.5 py-2 rounded-xl text-xs font-black whitespace-nowrap bg-cyan-50 hover:bg-cyan-100 text-cyan-700 border border-cyan-300 flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ml-1"
+                            >
+                                <Plus className="w-3.5 h-3.5" /> Agregar Tipo de Trabajo
+                            </button>
                         </div>
 
                         {/* Modal Body */}
@@ -996,11 +1118,23 @@ Return ONLY valid JSON with no other text:
                                         {catalogActiveType === 'Bulkhead' && 'Unidad principal: LF (Pies lineales). Las cotizaciones aplican 10% de margen operativo.'}
                                         {catalogActiveType === 'Boat Lift' && 'Unidad principal: Fixed (Precio fijo por elevador). Las cotizaciones aplican 10% de margen operativo.'}
                                         {catalogActiveType === 'Rip-Rap / Erosion Control' && 'Unidad principal: LF (Pies lineales). Las cotizaciones aplican 10% de margen operativo.'}
+                                        {!DEFAULT_PROJECT_TYPES.includes(catalogActiveType) && 'Tipo de trabajo personalizado. Agregue abajo los materiales, mano de obra o equipos necesarios para esta sección.'}
                                     </p>
                                 </div>
-                                <span className="text-[10px] font-black uppercase tracking-wider bg-white px-3 py-1.5 rounded-lg border border-cyan-200 text-cyan-800 shadow-sm">
-                                    {(catalog[catalogActiveType] || []).length} Opciones
-                                </span>
+                                <div className="flex items-center gap-2">
+                                    {!DEFAULT_PROJECT_TYPES.includes(catalogActiveType) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteSectionType(catalogActiveType)}
+                                            className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" /> Eliminar Este Tipo
+                                        </button>
+                                    )}
+                                    <span className="text-[10px] font-black uppercase tracking-wider bg-white px-3 py-1.5 rounded-lg border border-cyan-200 text-cyan-800 shadow-sm">
+                                        {(catalog[catalogActiveType] || []).length} Opciones
+                                    </span>
+                                </div>
                             </div>
 
                             {/* Existing Materials List */}
@@ -1193,6 +1327,55 @@ Return ONLY valid JSON with no other text:
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL: ADD NEW SECTION TYPE ── */}
+            {showNewTypeModal && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-200 animate-in fade-in zoom-in-95">
+                        <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
+                            <h4 className="font-extrabold text-base text-[#0a192f] flex items-center gap-2">
+                                <Plus className="w-5 h-5 text-cyan-600" />
+                                Agregar Tipo de Trabajo / Sección
+                            </h4>
+                            <button onClick={() => setShowNewTypeModal(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <p className="text-xs text-slate-500 mb-4 font-medium leading-relaxed">
+                            Ingrese el nombre del nuevo tipo de proyecto o sección de trabajo para el estimador (ej. Seawall, Retaining Wall, Boat Ramp, Deck Repair, Pergola).
+                        </p>
+                        <form onSubmit={handleAddSectionType} className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Nombre del Tipo de Trabajo *</label>
+                                <input 
+                                    type="text"
+                                    required
+                                    autoFocus
+                                    placeholder="ej. Seawall, Retaining Wall..."
+                                    value={newTypeName}
+                                    onChange={e => setNewTypeName(e.target.value)}
+                                    className="w-full bg-slate-50 border border-slate-200 focus:border-cyan-400 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 outline-none shadow-inner"
+                                />
+                            </div>
+                            <div className="flex gap-2 justify-end pt-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowNewTypeModal(false)}
+                                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-cyan-600/20 active:scale-95 flex items-center gap-1.5"
+                                >
+                                    <Plus className="w-4 h-4" /> Crear Tipo
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
