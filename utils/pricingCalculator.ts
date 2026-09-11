@@ -109,13 +109,13 @@ export const getDefaultCatalog = (): Record<string, PricingItem[]> => {
 export const calculateInteractivePrice = (
     type: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead' | 'boat_lift',
     quantity: number, // sqf or lf or 1 for lift
-    selectedItemIds: string[],
+    selectedItemIds: string[] = [],
     deckingType?: string,
     additionalExpenses: number = 0,
     customItems?: PricingItem[]
 ): number => {
     let subtotal = 0;
-    let items: PricingItem[] = (customItems && customItems.length > 0) ? customItems : [];
+    let items: PricingItem[] = (Array.isArray(customItems) && customItems.length > 0) ? customItems : [];
 
     if (items.length === 0) {
         if (type === 'dock') items = DOCK_ITEMS;
@@ -123,26 +123,31 @@ export const calculateInteractivePrice = (
         else if (type === 'floating_dock') items = FLOATING_DOCK_ITEMS;
         else if (type === 'bulkhead') items = BULKHEAD_ITEMS;
         else if (type === 'boat_lift') items = BOATLIFT_ITEMS;
+        else items = DOCK_ITEMS;
     }
 
-    // 1. Sum Selected Standard Items
-    items.forEach(item => {
-        if (selectedItemIds.includes(item.id)) {
-            if (item.unit === 'fixed') {
-                subtotal += item.price;
-            } else {
-                subtotal += (item.price * quantity);
-            }
-        }
-    });
+    const safeSelectedIds = Array.isArray(selectedItemIds) ? selectedItemIds : [];
 
-    // 2. Decking is now included in the items list for all types
+    // 1. Sum Selected Standard Items
+    if (Array.isArray(items)) {
+        items.forEach(item => {
+            if (item && item.id && safeSelectedIds.includes(item.id)) {
+                const itemPrice = Number(item.price) || 0;
+                const qty = Number(quantity) || 0;
+                if (item.unit === 'fixed') {
+                    subtotal += itemPrice;
+                } else {
+                    subtotal += (itemPrice * qty);
+                }
+            }
+        });
+    }
 
     // 3. Add Additional Expenses
-    subtotal += additionalExpenses;
+    subtotal += (Number(additionalExpenses) || 0);
 
     // 4. Apply 10% Markup (Overhead / Misc)
     const totalWithMarkup = subtotal * 1.10;
 
-    return Math.ceil(totalWithMarkup);
+    return Math.ceil(totalWithMarkup) || 0;
 };

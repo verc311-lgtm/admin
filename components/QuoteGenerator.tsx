@@ -43,7 +43,12 @@ const QuoteGenerator: React.FC = () => {
     const [catalog, setCatalog] = useState<Record<string, PricingItem[]>>(() => {
         try {
             const saved = localStorage.getItem('cva_pricing_catalog');
-            if (saved) return JSON.parse(saved);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length > 0) {
+                    return parsed;
+                }
+            }
         } catch (e) {
             console.error('Error loading local catalog:', e);
         }
@@ -93,7 +98,7 @@ const QuoteGenerator: React.FC = () => {
                 const { data } = await supabase.from('cva_settings').select('value').eq('key', 'ai_estimator_pricing_catalog').single();
                 if (data && data.value) {
                     const parsed = JSON.parse(data.value);
-                    if (parsed && typeof parsed === 'object') {
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length > 0) {
                         setCatalog(parsed);
                         localStorage.setItem('cva_pricing_catalog', data.value);
                     }
@@ -115,7 +120,8 @@ const QuoteGenerator: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
+        const items = getItemsForType(currentType);
+        const defaults = Array.isArray(items) ? items.filter(i => i && i.isDefault).map(i => i.id) : [];
         setCurrentSelectedItems(defaults);
         if (currentType !== "Other / Custom Project") {
             setCustomMaterialPrice('');
@@ -124,13 +130,15 @@ const QuoteGenerator: React.FC = () => {
     }, [currentType, catalog]);
 
     const getItemsForType = (type: string): PricingItem[] => {
-        return catalog[type] || [];
+        if (!catalog || typeof catalog !== 'object') return [];
+        const items = catalog[type];
+        return Array.isArray(items) ? items : [];
     };
 
-    const calculateSectionPrice = (type: string, dims: string, items: string[], decking?: string, customMat?: string, customLab?: string) => {
+    const calculateSectionPrice = (type: string, dims: string, items: string[] = [], decking?: string, customMat?: string, customLab?: string) => {
         const qty = parseFloat(dims) || 0;
         if (type === "Other / Custom Project") {
-            return (qty * (parseFloat(customMat || '0'))) + (qty * (parseFloat(customLab || '0')));
+            return (qty * (parseFloat(customMat || '0') || 0)) + (qty * (parseFloat(customLab || '0') || 0));
         }
         let calcType: 'dock' | 'riprap' | 'floating_dock' | 'bulkhead' | 'boat_lift' = 'dock';
         if (type === 'Floating Dock') calcType = 'floating_dock';
@@ -140,7 +148,8 @@ const QuoteGenerator: React.FC = () => {
         const effectiveQty = (calcType === 'boat_lift' && qty === 0) ? 1 : qty;
         
         const catalogItems = getItemsForType(type);
-        return calculateInteractivePrice(calcType, effectiveQty, items, decking, 0, catalogItems);
+        const safeItems = Array.isArray(items) ? items : [];
+        return calculateInteractivePrice(calcType, effectiveQty, safeItems, decking, 0, catalogItems);
     };
 
     const handleSaveKey = () => {
@@ -297,15 +306,18 @@ const QuoteGenerator: React.FC = () => {
     };
 
     const toggleCurrentItem = (id: string) => {
-        setCurrentSelectedItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+        setCurrentSelectedItems(prev => {
+            const list = Array.isArray(prev) ? prev : [];
+            return list.includes(id) ? list.filter(i => i !== id) : [...list, id];
+        });
     };
 
     const addSection = () => {
         const price = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, undefined, customMaterialPrice, customLaborPrice);
-        setSections([...sections, {
+        setSections([...(Array.isArray(sections) ? sections : []), {
             id: Date.now().toString(), type: currentType, dimensions: currentDimensions,
-            selectedItems: currentSelectedItems,
-            description: currentDescription, price,
+            selectedItems: Array.isArray(currentSelectedItems) ? currentSelectedItems : [],
+            description: currentDescription, price: Number(price) || 0,
             customMaterialPrice: parseFloat(customMaterialPrice) || undefined,
             customLaborPrice: parseFloat(customLaborPrice) || undefined
         }]);
@@ -313,13 +325,15 @@ const QuoteGenerator: React.FC = () => {
         setCurrentDescription('');
         setCustomMaterialPrice('');
         setCustomLaborPrice('');
-        const defaults = getItemsForType(currentType).filter(i => i.isDefault).map(i => i.id);
+        const items = getItemsForType(currentType);
+        const defaults = Array.isArray(items) ? items.filter(i => i && i.isDefault).map(i => i.id) : [];
         setCurrentSelectedItems(defaults);
     };
 
-    const removeSection = (id: string) => setSections(sections.filter(s => s.id !== id));
+    const removeSection = (id: string) => setSections((Array.isArray(sections) ? sections : []).filter(s => s.id !== id));
 
-    const sectionsTotal = sections.reduce((sum, s) => sum + s.price, 0);
+    const sectionsTotal = (Array.isArray(sections) ? sections : []).reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+    const adjustments = parseFloat(otherWorkCost) || 0;
     const grandTotal = sectionsTotal + adjustments;
 
     // Activate manual mode: prefills textarea with a blank template and lets user write from scratch
@@ -781,8 +795,8 @@ Return ONLY valid JSON with no extra text or markdown formatting:
         doc.save(`Proposal_${safeTitle}_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
-    const currentLivePrice = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, undefined, customMaterialPrice, customLaborPrice);
-    const proposalReady = scopeOfWork.trim().length > 0;
+    const currentLivePrice = Number(calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, undefined, customMaterialPrice, customLaborPrice)) || 0;
+    const proposalReady = (scopeOfWork || '').trim().length > 0;
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in">
@@ -875,14 +889,14 @@ Return ONLY valid JSON with no extra text or markdown formatting:
                     </div>
 
                     {/* Sections List */}
-                    {sections.length > 0 && (
+                    {Array.isArray(sections) && sections.length > 0 && (
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
                                 <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest ml-1">Sections Added</h3>
                                 <button onClick={() => setSections([])} className="text-[10px] text-red-400 font-bold hover:underline">Clear All</button>
                             </div>
                             {sections.map((s, idx) => (
-                                <div key={s.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-cyan-200 transition-all">
+                                <div key={s.id || idx} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-cyan-200 transition-all">
                                     <div className="flex gap-4 items-center">
                                         <div className="bg-cyan-50 text-cyan-700 font-black w-8 h-8 flex items-center justify-center rounded-lg text-xs">{idx + 1}</div>
                                         <div>
@@ -891,7 +905,7 @@ Return ONLY valid JSON with no extra text or markdown formatting:
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-4">
-                                        <span className="font-mono font-bold text-slate-700">${s.price.toLocaleString()}</span>
+                                        <span className="font-mono font-bold text-slate-700">${(Number(s?.price) || 0).toLocaleString()}</span>
                                         <button onClick={() => removeSection(s.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
@@ -919,7 +933,7 @@ Return ONLY valid JSON with no extra text or markdown formatting:
                                     </button>
                                 </div>
                                 <select value={currentType} onChange={e => setCurrentType(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-cyan-400">
-                                    {projectTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                    {(Array.isArray(projectTypes) ? projectTypes : DEFAULT_PROJECT_TYPES).map(t => <option key={t} value={t}>{t}</option>)}
                                 </select>
                             </div>
                             <div>
@@ -966,8 +980,8 @@ Return ONLY valid JSON with no extra text or markdown formatting:
                                     </button>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {getItemsForType(currentType).map(item => {
-                                        const sel = currentSelectedItems.includes(item.id);
+                                    {(getItemsForType(currentType) || []).map(item => {
+                                        const sel = Array.isArray(currentSelectedItems) && currentSelectedItems.includes(item.id);
                                         return (
                                             <div key={item.id} onClick={() => toggleCurrentItem(item.id)} className={`cursor-pointer p-2 rounded-lg border flex items-center gap-3 transition-all ${sel ? 'bg-cyan-50 border-cyan-200' : 'hover:bg-slate-50 border-transparent'}`}>
                                                 <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${sel ? 'bg-cyan-500 border-cyan-500' : 'bg-white border-slate-300'}`}>
@@ -986,7 +1000,7 @@ Return ONLY valid JSON with no extra text or markdown formatting:
 
                         <div className="flex justify-between items-center mb-4 px-1">
                             <span className="text-xs font-bold text-slate-400 uppercase">Section Total:</span>
-                            <span className="text-xl font-black text-slate-700">${currentLivePrice.toLocaleString()}</span>
+                            <span className="text-xl font-black text-slate-700">${(Number(currentLivePrice) || 0).toLocaleString()}</span>
                         </div>
                         <button onClick={addSection} className="w-full py-4 bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-bold rounded-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg transition-all">
                             <Plus className="w-4 h-4 text-cyan-400" /> Add to Proposal
@@ -1147,9 +1161,9 @@ Return ONLY valid JSON with no extra text or markdown formatting:
 
                         {/* Section Type Tabs */}
                         <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex items-center gap-2 overflow-x-auto">
-                            {projectTypes.filter(t => t !== "Other / Custom Project").map(type => {
+                            {(Array.isArray(projectTypes) ? projectTypes : DEFAULT_PROJECT_TYPES).filter(t => t !== "Other / Custom Project").map(type => {
                                 const isActive = catalogActiveType === type;
-                                const count = (catalog[type] || []).length;
+                                const count = (catalog && typeof catalog === 'object' && Array.isArray(catalog[type])) ? catalog[type].length : 0;
                                 const isCustom = !DEFAULT_PROJECT_TYPES.includes(type);
                                 return (
                                     <div key={type} className="flex items-center">
@@ -1219,7 +1233,7 @@ Return ONLY valid JSON with no extra text or markdown formatting:
                                         </button>
                                     )}
                                     <span className="text-[10px] font-black uppercase tracking-wider bg-white px-3 py-1.5 rounded-lg border border-cyan-200 text-cyan-800 shadow-sm">
-                                        {(catalog[catalogActiveType] || []).length} Opciones
+                                        {((catalog && typeof catalog === 'object' && Array.isArray(catalog[catalogActiveType])) ? catalog[catalogActiveType] : []).length} Opciones
                                     </span>
                                 </div>
                             </div>
@@ -1230,7 +1244,7 @@ Return ONLY valid JSON with no extra text or markdown formatting:
                                     Materiales y Tarifas Actuales ({catalogActiveType})
                                 </h4>
                                 <div className="border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden bg-white shadow-sm">
-                                    {(catalog[catalogActiveType] || []).map((item, idx) => (
+                                    {((catalog && typeof catalog === 'object' && Array.isArray(catalog[catalogActiveType])) ? catalog[catalogActiveType] : []).map((item, idx) => (
                                         <div key={item.id} className="p-3.5 hover:bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors">
                                             {/* Item Label & Default toggle */}
                                             <div className="flex items-center gap-3 flex-1">
