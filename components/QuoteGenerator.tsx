@@ -343,11 +343,55 @@ const QuoteGenerator: React.FC = () => {
         if (!scopeOfWork) {
             setScopeOfWork(
                 (projectTitle.trim() ? `PROJECT: ${projectTitle.trim().toUpperCase()}\n\n` : '') +
-                `SCOPE OF WORK:\n\n` +
-                sections.map((s, i) => `SECTION ${i + 1}: ${s.type.toUpperCase()}\n- Quantity: ${s.dimensions}\n- Description / Materials: ${s.description || 'Standard installation'}\n`).join('\n') +
-                `\nSTANDARD EXCLUSIONS:\nPermits, Engineering Drawings, Soil Tests, Hidden Subsurface Obstructions, Electrical Utility Hookups.`
+                `SCOPE OF WORK:\nCoastal VA Marine Construction is pleased to present this proposal for marine construction and installation services.\n\n` +
+                sections.map((s, i) => `SECTION ${i + 1} - ${s.type.toUpperCase()}:\n- Quantity / Dimensions: ${s.dimensions} ${s.type.toLowerCase().includes('dock') ? 'SQF' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap')) ? 'Linear Feet' : 'Units'}\n- Description / Materials: ${s.description || 'Standard installation'}\n- Fasteners & Hardware: Marine-grade corrosion-resistant hardware\n`).join('\n') +
+                `\nSTANDARD EXCLUSIONS:\n- Permits, regulatory filings, and engineering drawings (unless specifically noted)\n- Geotechnical soil testing or environmental surveys\n- Hidden subsurface or underwater obstructions\n- Electrical service connection / high-voltage utility tie-ins beyond rough-in`
             );
         }
+    };
+
+    // Helper to build robust fallback bullets for a section if AI omits it
+    const buildFallbackSection = (s: QuoteSection, idx: number): string => {
+        const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
+        const unitLabel = s.type.toLowerCase().includes('dock') ? 'SQF' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap') || s.type.toLowerCase().includes('handrail')) ? 'Linear Feet' : 'Units';
+        const bullets: string[] = [];
+
+        if (s.description && s.description.trim()) {
+            bullets.push(`Furnish and install according to custom specifications: ${s.description.trim()}.`);
+        } else if (items.length > 0) {
+            bullets.push(`Supply and complete installation of specified marine components: ${items.join(', ')}.`);
+        } else {
+            bullets.push(`Complete installation and craftsmanship of ${s.type} covering approximately ${s.dimensions} ${unitLabel}.`);
+        }
+
+        if (items.length > 0 && s.description) {
+            bullets.push(`Incorporate selected materials and components: ${items.join(', ')}.`);
+        }
+
+        const lower = s.type.toLowerCase();
+        if (lower.includes('pwc') || lower.includes('floating')) {
+            bullets.push(`Anchor securely utilizing heavy-duty marine-grade pile mounting brackets, guide piles or stiff arms, and corrosion-resistant fasteners.`);
+            bullets.push(`Calibrate flotation, roller alignment, and ensure smooth vessel drive-on/launch docking functionality.`);
+        } else if (lower.includes('aluminum') || lower.includes('walk') || lower.includes('gangway')) {
+            bullets.push(`Fabricated from heavy-duty marine-grade aluminum alloy with integrated non-skid ribbed surface and reinforced transition brackets.`);
+            bullets.push(`Secured to existing dock framing using marine 316 stainless steel through-bolts and high-strength mounting hardware.`);
+        } else if (lower.includes('dock') || lower.includes('pier')) {
+            bullets.push(`Substructure framing with heavy-duty marine-treated timbers and stringers secured with hot-dipped galvanized through-bolts.`);
+            bullets.push(`Decking installed with uniform spacing and high-strength marine-grade corrosion-resistant deck screws.`);
+        } else if (lower.includes('bulkhead')) {
+            bullets.push(`Heavy-duty marine sheet piling and timber support piles driven to engineer-specified penetration depth.`);
+            bullets.push(`Installation of heavy timber walers, galvanized tieback rods anchored to deadmen, and non-woven geotextile filter fabric with backfill.`);
+        } else if (lower.includes('lift')) {
+            bullets.push(`High-capacity marine boat lift system installed on heavy-duty timber or steel support piles.`);
+            bullets.push(`Marine-duty motors, grooved cable winders, stainless steel cables, and heavy-duty bunk brackets positioned to hull specifications.`);
+        } else if (lower.includes('rip-rap') || lower.includes('erosion')) {
+            bullets.push(`Excavation and shoreline grading with commercial-grade non-woven geotextile filter cloth and rip-rap stone armor layer.`);
+        } else {
+            bullets.push(`All framing, structural joints, and hardware engineered for marine environment using corrosion-resistant fasteners.`);
+            bullets.push(`Precision alignment, clean finished detailing, and rigorous final inspection adhering to coastal marine building standards.`);
+        }
+
+        return `SECTION ${idx + 1} - ${s.type.toUpperCase()}:\n` + bullets.map(b => `- ${b}`).join('\n');
     };
 
     const handleGenerateQuote = async () => {
@@ -398,9 +442,9 @@ const QuoteGenerator: React.FC = () => {
                 projectDesc += `Description: ${otherWorkDescription}\n`;
             }
 
-            const prompt = `You are a licensed master marine construction estimator preparing a highly professional, detailed construction proposal for "Coastal VA Marine Construction".
+            const prompt = `You are a licensed master marine construction estimator preparing a comprehensive, highly professional construction proposal for "Coastal VA Marine Construction".
 
-Proposal Title: ${projectTitle.trim() ? projectTitle.trim() : '(None provided - please generate a descriptive, professional project title)'}
+Proposal Title: ${projectTitle.trim() ? projectTitle.trim() : '(None provided - please generate an accurate, professional project title)'}
 Client Name: ${clientName || 'Valued Client'}
 Project Address: ${clientAddress || 'Client Site Location'}
 
@@ -409,74 +453,172 @@ ${projectDesc}
 
 CRITICAL PROPOSAL INSTRUCTIONS:
 1. TITLE:
-   - If the user specified a Proposal Title ("${projectTitle.trim()}"), use it as the official title.
+   - If the user specified a Proposal Title ("${projectTitle.trim()}"), use it.
    - If no title was specified, generate an accurate, formal, descriptive title based on the sections (e.g. "Marine Dock, Hip Metal Roof & Baluster Railing Installation").
-   - Include the title at the very top under "PROJECT: [TITLE]".
 
-2. THOROUGH MATERIAL & SPECIFICATION DETAILS (VERY IMPORTANT):
-   - For EACH section listed, you MUST meticulously detail what materials, fixtures, models, kits, dimensions, framing, and hardware are being used.
-   - Specifically incorporate and detail every specification mentioned in "Specified Details / Materials / Hardware" and "Configured Components & Options".
-   - Examples of detail expected:
-     * If the user specified a railing kit like "Wood Deck Line Railing Kit with Black Aluminum Round Balusters", explicitly detail the line railing system, round black aluminum balusters spaced to code (max 4" on center), pressure-treated wood posts/top and bottom rails, stainless steel structural screws/brackets, and eased edges.
-     * If the user specified a roof like "Hip Metal Roof 10ft x 16", detail the commercial/coastal gauge metal roofing panels, hip rafters/ridge caps, engineered roof framing/trusses, flashing, drip edge, synthetic underlayment, and marine-grade corrosion-resistant fasteners.
-     * If the user specified lighting posts like "Hanging lights 6in x 6in x 12ft Post", detail the heavy-duty 6x6x12ft marine-treated timber posts, embedment and structural anchoring, conduit routing for marine electrical fixtures, and weather-resistant mounting hardware.
-     * If bulkheads, docks, or boat lifts are included, detail marine timber piles, CCA/marine treatment, stringers, hot-dipped galvanized or 316 stainless steel through-bolts and hardware.
+2. MANDATORY ITEMIZED SECTIONS BREAKDOWN (EXTREMELY IMPORTANT):
+   - You MUST generate an item in the "sections" array for EVERY SINGLE section listed above.
+   - Total sections to generate: ${activeSections.length}. It is strictly forbidden to skip or omit any section.
+   - For EACH section listed, provide at least 3 to 4 comprehensive, technical bullet points specifying:
+     * Specific materials, models, equipment, decking, and kits according to the user's input (e.g. HydroPort Epic PWC, custom aluminum walk boards, wood deck railing kit with black aluminum round balusters, hip metal roof, 6x6x12 timber posts, etc.).
+     * Substructure framing, stringers, joists, pile specifications (e.g. 8" or 10" marine-treated pilings driven to refusal), brackets, and marine-grade corrosion-resistant hardware (316 stainless steel, hot-dipped galvanized through-bolts, heavy timber washers).
+     * Anchoring, buoyancy calibration, alignment, code-compliant spacing, safety features, non-skid surface treatments, and marine craftsmanship.
+   - Every single detail provided in "Specified Details / Materials / Hardware" and "Configured Components & Options" MUST be explicitly included in that section's bullet points.
    - Do NOT give generic or brief one-liners. Detail the exact components being utilized based on the user's input.
 
-3. FORMATTING RULES (STRICT):
-   - Output PLAIN TEXT ONLY. NO markdown bolding (**), NO asterisks (*), NO markdown hashes (#), NO backticks, NO horizontal rules (---).
-   - Use uppercase headings followed by a colon, like:
-     PROJECT: [TITLE]
-     
-     SCOPE OF WORK:
-     [Brief professional introductory statement outlining the scope and craftsmanship]
-     
-     SECTION 1 - [NAME]:
-     - [Detailed bullet on exact materials and kits being installed]
-     - [Detailed bullet on framing, structural support, anchoring, and marine fasteners]
-     - [Detailed bullet on alignment, safety standards, and finishing touches]
-     
-     SECTION 2 - [NAME]:
-     ...
-     
-     STANDARD EXCLUSIONS:
-     - Permits, regulatory filings, and engineering drawings (unless specifically noted)
-     - Geotechnical soil testing or environmental surveys
-     - Hidden subsurface or underwater obstructions
-     - Electrical service connection / high-voltage utility tie-ins beyond rough-in
+3. SCOPE OF WORK INTRODUCTION:
+   - Provide a 2 to 3 sentence introductory statement summarizing the project scope, coastal site preparation, and dedication to premium marine engineering and durability.
 
-4. DO NOT mention dollar amounts or prices in the scope text.
+4. STANDARD EXCLUSIONS:
+   - Include standard marine industry exclusions.
 
-Return ONLY valid JSON with no extra text or markdown formatting:
+5. FORMATTING RULES (STRICT):
+   - Output PLAIN TEXT ONLY within the JSON fields. NO markdown bolding (**), NO asterisks (*), NO markdown hashes (#), NO backticks.
+   - DO NOT mention dollar amounts or prices in the proposal text.
+
+Return ONLY a valid JSON object matching this schema:
 {
-  "title": "...",
-  "scopeOfWork": "...",
-  "exclusions": "..."
+  "title": "Descriptive Project Title",
+  "introduction": "Professional 2-3 sentence introductory overview paragraph.",
+  "sections": [
+    {
+      "name": "SECTION TITLE (e.g. PWC / FLOATING or ALUMINUM WALK BOARDS)",
+      "bullets": [
+        "Comprehensive bullet detailing materials, models, dimensions, and specifications...",
+        "Comprehensive bullet detailing structural framing, pilings, brackets, anchoring, and marine fasteners...",
+        "Comprehensive bullet detailing alignment, safety standards, non-skid finishing, and coastal durability..."
+      ]
+    }
+  ],
+  "exclusions": [
+    "Permits, regulatory filings, and engineering drawings (unless specifically noted)",
+    "Geotechnical soil testing or environmental surveys",
+    "Hidden subsurface or underwater obstructions",
+    "Electrical service connection / high-voltage utility tie-ins beyond rough-in"
+  ]
 }`;
 
             const res = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-                body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "user", content: prompt }], temperature: 0.2 })
+                body: JSON.stringify({
+                    model: "gpt-4o",
+                    messages: [{ role: "user", content: prompt }],
+                    temperature: 0.2,
+                    response_format: { type: "json_object" }
+                })
             });
             const data = await res.json();
             if (data.error) throw new Error(data.error.message);
             const content = data.choices[0].message.content;
-            const parsed = JSON.parse(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1));
+            
+            let parsed: any = {};
+            try {
+                const firstBrace = content.indexOf('{');
+                const lastBrace = content.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1) {
+                    parsed = JSON.parse(content.substring(firstBrace, lastBrace + 1));
+                } else {
+                    parsed = JSON.parse(content);
+                }
+            } catch (pErr) {
+                console.warn("Could not parse JSON directly from OpenAI response:", pErr);
+            }
 
             const resolvedTitle = projectTitle.trim() || parsed.title || '';
             if (!projectTitle.trim() && parsed.title) {
                 setProjectTitle(parsed.title);
             }
 
-            let fullScope = (parsed.scopeOfWork || '').trim();
-            if (resolvedTitle && !fullScope.toUpperCase().startsWith('PROJECT:')) {
-                fullScope = `PROJECT: ${resolvedTitle.toUpperCase()}\n\n` + fullScope;
+            // Assemble the comprehensive Scope of Work
+            let fullScope = "";
+            if (resolvedTitle) {
+                const cleanTitle = resolvedTitle.replace(/^PROJECT:\s*/i, '').trim();
+                fullScope += `PROJECT: ${cleanTitle.toUpperCase()}\n\n`;
             }
-            if (parsed.exclusions && !fullScope.includes("STANDARD EXCLUSIONS:")) {
-                fullScope += "\n\nSTANDARD EXCLUSIONS:\n" + (parsed.exclusions || "Permits, Engineering Drawings, Soil Tests.");
+
+            // Introduction / Scope of Work header
+            const intro = (parsed.introduction || parsed.intro || (typeof parsed.scopeOfWork === 'string' && !parsed.scopeOfWork.toUpperCase().includes('SECTION') ? parsed.scopeOfWork : '') || '').trim();
+            fullScope += `SCOPE OF WORK:\n${intro || 'Coastal VA Marine Construction is pleased to present this comprehensive proposal. All work will be executed with premium marine-grade materials, proven craftsmanship, and strict adherence to coastal building standards.'}\n\n`;
+
+            // Render Sections
+            let renderedSectionsCount = 0;
+            if (Array.isArray(parsed.sections) && parsed.sections.length > 0) {
+                parsed.sections.forEach((sec: any, idx: number) => {
+                    const fallbackName = activeSections[idx] ? activeSections[idx].type : `Section ${idx + 1}`;
+                    const rawName = sec.name || sec.title || sec.heading || fallbackName;
+                    const cleanName = rawName.replace(/^SECTION\s*\d+\s*[-:]*\s*/i, '').trim();
+
+                    let bullets: string[] = [];
+                    if (Array.isArray(sec.bullets)) bullets = sec.bullets;
+                    else if (typeof sec.bullets === 'string') bullets = sec.bullets.split('\n');
+                    else if (Array.isArray(sec.details)) bullets = sec.details;
+                    else if (typeof sec.details === 'string') bullets = sec.details.split('\n');
+
+                    const cleanBullets = bullets
+                        .map((b: string) => b.replace(/^[-*•\d\.)\s]+/, '').trim())
+                        .filter((b: string) => b.length > 0);
+
+                    if (cleanBullets.length > 0) {
+                        fullScope += `SECTION ${idx + 1} - ${cleanName.toUpperCase()}:\n`;
+                        cleanBullets.forEach(b => {
+                            fullScope += `- ${b}\n`;
+                        });
+                        fullScope += '\n';
+                        renderedSectionsCount++;
+                    } else if (activeSections[idx]) {
+                        fullScope += buildFallbackSection(activeSections[idx], idx) + '\n\n';
+                        renderedSectionsCount++;
+                    }
+                });
             }
-            setScopeOfWork(fullScope);
+
+            // If parsed.sections didn't render or was missing sections completely:
+            if (renderedSectionsCount === 0) {
+                if (typeof parsed.scopeOfWork === 'string' && /SECTION\s+\d+/i.test(parsed.scopeOfWork)) {
+                    // OpenAI returned plain text with sections in scopeOfWork
+                    fullScope = parsed.scopeOfWork.trim();
+                    if (resolvedTitle && !fullScope.toUpperCase().startsWith('PROJECT:')) {
+                        fullScope = `PROJECT: ${resolvedTitle.toUpperCase()}\n\n` + fullScope;
+                    }
+                } else {
+                    // Fallback to activeSections
+                    activeSections.forEach((s, idx) => {
+                        fullScope += buildFallbackSection(s, idx) + '\n\n';
+                    });
+                }
+            }
+
+            // Standard Exclusions
+            if (!fullScope.includes("STANDARD EXCLUSIONS:")) {
+                fullScope += `STANDARD EXCLUSIONS:\n`;
+                if (Array.isArray(parsed.exclusions) && parsed.exclusions.length > 0) {
+                    parsed.exclusions.forEach((e: string) => {
+                        const clean = e.replace(/^[-*•\d\.)\s]+/, '').trim();
+                        if (clean) fullScope += `- ${clean}\n`;
+                    });
+                } else if (typeof parsed.exclusions === 'string' && parsed.exclusions.trim()) {
+                    const exclLines = parsed.exclusions
+                        .split('\n')
+                        .map((l: string) => l.replace(/^[-*•\d\.)\s]+/, '').trim())
+                        .filter((l: string) => l.length > 0);
+                    if (exclLines.length > 0) {
+                        exclLines.forEach((l: string) => { fullScope += `- ${l}\n`; });
+                    } else {
+                        fullScope += `- Permits, regulatory filings, and engineering drawings (unless specifically noted)\n`;
+                        fullScope += `- Geotechnical soil testing or environmental surveys\n`;
+                        fullScope += `- Hidden subsurface or underwater obstructions\n`;
+                        fullScope += `- Electrical service connection / high-voltage utility tie-ins beyond rough-in\n`;
+                    }
+                } else {
+                    fullScope += `- Permits, regulatory filings, and engineering drawings (unless specifically noted)\n`;
+                    fullScope += `- Geotechnical soil testing or environmental surveys\n`;
+                    fullScope += `- Hidden subsurface or underwater obstructions\n`;
+                    fullScope += `- Electrical service connection / high-voltage utility tie-ins beyond rough-in\n`;
+                }
+            }
+
+            setScopeOfWork(fullScope.trim());
         } catch (err: any) {
             setErrorMsg("Error: " + err.message);
         } finally {
@@ -652,11 +794,19 @@ Return ONLY valid JSON with no extra text or markdown formatting:
                 drawFooter();
                 doc.addPage();
                 drawHeader();
-                doc.setFont("helvetica", "normal");
+            }
+            const line = lines[i];
+            const isHeading = /^(PROJECT:|SCOPE OF WORK:|SECTION\s+\d+|STANDARD EXCLUSIONS:)/i.test(line.trim());
+            if (isHeading) {
+                doc.setFont("helvetica", "bold");
                 doc.setFontSize(9);
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+            } else {
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8.5);
                 doc.setTextColor(BODY[0], BODY[1], BODY[2]);
             }
-            doc.text(lines[i], margin, y);
+            doc.text(line, margin, y);
             y += 4.5;
         }
 
