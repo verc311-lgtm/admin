@@ -64,6 +64,7 @@ const QuoteGenerator: React.FC = () => {
 
     const [clientName, setClientName] = useState('');
     const [clientAddress, setClientAddress] = useState('');
+    const [projectTitle, setProjectTitle] = useState('');
 
     const [sections, setSections] = useState<QuoteSection[]>([]);
     const [currentType, setCurrentType] = useState(DEFAULT_PROJECT_TYPES[0]);
@@ -319,7 +320,6 @@ const QuoteGenerator: React.FC = () => {
     const removeSection = (id: string) => setSections(sections.filter(s => s.id !== id));
 
     const sectionsTotal = sections.reduce((sum, s) => sum + s.price, 0);
-    const adjustments = parseFloat(otherWorkCost) || 0;
     const grandTotal = sectionsTotal + adjustments;
 
     // Activate manual mode: prefills textarea with a blank template and lets user write from scratch
@@ -328,9 +328,10 @@ const QuoteGenerator: React.FC = () => {
         setAiEstimatedTotal(grandTotal);
         if (!scopeOfWork) {
             setScopeOfWork(
-                `SCOPE OF WORK\n\n` +
-                sections.map((s, i) => `Section ${i + 1}: ${s.type}\n- Dimensions: ${s.dimensions}\n- ${s.description || ''}\n`).join('\n') +
-                `\n\nSTANDARD EXCLUSIONS:\nPermits, Engineering, Soil Tests, Hidden Obstructions, Electrical Work.`
+                (projectTitle.trim() ? `PROJECT: ${projectTitle.trim().toUpperCase()}\n\n` : '') +
+                `SCOPE OF WORK:\n\n` +
+                sections.map((s, i) => `SECTION ${i + 1}: ${s.type.toUpperCase()}\n- Quantity: ${s.dimensions}\n- Description / Materials: ${s.description || 'Standard installation'}\n`).join('\n') +
+                `\nSTANDARD EXCLUSIONS:\nPermits, Engineering Drawings, Soil Tests, Hidden Subsurface Obstructions, Electrical Utility Hookups.`
             );
         }
     };
@@ -364,47 +365,79 @@ const QuoteGenerator: React.FC = () => {
         try {
             let projectDesc = "";
             activeSections.forEach((s, idx) => {
-                if (s.type === "Other / Custom Project") {
-                    projectDesc += `\nSECTION ${idx + 1}: CUSTOM PROJECT\n`;
-                    projectDesc += `Description: ${s.description || 'Custom Work'}\n`;
-                    projectDesc += `Quantity: ${s.dimensions}\n`;
-                    if (s.customMaterialPrice) projectDesc += `Material Rate: $${s.customMaterialPrice}/unit\n`;
-                    if (s.customLaborPrice) projectDesc += `Labor Rate: $${s.customLaborPrice}/unit\n`;
-                } else {
-                    const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
-                    projectDesc += `\nSECTION ${idx + 1}: ${s.type}\n`;
-                    if (s.description) projectDesc += `Note: ${s.description}\n`;
-                    projectDesc += `Dimensions: ${s.dimensions} ${s.type.includes('Dock') ? 'SQF' : 'Linear Feet'}\n`;
-                    projectDesc += `Components: ${items.join(', ')}\n`;
+                const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
+                projectDesc += `\n--- SECTION ${idx + 1}: ${s.type.toUpperCase()} ---\n`;
+                projectDesc += `Work / Section Type: ${s.type}\n`;
+                projectDesc += `Dimensions / Qty: ${s.dimensions} ${s.type.toLowerCase().includes('dock') ? 'SQF (Square Feet)' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap') || s.type.toLowerCase().includes('handrail')) ? 'Linear Feet' : 'Units'}\n`;
+                if (s.description) {
+                    projectDesc += `Specified Details / Materials / Hardware: "${s.description}"\n`;
+                }
+                if (items.length > 0) {
+                    projectDesc += `Configured Components & Options: ${items.join(', ')}\n`;
+                }
+                if (s.customMaterialPrice || s.customLaborPrice) {
+                    projectDesc += `Rates: Material $${s.customMaterialPrice || 0}/unit, Labor $${s.customLaborPrice || 0}/unit\n`;
                 }
             });
-            if (adjustments > 0) projectDesc += `\nADDITIONAL WORK: ${otherWorkDescription}\n`;
+            if (adjustments > 0) {
+                projectDesc += `\n--- ADDITIONAL WORK / ADJUSTMENTS ---\n`;
+                projectDesc += `Description: ${otherWorkDescription}\n`;
+            }
 
-            const prompt = `You are a senior estimator writing a formal construction proposal for "Coastal VA Marine Construction".
+            const prompt = `You are a licensed master marine construction estimator preparing a highly professional, detailed construction proposal for "Coastal VA Marine Construction".
 
-Client: ${clientName || 'Valued Client'}
-Address: ${clientAddress || 'N/A'}
+Proposal Title: ${projectTitle.trim() ? projectTitle.trim() : '(None provided - please generate a descriptive, professional project title)'}
+Client Name: ${clientName || 'Valued Client'}
+Project Address: ${clientAddress || 'Client Site Location'}
 
-Project Sections:
+PROJECT SECTIONS & SPECIFICATIONS:
 ${projectDesc}
 
-CRITICAL FORMATTING RULES - YOU MUST FOLLOW THESE EXACTLY:
-- Write in PLAIN TEXT only. NO markdown. NO asterisks (*). NO hash symbols (#). NO dashes (---) as dividers. NO bold markers.
-- Use section headings in ALL CAPS followed by a colon, like: SCOPE OF WORK:
-- Use a simple hyphen and space for bullet points ONLY when listing items: "- Item here"
-- Write in complete, professional sentences. Formal business language.
-- DO NOT mention specific dollar amounts in the scope text.
-- Keep each section focused and clear.
+CRITICAL PROPOSAL INSTRUCTIONS:
+1. TITLE:
+   - If the user specified a Proposal Title ("${projectTitle.trim()}"), use it as the official title.
+   - If no title was specified, generate an accurate, formal, descriptive title based on the sections (e.g. "Marine Dock, Hip Metal Roof & Baluster Railing Installation").
+   - Include the title at the very top under "PROJECT: [TITLE]".
 
-Write the following sections:
-1. A brief introduction paragraph about the project.
-2. For each section listed, write a heading and 3-5 bullet points describing materials, methods, and specifications.
-3. A STANDARD EXCLUSIONS section listing: Permits, Engineering Drawings, Soil Tests, Utility Locating, Hidden Obstructions.
+2. THOROUGH MATERIAL & SPECIFICATION DETAILS (VERY IMPORTANT):
+   - For EACH section listed, you MUST meticulously detail what materials, fixtures, models, kits, dimensions, framing, and hardware are being used.
+   - Specifically incorporate and detail every specification mentioned in "Specified Details / Materials / Hardware" and "Configured Components & Options".
+   - Examples of detail expected:
+     * If the user specified a railing kit like "Wood Deck Line Railing Kit with Black Aluminum Round Balusters", explicitly detail the line railing system, round black aluminum balusters spaced to code (max 4" on center), pressure-treated wood posts/top and bottom rails, stainless steel structural screws/brackets, and eased edges.
+     * If the user specified a roof like "Hip Metal Roof 10ft x 16", detail the commercial/coastal gauge metal roofing panels, hip rafters/ridge caps, engineered roof framing/trusses, flashing, drip edge, synthetic underlayment, and marine-grade corrosion-resistant fasteners.
+     * If the user specified lighting posts like "Hanging lights 6in x 6in x 12ft Post", detail the heavy-duty 6x6x12ft marine-treated timber posts, embedment and structural anchoring, conduit routing for marine electrical fixtures, and weather-resistant mounting hardware.
+     * If bulkheads, docks, or boat lifts are included, detail marine timber piles, CCA/marine treatment, stringers, hot-dipped galvanized or 316 stainless steel through-bolts and hardware.
+   - Do NOT give generic or brief one-liners. Detail the exact components being utilized based on the user's input.
 
-Return ONLY valid JSON with no other text:
+3. FORMATTING RULES (STRICT):
+   - Output PLAIN TEXT ONLY. NO markdown bolding (**), NO asterisks (*), NO markdown hashes (#), NO backticks, NO horizontal rules (---).
+   - Use uppercase headings followed by a colon, like:
+     PROJECT: [TITLE]
+     
+     SCOPE OF WORK:
+     [Brief professional introductory statement outlining the scope and craftsmanship]
+     
+     SECTION 1 - [NAME]:
+     - [Detailed bullet on exact materials and kits being installed]
+     - [Detailed bullet on framing, structural support, anchoring, and marine fasteners]
+     - [Detailed bullet on alignment, safety standards, and finishing touches]
+     
+     SECTION 2 - [NAME]:
+     ...
+     
+     STANDARD EXCLUSIONS:
+     - Permits, regulatory filings, and engineering drawings (unless specifically noted)
+     - Geotechnical soil testing or environmental surveys
+     - Hidden subsurface or underwater obstructions
+     - Electrical service connection / high-voltage utility tie-ins beyond rough-in
+
+4. DO NOT mention dollar amounts or prices in the scope text.
+
+Return ONLY valid JSON with no extra text or markdown formatting:
 {
+  "title": "...",
   "scopeOfWork": "...",
-  "exclusions": "Permits, Engineering Drawings, Soil Tests, Utility Locating, Hidden Obstructions."
+  "exclusions": "..."
 }`;
 
             const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -416,7 +449,20 @@ Return ONLY valid JSON with no other text:
             if (data.error) throw new Error(data.error.message);
             const content = data.choices[0].message.content;
             const parsed = JSON.parse(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1));
-            setScopeOfWork(parsed.scopeOfWork + "\n\nSTANDARD EXCLUSIONS:\n" + (parsed.exclusions || "Permits, Engineering, Soil Tests."));
+
+            const resolvedTitle = projectTitle.trim() || parsed.title || '';
+            if (!projectTitle.trim() && parsed.title) {
+                setProjectTitle(parsed.title);
+            }
+
+            let fullScope = (parsed.scopeOfWork || '').trim();
+            if (resolvedTitle && !fullScope.toUpperCase().startsWith('PROJECT:')) {
+                fullScope = `PROJECT: ${resolvedTitle.toUpperCase()}\n\n` + fullScope;
+            }
+            if (parsed.exclusions && !fullScope.includes("STANDARD EXCLUSIONS:")) {
+                fullScope += "\n\nSTANDARD EXCLUSIONS:\n" + (parsed.exclusions || "Permits, Engineering Drawings, Soil Tests.");
+            }
+            setScopeOfWork(fullScope);
         } catch (err: any) {
             setErrorMsg("Error: " + err.message);
         } finally {
@@ -457,7 +503,7 @@ Return ONLY valid JSON with no other text:
             doc.setFont("helvetica", "normal");
             doc.setFontSize(8);
             doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
-            doc.text("CONSTRUCTION PROPOSAL", margin, 22);
+            doc.text(projectTitle.trim() ? `CONSTRUCTION PROPOSAL • ${projectTitle.trim().toUpperCase().substring(0, 48)}` : "CONSTRUCTION PROPOSAL", margin, 22);
 
             // Date on right
             doc.setFontSize(8);
@@ -504,7 +550,17 @@ Return ONLY valid JSON with no other text:
             doc.text(clientAddress, margin, y);
             y += 5;
         }
-        y += 8;
+
+        if (projectTitle.trim()) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
+            const titleLines = doc.splitTextToSize(`PROJECT: ${projectTitle.trim().toUpperCase()}`, width - margin * 2);
+            doc.text(titleLines, margin, y + 1);
+            y += (titleLines.length * 4.5) + 3;
+        } else {
+            y += 3;
+        }
 
         // Thin separator
         doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
@@ -721,7 +777,8 @@ Return ONLY valid JSON with no other text:
 
         drawFooter();
 
-        doc.save(`Proposal_${(clientName || 'Client').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+        const safeTitle = (projectTitle.trim() || clientName || 'Proposal').replace(/[^a-zA-Z0-9_-]/g, '_');
+        doc.save(`Proposal_${safeTitle}_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     const currentLivePrice = calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, undefined, customMaterialPrice, customLaborPrice);
@@ -775,15 +832,45 @@ Return ONLY valid JSON with no other text:
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* LEFT: Builder */}
                 <div className="lg:col-span-7 space-y-6">
-                    {/* Client Info */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Client Name</label>
-                            <input value={clientName} onChange={e => setClientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700 focus:border-cyan-400 outline-none" placeholder="John Doe" />
+                    {/* Client Info & Project Title */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Client Name</label>
+                                <input value={clientName} onChange={e => setClientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700 focus:border-cyan-400 outline-none" placeholder="John Doe" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Project Address</label>
+                                <input value={clientAddress} onChange={e => setClientAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700 focus:border-cyan-400 outline-none" placeholder="123 Ocean Dr" />
+                            </div>
                         </div>
+
                         <div>
-                            <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Project Address</label>
-                            <input value={clientAddress} onChange={e => setClientAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 font-bold text-slate-700 focus:border-cyan-400 outline-none" placeholder="123 Ocean Dr" />
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                                    Proposal / Project Title (Título del Proyecto)
+                                </label>
+                                {projectTitle ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setProjectTitle('')}
+                                        className="text-[10px] text-slate-400 hover:text-rose-500 font-bold transition-colors cursor-pointer"
+                                    >
+                                        Limpiar
+                                    </button>
+                                ) : (
+                                    <span className="text-[10px] text-slate-400 font-medium italic">
+                                        (Opcional · La IA lo generará si está vacío)
+                                    </span>
+                                )}
+                            </div>
+                            <input
+                                type="text"
+                                value={projectTitle}
+                                onChange={e => setProjectTitle(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 focus:border-cyan-400 rounded-xl px-4 py-2.5 font-bold text-slate-800 outline-none placeholder:text-slate-400 text-xs transition-colors shadow-inner"
+                                placeholder="e.g. Handrail, Hip Metal Roof & Boathouse Lighting Installation"
+                            />
                         </div>
                     </div>
 
