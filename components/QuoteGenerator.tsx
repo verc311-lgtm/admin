@@ -344,7 +344,7 @@ const QuoteGenerator: React.FC = () => {
             setScopeOfWork(
                 (projectTitle.trim() ? `PROJECT: ${projectTitle.trim().toUpperCase()}\n\n` : '') +
                 `SCOPE OF WORK:\nCoastal VA Marine Construction is pleased to present this proposal for marine construction and installation services.\n\n` +
-                sections.map((s, i) => `SECTION ${i + 1} - ${s.type.toUpperCase()}:\n- Quantity / Dimensions: ${s.dimensions} ${s.type.toLowerCase().includes('dock') ? 'SQF' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap')) ? 'Linear Feet' : 'Units'}\n- Description / Materials: ${s.description || 'Standard installation'}\n- Fasteners & Hardware: Marine-grade corrosion-resistant hardware\n`).join('\n') +
+                sections.map((s, i) => `OPTION ${i + 1} - ${s.type.toUpperCase()}:\n- Quantity / Dimensions: ${s.dimensions} ${s.type.toLowerCase().includes('dock') ? 'SQF' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap')) ? 'Linear Feet' : 'Units'}\n- Description / Materials: ${s.description || 'Standard installation'}\n- Fasteners & Hardware: Marine-grade corrosion-resistant hardware\n`).join('\n') +
                 `\nSTANDARD EXCLUSIONS:\n- Permits, regulatory filings, and engineering drawings (unless specifically noted)\n- Geotechnical soil testing or environmental surveys\n- Hidden subsurface or underwater obstructions\n- Electrical service connection / high-voltage utility tie-ins beyond rough-in`
             );
         }
@@ -391,7 +391,7 @@ const QuoteGenerator: React.FC = () => {
             bullets.push(`Precision alignment, clean finished detailing, and rigorous final inspection adhering to coastal marine building standards.`);
         }
 
-        return `SECTION ${idx + 1} - ${s.type.toUpperCase()}:\n` + bullets.map(b => `- ${b}`).join('\n');
+        return `OPTION ${idx + 1} - ${s.type.toUpperCase()}:\n` + bullets.map(b => `- ${b}`).join('\n');
     };
 
     const handleGenerateQuote = async () => {
@@ -424,8 +424,8 @@ const QuoteGenerator: React.FC = () => {
             let projectDesc = "";
             activeSections.forEach((s, idx) => {
                 const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
-                projectDesc += `\n--- SECTION ${idx + 1}: ${s.type.toUpperCase()} ---\n`;
-                projectDesc += `Work / Section Type: ${s.type}\n`;
+                projectDesc += `\n--- OPTION ${idx + 1}: ${s.type.toUpperCase()} ---\n`;
+                projectDesc += `Work / Option Type: ${s.type}\n`;
                 projectDesc += `Dimensions / Qty: ${s.dimensions} ${s.type.toLowerCase().includes('dock') ? 'SQF (Square Feet)' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap') || s.type.toLowerCase().includes('handrail')) ? 'Linear Feet' : 'Units'}\n`;
                 if (s.description) {
                     projectDesc += `Specified Details / Materials / Hardware: "${s.description}"\n`;
@@ -448,22 +448,22 @@ Proposal Title: ${projectTitle.trim() ? projectTitle.trim() : '(None provided - 
 Client Name: ${clientName || 'Valued Client'}
 Project Address: ${clientAddress || 'Client Site Location'}
 
-PROJECT SECTIONS & SPECIFICATIONS:
+PROJECT OPTIONS & SPECIFICATIONS:
 ${projectDesc}
 
 CRITICAL PROPOSAL INSTRUCTIONS:
 1. TITLE:
    - If the user specified a Proposal Title ("${projectTitle.trim()}"), use it.
-   - If no title was specified, generate an accurate, formal, descriptive title based on the sections (e.g. "Marine Dock, Hip Metal Roof & Baluster Railing Installation").
+   - If no title was specified, generate an accurate, formal, descriptive title based on the sections/options (e.g. "Bulkhead Wood, Vinyl or Rip Rap Installation").
 
-2. MANDATORY ITEMIZED SECTIONS BREAKDOWN (EXTREMELY IMPORTANT):
-   - You MUST generate an item in the "sections" array for EVERY SINGLE section listed above.
-   - Total sections to generate: ${activeSections.length}. It is strictly forbidden to skip or omit any section.
-   - For EACH section listed, provide at least 3 to 4 comprehensive, technical bullet points specifying:
-     * Specific materials, models, equipment, decking, and kits according to the user's input (e.g. HydroPort Epic PWC, custom aluminum walk boards, wood deck railing kit with black aluminum round balusters, hip metal roof, 6x6x12 timber posts, etc.).
-     * Substructure framing, stringers, joists, pile specifications (e.g. 8" or 10" marine-treated pilings driven to refusal), brackets, and marine-grade corrosion-resistant hardware (316 stainless steel, hot-dipped galvanized through-bolts, heavy timber washers).
-     * Anchoring, buoyancy calibration, alignment, code-compliant spacing, safety features, non-skid surface treatments, and marine craftsmanship.
-   - Every single detail provided in "Specified Details / Materials / Hardware" and "Configured Components & Options" MUST be explicitly included in that section's bullet points.
+2. MANDATORY ITEMIZED OPTIONS BREAKDOWN (EXTREMELY IMPORTANT):
+   - You MUST generate an item in the "sections" array for EVERY SINGLE option listed above.
+   - Total options to generate: ${activeSections.length}. It is strictly forbidden to skip or omit any option.
+   - For EACH option listed, provide at least 3 to 4 comprehensive, technical bullet points specifying:
+     * Specific materials, models, equipment, decking, and kits according to the user's input (e.g. Bulkhead T&G Wood, TW-95 vinyl sheeting, Class I rip-rap, HydroPort Epic PWC, etc.).
+     * Substructure framing, stringers, joists, pile specifications (e.g. 10" x 20' marine-treated pilings driven to refusal, 6x6x16 walers, tie rods), brackets, and marine-grade corrosion-resistant hardware.
+     * Anchoring, erosion prevention, filter cloth, alignment, code-compliant spacing, safety features, non-skid surface treatments, and marine craftsmanship.
+   - Every single detail provided in "Specified Details / Materials / Hardware" and "Configured Components & Options" MUST be explicitly included in that option's bullet points.
    - Do NOT give generic or brief one-liners. Detail the exact components being utilized based on the user's input.
 
 3. SCOPE OF WORK INTRODUCTION:
@@ -482,7 +482,7 @@ Return ONLY a valid JSON object matching this schema:
   "introduction": "Professional 2-3 sentence introductory overview paragraph.",
   "sections": [
     {
-      "name": "SECTION TITLE (e.g. PWC / FLOATING or ALUMINUM WALK BOARDS)",
+      "name": "OPTION TITLE (e.g. BULKHEAD - WOOD, BULKHEAD - VINYL, or RIP-RAP / EROSION CONTROL)",
       "bullets": [
         "Comprehensive bullet detailing materials, models, dimensions, and specifications...",
         "Comprehensive bullet detailing structural framing, pilings, brackets, anchoring, and marine fasteners...",
@@ -538,16 +538,16 @@ Return ONLY a valid JSON object matching this schema:
             }
 
             // Introduction / Scope of Work header
-            const intro = (parsed.introduction || parsed.intro || (typeof parsed.scopeOfWork === 'string' && !parsed.scopeOfWork.toUpperCase().includes('SECTION') ? parsed.scopeOfWork : '') || '').trim();
+            const intro = (parsed.introduction || parsed.intro || (typeof parsed.scopeOfWork === 'string' && !parsed.scopeOfWork.toUpperCase().includes('OPTION') && !parsed.scopeOfWork.toUpperCase().includes('SECTION') ? parsed.scopeOfWork : '') || '').trim();
             fullScope += `SCOPE OF WORK:\n${intro || 'Coastal VA Marine Construction is pleased to present this comprehensive proposal. All work will be executed with premium marine-grade materials, proven craftsmanship, and strict adherence to coastal building standards.'}\n\n`;
 
-            // Render Sections
+            // Render Options
             let renderedSectionsCount = 0;
             if (Array.isArray(parsed.sections) && parsed.sections.length > 0) {
                 parsed.sections.forEach((sec: any, idx: number) => {
-                    const fallbackName = activeSections[idx] ? activeSections[idx].type : `Section ${idx + 1}`;
+                    const fallbackName = activeSections[idx] ? activeSections[idx].type : `Option ${idx + 1}`;
                     const rawName = sec.name || sec.title || sec.heading || fallbackName;
-                    const cleanName = rawName.replace(/^SECTION\s*\d+\s*[-:]*\s*/i, '').trim();
+                    const cleanName = rawName.replace(/^(OPTION|SECTION)\s*\d+\s*[-:]*\s*/i, '').trim();
 
                     let bullets: string[] = [];
                     if (Array.isArray(sec.bullets)) bullets = sec.bullets;
@@ -560,7 +560,7 @@ Return ONLY a valid JSON object matching this schema:
                         .filter((b: string) => b.length > 0);
 
                     if (cleanBullets.length > 0) {
-                        fullScope += `SECTION ${idx + 1} - ${cleanName.toUpperCase()}:\n`;
+                        fullScope += `OPTION ${idx + 1} - ${cleanName.toUpperCase()}:\n`;
                         cleanBullets.forEach(b => {
                             fullScope += `- ${b}\n`;
                         });
@@ -575,9 +575,9 @@ Return ONLY a valid JSON object matching this schema:
 
             // If parsed.sections didn't render or was missing sections completely:
             if (renderedSectionsCount === 0) {
-                if (typeof parsed.scopeOfWork === 'string' && /SECTION\s+\d+/i.test(parsed.scopeOfWork)) {
+                if (typeof parsed.scopeOfWork === 'string' && /(OPTION|SECTION)\s+\d+/i.test(parsed.scopeOfWork)) {
                     // OpenAI returned plain text with sections in scopeOfWork
-                    fullScope = parsed.scopeOfWork.trim();
+                    fullScope = parsed.scopeOfWork.trim().replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1');
                     if (resolvedTitle && !fullScope.toUpperCase().startsWith('PROJECT:')) {
                         fullScope = `PROJECT: ${resolvedTitle.toUpperCase()}\n\n` + fullScope;
                     }
@@ -618,6 +618,8 @@ Return ONLY a valid JSON object matching this schema:
                 }
             }
 
+            // Normalize any remaining SECTION to OPTION
+            fullScope = fullScope.replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1');
             setScopeOfWork(fullScope.trim());
         } catch (err: any) {
             setErrorMsg("Error: " + err.message);
@@ -722,54 +724,7 @@ Return ONLY a valid JSON object matching this schema:
         doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
         doc.setLineWidth(0.3);
         doc.line(margin, y, width - margin, y);
-        y += 10;
-
-        // ── Itemized Project Summary (only if checked) ──
-        if (showProjectSummary) {
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(8);
-            doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
-            doc.text("PROJECT BREAKDOWN", margin, y);
-            y += 7;
-
-            sections.forEach(s => {
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(9);
-                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text(s.type, margin + 2, y);
-
-                let desc = s.type === "Other / Custom Project"
-                    ? `${s.dimensions} units${s.description ? ' — ' + s.description : ''}`
-                    : `${s.dimensions} ${s.type.includes('Dock') ? 'sqft' : 'lf'}${s.description ? ' — ' + s.description : ''}`;
-                if (desc.length > 55) desc = desc.substring(0, 52) + '...';
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(8);
-                doc.setTextColor(BODY[0], BODY[1], BODY[2]);
-                doc.text(desc, margin + 50, y);
-
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(9);
-                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text(`$${s.price.toLocaleString()}`, width - margin, y, { align: 'right' });
-                y += 6;
-            });
-
-            if (otherWorkDescription && adjustments > 0) {
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(9);
-                doc.setTextColor(BODY[0], BODY[1], BODY[2]);
-                doc.text(otherWorkDescription, margin + 2, y);
-                doc.setFont("helvetica", "bold");
-                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text(`$${adjustments.toLocaleString()}`, width - margin, y, { align: 'right' });
-                y += 6;
-            }
-
-            y += 2;
-            doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
-            doc.line(margin, y, width - margin, y);
-            y += 10;
-        }
+        y += 8;
 
         // ── Scope of Work ──
         doc.setFont("helvetica", "bold");
@@ -788,7 +743,8 @@ Return ONLY a valid JSON object matching this schema:
         doc.setFontSize(9);
         doc.setTextColor(BODY[0], BODY[1], BODY[2]);
 
-        const lines = doc.splitTextToSize(scopeOfWork, width - margin * 2);
+        const displayScope = (scopeOfWork || '').replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1');
+        const lines = doc.splitTextToSize(displayScope, width - margin * 2);
         for (let i = 0; i < lines.length; i++) {
             if (y > height - 25) {
                 drawFooter();
@@ -796,7 +752,7 @@ Return ONLY a valid JSON object matching this schema:
                 drawHeader();
             }
             const line = lines[i];
-            const isHeading = /^(PROJECT:|SCOPE OF WORK:|SECTION\s+\d+|STANDARD EXCLUSIONS:)/i.test(line.trim());
+            const isHeading = /^(PROJECT:|SCOPE OF WORK:|OPTION\s+\d+|SECTION\s+\d+|STANDARD EXCLUSIONS:)/i.test(line.trim());
             if (isHeading) {
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9);
@@ -820,7 +776,7 @@ Return ONLY a valid JSON object matching this schema:
         doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
 
         // Center title
-        y = 60;
+        y = 54;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
         doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
@@ -830,43 +786,88 @@ Return ONLY a valid JSON object matching this schema:
         doc.setLineWidth(0.6);
         doc.line(width / 2 - 30, y, width / 2 + 30, y);
         doc.setLineWidth(0.2);
-        y += 14;
+        y += 12;
 
         // ── Itemized breakdown (conditional) ──
         if (showProjectSummary && sections.length > 0) {
             // Table header
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(7);
+            doc.setFontSize(7.5);
             doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
-            doc.text("DESCRIPTION", margin, y);
+            doc.text("OPTION / DESCRIPTION", margin, y);
             doc.text("AMOUNT", width - margin, y, { align: 'right' });
             y += 3;
             doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
             doc.line(margin, y, width - margin, y);
             y += 6;
 
-            // Rows
-            sections.forEach(s => {
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
-                doc.setTextColor(BODY[0], BODY[1], BODY[2]);
-                doc.text(s.type, margin, y);
+            // Rows with Option title and detailed description
+            sections.forEach((s, idx) => {
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(9.5);
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                doc.text(`Option ${idx + 1}: ${s.type}`, margin, y);
 
                 doc.setFont("helvetica", "bold");
+                doc.setFontSize(9.5);
                 doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text(`$${s.price.toLocaleString()}`, width - margin, y, { align: 'right' });
-                y += 8;
+                doc.text(`$${(Number(s.price) || 0).toLocaleString()}`, width - margin, y, { align: 'right' });
+
+                // Construct detailed subtitle so user knows what this option corresponds to
+                const unitLabel = s.type.toLowerCase().includes('dock') 
+                    ? 'SQF' 
+                    : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap') || s.type.toLowerCase().includes('handrail')) 
+                        ? 'LF' 
+                        : 'Units';
+                const dimsStr = s.dimensions ? `${s.dimensions} ${unitLabel}` : '';
+                let detailStr = '';
+
+                if (s.description && s.description.trim()) {
+                    detailStr = dimsStr ? `${dimsStr} — ${s.description.trim()}` : s.description.trim();
+                } else {
+                    const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
+                    if (items.length > 0) {
+                        detailStr = dimsStr ? `${dimsStr} — ${items.slice(0, 3).join(', ')}` : items.slice(0, 3).join(', ');
+                    } else {
+                        detailStr = dimsStr;
+                    }
+                }
+
+                if (detailStr) {
+                    y += 4.5;
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(8);
+                    doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+                    const descLines = doc.splitTextToSize(detailStr, width - margin * 2 - 35);
+                    doc.text(descLines, margin + 3, y);
+                    y += (descLines.length * 3.8) + 4.5;
+                } else {
+                    y += 7.5;
+                }
             });
 
             if (adjustments > 0) {
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
-                doc.setTextColor(BODY[0], BODY[1], BODY[2]);
-                doc.text(otherWorkDescription || 'Additional Work', margin, y);
                 doc.setFont("helvetica", "bold");
+                doc.setFontSize(9.5);
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                doc.text("Additional Work / Adjustments", margin, y);
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(9.5);
                 doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
                 doc.text(`$${adjustments.toLocaleString()}`, width - margin, y, { align: 'right' });
-                y += 8;
+
+                if (otherWorkDescription && otherWorkDescription.trim()) {
+                    y += 4.5;
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(8);
+                    doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+                    const otherLines = doc.splitTextToSize(otherWorkDescription.trim(), width - margin * 2 - 35);
+                    doc.text(otherLines, margin + 3, y);
+                    y += (otherLines.length * 3.8) + 4.5;
+                } else {
+                    y += 7.5;
+                }
             }
 
             y += 2;
@@ -874,7 +875,7 @@ Return ONLY a valid JSON object matching this schema:
             doc.setLineWidth(0.4);
             doc.line(margin, y, width - margin, y);
             doc.setLineWidth(0.2);
-            y += 16;
+            y += 14;
         }
 
         // ── Total Box — always shown ──
@@ -1038,19 +1039,21 @@ Return ONLY a valid JSON object matching this schema:
                         </div>
                     </div>
 
-                    {/* Sections List */}
+                    {/* Sections / Options List */}
                     {Array.isArray(sections) && sections.length > 0 && (
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
-                                <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest ml-1">Sections Added</h3>
+                                <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest ml-1">Options / Sections Added</h3>
                                 <button onClick={() => setSections([])} className="text-[10px] text-red-400 font-bold hover:underline">Clear All</button>
                             </div>
                             {sections.map((s, idx) => (
                                 <div key={s.id || idx} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-cyan-200 transition-all">
                                     <div className="flex gap-4 items-center">
-                                        <div className="bg-cyan-50 text-cyan-700 font-black w-8 h-8 flex items-center justify-center rounded-lg text-xs">{idx + 1}</div>
+                                        <div className="bg-cyan-50 text-cyan-700 font-black px-2.5 h-8 flex items-center justify-center rounded-lg text-xs whitespace-nowrap">
+                                            Opt {idx + 1}
+                                        </div>
                                         <div>
-                                            <h4 className="font-bold text-slate-700">{s.type}</h4>
+                                            <h4 className="font-bold text-slate-700">Option {idx + 1}: {s.type}</h4>
                                             <p className="text-xs text-slate-400">{s.dimensions} units{s.description ? ` · ${s.description}` : ''}</p>
                                         </div>
                                     </div>
