@@ -790,18 +790,22 @@ Return ONLY a valid JSON object matching this schema:
 
         // ── Itemized breakdown (conditional) ──
         if (showProjectSummary && sections.length > 0) {
+            const cbSize = 6; // mm square checkbox
+            const cbX = width - margin - cbSize; // right-aligned at margin
+            const amountRight = cbX - 4; // price right-aligned with 4mm gap before checkbox
+
             // Table header
             doc.setFont("helvetica", "bold");
             doc.setFontSize(7.5);
             doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
             doc.text("OPTION / DESCRIPTION", margin, y);
-            doc.text("AMOUNT", width - margin, y, { align: 'right' });
+            doc.text("AMOUNT", amountRight, y, { align: 'right' });
             y += 3;
             doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
             doc.line(margin, y, width - margin, y);
             y += 6;
 
-            // Rows with Option title and detailed description
+            // Rows with Option title, detailed description, amount, and checkbox
             sections.forEach((s, idx) => {
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9.5);
@@ -811,7 +815,13 @@ Return ONLY a valid JSON object matching this schema:
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9.5);
                 doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text(`$${(Number(s.price) || 0).toLocaleString()}`, width - margin, y, { align: 'right' });
+                doc.text(`$${(Number(s.price) || 0).toLocaleString()}`, amountRight, y, { align: 'right' });
+
+                // Checkbox box next to amount
+                doc.setDrawColor(BLACK[0], BLACK[1], BLACK[2]);
+                doc.setLineWidth(0.6);
+                doc.rect(cbX, y - 4.5, cbSize, cbSize);
+                doc.setLineWidth(0.2);
 
                 // Construct detailed subtitle so user knows what this option corresponds to
                 const unitLabel = s.type.toLowerCase().includes('dock') 
@@ -838,7 +848,7 @@ Return ONLY a valid JSON object matching this schema:
                     doc.setFont("helvetica", "normal");
                     doc.setFontSize(8);
                     doc.setTextColor(BODY[0], BODY[1], BODY[2]);
-                    const descLines = doc.splitTextToSize(detailStr, width - margin * 2 - 35);
+                    const descLines = doc.splitTextToSize(detailStr, width - margin * 2 - 40);
                     doc.text(descLines, margin + 3, y);
                     y += (descLines.length * 3.8) + 4.5;
                 } else {
@@ -855,14 +865,19 @@ Return ONLY a valid JSON object matching this schema:
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9.5);
                 doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text(`$${adjustments.toLocaleString()}`, width - margin, y, { align: 'right' });
+                doc.text(`$${adjustments.toLocaleString()}`, amountRight, y, { align: 'right' });
+
+                doc.setDrawColor(BLACK[0], BLACK[1], BLACK[2]);
+                doc.setLineWidth(0.6);
+                doc.rect(cbX, y - 4.5, cbSize, cbSize);
+                doc.setLineWidth(0.2);
 
                 if (otherWorkDescription && otherWorkDescription.trim()) {
                     y += 4.5;
                     doc.setFont("helvetica", "normal");
                     doc.setFontSize(8);
                     doc.setTextColor(BODY[0], BODY[1], BODY[2]);
-                    const otherLines = doc.splitTextToSize(otherWorkDescription.trim(), width - margin * 2 - 35);
+                    const otherLines = doc.splitTextToSize(otherWorkDescription.trim(), width - margin * 2 - 40);
                     doc.text(otherLines, margin + 3, y);
                     y += (otherLines.length * 3.8) + 4.5;
                 } else {
@@ -870,49 +885,69 @@ Return ONLY a valid JSON object matching this schema:
                 }
             }
 
+            // Solid divider line below options
             y += 2;
             doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
-            doc.setLineWidth(0.4);
+            doc.setLineWidth(0.6);
             doc.line(margin, y, width - margin, y);
             doc.setLineWidth(0.2);
-            y += 14;
+            y += 18;
+
+            // Selected Option Total line with handwritten line
+            const totalLineEnd = width - margin;
+            const totalLineStart = width / 2 - 2;
+            const dollarX = totalLineStart - 8;
+            const labelX = dollarX - 8;
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(11.5);
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+            doc.text("SELECTED OPTION TOTAL", labelX, y, { align: 'right' });
+            doc.text("$", dollarX, y);
+
+            doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+            doc.setLineWidth(0.7);
+            doc.line(totalLineStart, y + 1, totalLineEnd, y + 1);
+            doc.setLineWidth(0.2);
+
+            y += 22;
+        } else {
+            // ── Total Box — shown when proposal is lump sum (not itemized options) ──
+            const boxW = 130;
+            const boxH = 52;
+            const boxX = (width - boxW) / 2;
+
+            // Navy background
+            doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+            doc.roundedRect(boxX, y, boxW, boxH, 4, 4, 'F');
+
+            // Cyan accent line at top
+            doc.setFillColor(CYAN[0], CYAN[1], CYAN[2]);
+            doc.roundedRect(boxX, y, boxW, 2, 4, 4, 'F');
+            // Cover bottom rounding of accent
+            doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+            doc.rect(boxX, y + 1.5, boxW, 3, 'F');
+
+            // Label
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8);
+            doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
+            doc.text("TOTAL PROPOSED INVESTMENT", width / 2, y + 16, { align: 'center' });
+
+            // Amount
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(32);
+            doc.setTextColor(255, 255, 255);
+            doc.text(`$${aiEstimatedTotal.toLocaleString()}`, width / 2, y + 35, { align: 'center' });
+
+            // Small note under amount
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7);
+            doc.setTextColor(148, 163, 184);
+            doc.text("All materials, labor & equipment included", width / 2, y + 43, { align: 'center' });
+
+            y += boxH + 16;
         }
-
-        // ── Total Box — always shown ──
-        const boxW = 130;
-        const boxH = 52;
-        const boxX = (width - boxW) / 2;
-
-        // Navy background
-        doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
-        doc.roundedRect(boxX, y, boxW, boxH, 4, 4, 'F');
-
-        // Cyan accent line at top
-        doc.setFillColor(CYAN[0], CYAN[1], CYAN[2]);
-        doc.roundedRect(boxX, y, boxW, 2, 4, 4, 'F');
-        // Cover bottom rounding of accent
-        doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
-        doc.rect(boxX, y + 1.5, boxW, 3, 'F');
-
-        // Label
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
-        doc.text("TOTAL PROPOSED INVESTMENT", width / 2, y + 16, { align: 'center' });
-
-        // Amount
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(32);
-        doc.setTextColor(255, 255, 255);
-        doc.text(`$${aiEstimatedTotal.toLocaleString()}`, width / 2, y + 35, { align: 'center' });
-
-        // Small note under amount
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(7);
-        doc.setTextColor(148, 163, 184);
-        doc.text("All materials, labor & equipment included", width / 2, y + 43, { align: 'center' });
-
-        y += boxH + 16;
 
         // ── Validity ──
         doc.setFont("helvetica", "normal");
