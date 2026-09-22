@@ -829,7 +829,17 @@ Return ONLY a valid JSON object matching this schema:
                     : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap') || s.type.toLowerCase().includes('handrail')) 
                         ? 'LF' 
                         : 'Units';
-                const dimsStr = s.dimensions ? `${s.dimensions} ${unitLabel}` : '';
+                const rawDims = (s.dimensions || '').trim();
+                let dimsStr = '';
+                if (rawDims) {
+                    const lowerDims = rawDims.toLowerCase();
+                    const lowerUnit = unitLabel.toLowerCase();
+                    if (lowerDims.includes(lowerUnit) || lowerDims.includes('sqf') || lowerDims.includes('sq ft') || lowerDims.includes('lf') || lowerDims.includes('feet') || lowerDims.includes('unit') || lowerDims.includes('qty')) {
+                        dimsStr = rawDims;
+                    } else {
+                        dimsStr = `${rawDims} ${unitLabel}`;
+                    }
+                }
                 let detailStr = '';
 
                 if (s.description && s.description.trim()) {
