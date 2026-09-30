@@ -1,9 +1,64 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, ArrowLeft, Printer, Anchor, X, FileDown, Loader2, Save, CheckCircle2, Search, DollarSign, Clock, AlertCircle } from 'lucide-react';
+import { FileText, ArrowLeft, Printer, Anchor, X, FileDown, Loader2, Save, CheckCircle2, Search, DollarSign, Clock, AlertCircle, Percent, RotateCcw } from 'lucide-react';
 import { Project, Invoice } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+// Helper to calculate total contract value (base + change orders)
+export const getProjectContractTotal = (proj?: Project | null): number => {
+  if (!proj) return 0;
+  if (proj.totalAmount && proj.totalAmount > 0) return proj.totalAmount;
+  const computed = (proj.balance || 0) + (proj.paidAmount || 0);
+  return computed > 0 ? computed : (proj.balance || 0);
+};
+
+// Helper to format percentage (e.g. 50% or 33.3%)
+export const formatPctStr = (val: number): string => {
+  if (isNaN(val) || val <= 0) return '0%';
+  const rounded = Math.round(val * 10) / 10;
+  return rounded % 1 === 0 ? `${rounded}%` : `${rounded.toFixed(1)}%`;
+};
+
+// Helper to construct detailed scope description including payment sequence, current billing %, and remaining pending %
+export const buildScopeDescription = (
+  proj: Project,
+  amount: number,
+  allInvoices: Invoice[],
+  baseWorkNote: string = 'Marine construction services and progress implementation.'
+): string => {
+  const projInvoices = allInvoices
+    .filter(inv => inv.projectId === proj.id)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+  const payNum = projInvoices.length + 1;
+  const isFirst = payNum === 1;
+
+  const total = getProjectContractTotal(proj) || amount || 1;
+  const pct = Math.min(100, Math.max(0, (amount / total) * 100));
+  const pctStr = formatPctStr(pct);
+
+  const remaining = Math.max(0, (proj.balance || 0) - amount);
+  const remPct = Math.min(100, Math.max(0, (remaining / total) * 100));
+  const remPctStr = formatPctStr(remPct);
+
+  let payLabel = '';
+  if (isFirst) {
+    payLabel = remaining <= 0 ? `Single Full Payment (${pctStr} Full Contract)` : `First Payment (${pctStr} Initial Draw)`;
+  } else if (remaining <= 0) {
+    payLabel = `Final Payment (${pctStr} Final Draw / Completion)`;
+  } else {
+    payLabel = `Payment #${payNum} (${pctStr} Progress Draw)`;
+  }
+
+  const cleanNote = baseWorkNote.trim() ? baseWorkNote.trim() : 'Marine construction services and progress implementation.';
+
+  const remainingLine = remaining <= 0
+    ? `Remaining balance pending to collect: 0% ($0.00 - Paid in Full upon receipt).`
+    : `Remaining balance pending to collect: ${remPctStr} ($${remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).`;
+
+  return `${payLabel} - ${cleanNote}\n• Billed on this invoice: ${pctStr} ($${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) of total contract ($${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})\n• ${remainingLine}`;
+};
 
 interface InvoiceViewProps {
   projects: Project[];
@@ -18,6 +73,8 @@ interface InvoiceViewProps {
 const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialInvoice, initialProject, onGenerateInvoice, onAddPayment, onClose }) => {
   const [selectedProject, setSelectedProject] = useState<Project | null>(initialProject || null);
   const [invoiceAmount, setInvoiceAmount] = useState<number>(initialProject ? initialProject.balance : 0);
+  const [invoicePercentInput, setInvoicePercentInput] = useState<string>('');
+  const [workNote, setWorkNote] = useState<string>('Marine construction services and progress implementation.');
   const [invoiceDescription, setInvoiceDescription] = useState<string>('Marine construction services and progress implementation.');
   const [showPreview, setShowPreview] = useState(false);
   const [historicalInvoice, setHistoricalInvoice] = useState<Invoice | null>(initialInvoice || null);
@@ -35,6 +92,9 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       if (project) {
         setSelectedProject(project);
         setInvoiceAmount(initialInvoice.amount);
+        const total = getProjectContractTotal(project);
+        const pct = total > 0 ? Math.round(((initialInvoice.amount / total) * 100) * 10) / 10 : 0;
+        setInvoicePercentInput(pct > 0 ? pct.toString() : '');
         setInvoiceDescription(initialInvoice.description || 'Marine construction services and progress implementation.');
         setHistoricalInvoice(initialInvoice);
         setSavedInvoiceNumber(initialInvoice.invoiceNumber);
@@ -43,8 +103,14 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       }
     } else if (initialProject) {
       setSelectedProject(initialProject);
-      setInvoiceAmount(initialProject.balance);
-      setInvoiceDescription('Marine construction services and progress implementation.');
+      const total = getProjectContractTotal(initialProject);
+      const defaultAmount = initialProject.balance;
+      setInvoiceAmount(defaultAmount);
+      const defaultPct = total > 0 ? Math.round(((defaultAmount / total) * 100) * 10) / 10 : 100;
+      setInvoicePercentInput(defaultPct.toString());
+      const defaultNote = 'Marine construction services and progress implementation.';
+      setWorkNote(defaultNote);
+      setInvoiceDescription(buildScopeDescription(initialProject, defaultAmount, invoices, defaultNote));
       setSavedInvoiceNumber('');
       setShowPreview(false);
       setHistoricalInvoice(null);
@@ -58,6 +124,9 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       if (project) {
         setSelectedProject(project);
         setInvoiceAmount(historicalInvoice.amount);
+        const total = getProjectContractTotal(project);
+        const pct = total > 0 ? Math.round(((historicalInvoice.amount / total) * 100) * 10) / 10 : 0;
+        setInvoicePercentInput(pct > 0 ? pct.toString() : '');
         setInvoiceDescription(historicalInvoice.description || 'Marine construction services and progress implementation.');
         setSavedInvoiceNumber(historicalInvoice.invoiceNumber);
         setShowPreview(true);
@@ -66,10 +135,62 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
     }
   }, [historicalInvoice, projects]);
 
+  const handleAmountChange = (val: number) => {
+    setInvoiceAmount(val);
+    if (selectedProject) {
+      const total = getProjectContractTotal(selectedProject);
+      if (total > 0) {
+        const pct = Math.min(100, Math.max(0, (val / total) * 100));
+        const rounded = Math.round(pct * 10) / 10;
+        setInvoicePercentInput(rounded.toString());
+      }
+      setInvoiceDescription(buildScopeDescription(selectedProject, val, invoices, workNote));
+    }
+  };
+
+  const handlePercentChange = (valStr: string) => {
+    setInvoicePercentInput(valStr);
+    const parsedPct = parseFloat(valStr);
+    if (!isNaN(parsedPct) && selectedProject) {
+      const total = getProjectContractTotal(selectedProject);
+      const calculatedAmount = Math.round(((total * parsedPct) / 100) * 100) / 100;
+      setInvoiceAmount(calculatedAmount);
+      setInvoiceDescription(buildScopeDescription(selectedProject, calculatedAmount, invoices, workNote));
+    } else if (valStr === '' && selectedProject) {
+      setInvoiceAmount(0);
+      setInvoiceDescription(buildScopeDescription(selectedProject, 0, invoices, workNote));
+    }
+  };
+
+  const handleQuickPercent = (pct: number) => {
+    if (!selectedProject) return;
+    const total = getProjectContractTotal(selectedProject);
+    let amount = 0;
+    if (pct === 100) {
+      amount = selectedProject.balance;
+    } else {
+      amount = Math.round(((total * pct) / 100) * 100) / 100;
+      if (amount > selectedProject.balance) {
+        amount = selectedProject.balance;
+      }
+    }
+    setInvoiceAmount(amount);
+    const actualPct = total > 0 ? Math.round(((amount / total) * 100) * 10) / 10 : pct;
+    setInvoicePercentInput(actualPct.toString());
+    setInvoiceDescription(buildScopeDescription(selectedProject, amount, invoices, workNote));
+  };
+
+  const handleWorkNoteChange = (note: string) => {
+    setWorkNote(note);
+    if (selectedProject) {
+      setInvoiceDescription(buildScopeDescription(selectedProject, invoiceAmount, invoices, note));
+    }
+  };
+
   const handlePreview = (e: React.FormEvent) => {
     e.preventDefault();
     if (invoiceAmount <= 0) {
-      alert("Invalid Amount.");
+      alert("Invalid Amount. Please enter a billing amount greater than 0.");
       return;
     }
     setShowPreview(true);
@@ -127,14 +248,18 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
         .filter(inv => inv.projectId === project.id)
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+      const contractTotal = getProjectContractTotal(project) || invoiceAmount || 1;
+      const billingPct = contractTotal > 0 ? Math.round((invoiceAmount / contractTotal) * 100) : 0;
+      const pctBadge = billingPct > 0 ? ` (${billingPct}%)` : '';
+
       let invoiceIndexText = '';
       if (historicalInvoice) {
         const idx = projectInvoices.findIndex(inv => inv.id === historicalInvoice.id);
         const num = idx !== -1 ? idx + 1 : 1;
-        invoiceIndexText = num === 1 ? 'First Progress Payment' : (num === 2 ? 'Second Progress Payment' : (num === 3 ? 'Third Progress Payment' : `${num}th Progress Payment`));
+        invoiceIndexText = num === 1 ? `First Progress Payment${pctBadge}` : (num === 2 ? `Second Progress Payment${pctBadge}` : (num === 3 ? `Third Progress Payment${pctBadge}` : `${num}th Progress Payment${pctBadge}`));
       } else {
         const num = projectInvoices.length + 1;
-        invoiceIndexText = num === 1 ? 'First Progress Payment' : (num === 2 ? 'Second Progress Payment' : (num === 3 ? 'Third Progress Payment' : `${num}th Progress Payment`));
+        invoiceIndexText = num === 1 ? `First Progress Payment${pctBadge}` : (num === 2 ? `Second Progress Payment${pctBadge}` : (num === 3 ? `Third Progress Payment${pctBadge}` : `${num}th Progress Payment${pctBadge}`));
       }
 
       // --- NEW LOGO HEADER DESIGN ---
@@ -393,14 +518,18 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       .filter(inv => inv.projectId === currentProject?.id)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+    const contractTotal = getProjectContractTotal(currentProject) || invoiceAmount || 1;
+    const billingPct = contractTotal > 0 ? Math.round((invoiceAmount / contractTotal) * 100) : 0;
+    const pctBadge = billingPct > 0 ? ` (${billingPct}%)` : '';
+
     let invoiceIndexText = '';
     if (historicalInvoice) {
       const idx = projectInvoices.findIndex(inv => inv.id === historicalInvoice.id);
       const num = idx !== -1 ? idx + 1 : 1;
-      invoiceIndexText = num === 1 ? 'First Progress Payment' : (num === 2 ? 'Second Progress Payment' : (num === 3 ? 'Third Progress Payment' : `${num}th Progress Payment`));
+      invoiceIndexText = num === 1 ? `First Progress Payment${pctBadge}` : (num === 2 ? `Second Progress Payment${pctBadge}` : (num === 3 ? `Third Progress Payment${pctBadge}` : `${num}th Progress Payment${pctBadge}`));
     } else {
       const num = projectInvoices.length + 1;
-      invoiceIndexText = num === 1 ? 'First Progress Payment' : (num === 2 ? 'Second Progress Payment' : (num === 3 ? 'Third Progress Payment' : `${num}th Progress Payment`));
+      invoiceIndexText = num === 1 ? `First Progress Payment${pctBadge}` : (num === 2 ? `Second Progress Payment${pctBadge}` : (num === 3 ? `Third Progress Payment${pctBadge}` : `${num}th Progress Payment${pctBadge}`));
     }
 
     return (
@@ -477,10 +606,14 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
                 Please reference the invoice number in your payment. Coastal VA appreciates your business and trust in our engineering.
               </p>
             </div>
-            <div className="w-80 bg-slate-50 p-10 rounded-[2.5rem] border-2 border-slate-100">
+            <div className="w-80 bg-slate-50 p-8 rounded-[2.5rem] border-2 border-slate-100 flex flex-col gap-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-black uppercase text-cyan-600">Total Due</span>
                 <span className="text-4xl font-black text-[#0a192f] italic tracking-tighter leading-none">${invoiceAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase pt-2 border-t border-slate-200">
+                <span>Remaining Pending:</span>
+                <span className="text-slate-700 font-black">${Math.max(0, (currentProject?.balance || 0) - invoiceAmount).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -511,48 +644,180 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
   }
 
   // RENDER CREATION FORM
+  const totalContractVal = getProjectContractTotal(selectedProject);
+  const currentPctNum = totalContractVal > 0 ? (invoiceAmount / totalContractVal) * 100 : 0;
+  const currentRemainingBal = Math.max(0, (selectedProject?.balance || 0) - invoiceAmount);
+  const currentRemPctNum = totalContractVal > 0 ? (currentRemainingBal / totalContractVal) * 100 : 0;
+
+  const currentProjectInvoices = selectedProject
+    ? invoices.filter(inv => inv.projectId === selectedProject.id)
+    : [];
+  const paymentNumber = currentProjectInvoices.length + 1;
+  const isFirstPayment = paymentNumber === 1;
+
   return (
-    <div className="max-w-xl mx-auto pt-10 animate-in fade-in duration-500">
+    <div className="max-w-xl mx-auto pt-8 animate-in fade-in duration-500">
       <div className="bg-white rounded-[3.5rem] shadow-2xl border overflow-hidden ring-8 ring-white">
-        <div className="p-12 bg-[#0a192f] text-white flex justify-between items-center">
+        {/* Header */}
+        <div className="p-10 md:p-12 bg-[#0a192f] text-white flex justify-between items-center">
           <div>
             <h2 className="text-3xl font-black uppercase italic leading-none tracking-tighter">Draft Invoice</h2>
-            <p className="text-cyan-400 text-[10px] font-black tracking-widest uppercase mt-4">{selectedProject?.name || 'Creation Tool'}</p>
+            <p className="text-cyan-400 text-[10px] font-black tracking-widest uppercase mt-3">{selectedProject?.name || 'Creation Tool'}</p>
           </div>
-          <button onClick={() => onClose?.()} className="text-white/20 hover:text-white"><X className="w-10 h-10" /></button>
+          <button onClick={() => onClose?.()} className="text-white/20 hover:text-white transition-colors"><X className="w-8 h-8" /></button>
         </div>
 
-        <form onSubmit={handlePreview} className="p-12 space-y-10">
-          <div className="p-8 bg-cyan-50 rounded-[2rem] border-2 border-cyan-100 flex justify-between items-center">
-            <span className="text-[10px] font-black uppercase text-cyan-700 tracking-widest">Available Balance</span>
-            <span className="text-3xl font-black font-mono text-[#0a192f] italic">${selectedProject?.balance.toLocaleString()}</span>
-          </div>
-          <div className="space-y-4">
-            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Billing Amount</label>
-            <div className="relative">
-              <span className="absolute left-8 top-1/2 -translate-y-1/2 text-cyan-600 text-5xl font-black italic tracking-tighter">$</span>
-              <input
-                type="number" step="0.01" required autoFocus
-                className="w-full pl-20 pr-10 py-10 bg-slate-50 rounded-[2.5rem] border-4 border-transparent focus:border-cyan-400 outline-none text-6xl font-black italic shadow-inner tracking-tighter text-[#0a192f]"
-                value={invoiceAmount || ''}
-                onChange={e => setInvoiceAmount(parseFloat(e.target.value) || 0)}
-              />
+        <form onSubmit={handlePreview} className="p-8 md:p-12 space-y-8">
+          {/* Financial Overview Card */}
+          <div className="p-6 bg-cyan-50/70 rounded-3xl border-2 border-cyan-100 flex flex-col gap-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <span className="text-[10px] font-black uppercase text-cyan-800 tracking-widest block">Available Balance</span>
+                <span className="text-xs text-slate-500 font-medium">Pending to collect</span>
+              </div>
+              <span className="text-3xl font-black font-mono text-[#0a192f] italic">
+                ${(selectedProject?.balance || 0).toLocaleString()}
+              </span>
+            </div>
+            
+            <div className="pt-3 border-t border-cyan-200/70 flex justify-between items-center text-xs">
+              <span className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">Total Contract Value:</span>
+              <span className="font-black text-slate-800 font-mono text-sm">
+                ${totalContractVal.toLocaleString()}
+              </span>
             </div>
           </div>
 
+          {/* Billing Amount & Percentage Section */}
           <div className="space-y-4">
-            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Detailed Invoice Description / Scope Details *</label>
+            <div className="flex justify-between items-center">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">
+                Billing Amount & Draw Percentage
+              </label>
+              <span className="text-[9px] font-black text-cyan-700 bg-cyan-100/80 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                {isFirstPayment ? '★ First Payment (Draw 1)' : `Payment #${paymentNumber} (Draw ${paymentNumber})`}
+              </span>
+            </div>
+
+            {/* Quick Draw / Percentage Buttons */}
+            <div className="grid grid-cols-4 gap-2">
+              {[25, 33.3, 50, 100].map(pct => {
+                const isSelected = Math.abs(currentPctNum - pct) < 0.2;
+                return (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => handleQuickPercent(pct)}
+                    className={`py-2 px-1 text-center rounded-xl text-xs font-black transition-all border ${
+                      isSelected
+                        ? 'bg-[#0a192f] text-cyan-400 border-[#0a192f] shadow-md shadow-slate-900/10'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                    }`}
+                  >
+                    {pct === 100 ? '100% (Full)' : `${pct}%`}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Dual Inputs: Amount ($) and Percentage (%) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Dollar Amount Input */}
+              <div className="relative">
+                <span className="text-[9px] font-black uppercase text-slate-400 absolute left-5 top-2.5 tracking-wider">Amount ($)</span>
+                <span className="absolute left-5 top-8 text-cyan-600 text-2xl font-black italic">$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  autoFocus
+                  className="w-full pl-11 pr-4 pt-7 pb-2.5 bg-slate-50 rounded-2xl border-2 border-slate-200 focus:border-cyan-400 outline-none text-2xl font-black italic text-[#0a192f] shadow-inner"
+                  value={invoiceAmount || ''}
+                  onChange={e => handleAmountChange(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+
+              {/* Percentage (%) Input - Directly editable by user */}
+              <div className="relative">
+                <span className="text-[9px] font-black uppercase text-slate-400 absolute left-5 top-2.5 tracking-wider">Percentage (%)</span>
+                <span className="absolute left-5 top-8 text-cyan-600 text-2xl font-black italic">%</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  placeholder="0.0"
+                  className="w-full pl-12 pr-4 pt-7 pb-2.5 bg-slate-50 rounded-2xl border-2 border-slate-200 focus:border-cyan-400 outline-none text-2xl font-black italic text-[#0a192f] shadow-inner"
+                  value={invoicePercentInput}
+                  onChange={e => handlePercentChange(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Real-time Calculation Breakdown Pill */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col gap-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-bold">This Invoice:</span>
+                <span className="font-black text-[#0a192f] font-mono">
+                  {formatPctStr(currentPctNum)} (${(invoiceAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-slate-200/60">
+                <span className="text-slate-500 font-bold">Remaining Pending to Collect:</span>
+                <span className={`font-black font-mono ${currentRemainingBal <= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {formatPctStr(currentRemPctNum)} (${currentRemainingBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Scope Details Section */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">
+                Detailed Invoice Description / Scope Details *
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedProject) {
+                    setInvoiceDescription(buildScopeDescription(selectedProject, invoiceAmount, invoices, workNote));
+                  }
+                }}
+                className="text-[10px] font-black text-cyan-600 hover:text-cyan-700 uppercase flex items-center gap-1 transition-colors"
+                title="Reset or recalculate description with current amount and percentage"
+              >
+                <RotateCcw className="w-3 h-3" /> Auto-Generate
+              </button>
+            </div>
+
+            {/* Milestone / Work note customization */}
+            <div>
+              <input
+                type="text"
+                placeholder="Custom work note (e.g. Deposit for materials, Framing complete)..."
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-cyan-400 outline-none text-xs font-bold text-slate-700 shadow-inner"
+                value={workNote}
+                onChange={e => handleWorkNoteChange(e.target.value)}
+              />
+            </div>
+
             <textarea
-              rows={3}
+              rows={4}
               required
-              className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-cyan-400 outline-none text-xs font-bold text-slate-700 shadow-inner resize-none"
-              placeholder="Describe what work this invoice covers (e.g. Deposit Payment, Materials Delivered, Framing Complete)..."
+              className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-cyan-400 outline-none text-xs font-bold text-slate-700 shadow-inner resize-none font-mono leading-relaxed"
+              placeholder="Describe what work this invoice covers..."
               value={invoiceDescription}
               onChange={e => setInvoiceDescription(e.target.value)}
             />
           </div>
 
-          <button type="submit" className="w-full py-7 bg-cyan-600 text-white rounded-[2.5rem] font-black uppercase text-xs shadow-2xl hover:bg-cyan-500 transition-all active:scale-95 shadow-cyan-600/20">Preview Invoice Document</button>
+          <button
+            type="submit"
+            className="w-full py-6 bg-cyan-600 text-white rounded-[2rem] font-black uppercase text-xs shadow-2xl hover:bg-cyan-500 transition-all active:scale-95 shadow-cyan-600/20 flex items-center justify-center gap-2"
+          >
+            <FileText className="w-4 h-4" /> Preview Invoice Document
+          </button>
         </form>
       </div>
     </div>
