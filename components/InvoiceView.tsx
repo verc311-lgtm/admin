@@ -86,11 +86,16 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
 
   const invoiceRef = useRef<HTMLDivElement>(null);
 
+  const loadedProjectIdRef = useRef<string | null>(null);
+  const loadedInvoiceIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (initialInvoice) {
-      const project = projects.find(p => p.id === initialInvoice.projectId);
-      if (project) {
-        setSelectedProject(project);
+      if (loadedInvoiceIdRef.current !== initialInvoice.id) {
+        loadedInvoiceIdRef.current = initialInvoice.id;
+        loadedProjectIdRef.current = null;
+        const project = projects.find(p => p.id === initialInvoice.projectId);
+        if (project) setSelectedProject(project);
         setInvoiceAmount(initialInvoice.amount);
         const total = getProjectContractTotal(project);
         const pct = total > 0 ? Math.round(((initialInvoice.amount / total) * 100) * 10) / 10 : 0;
@@ -102,38 +107,58 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
         setIsSaved(true);
       }
     } else if (initialProject) {
-      setSelectedProject(initialProject);
-      const total = getProjectContractTotal(initialProject);
-      const defaultAmount = initialProject.balance;
-      setInvoiceAmount(defaultAmount);
-      const defaultPct = total > 0 ? Math.round(((defaultAmount / total) * 100) * 10) / 10 : 100;
-      setInvoicePercentInput(defaultPct.toString());
-      const defaultNote = 'Marine construction services and progress implementation.';
-      setWorkNote(defaultNote);
-      setInvoiceDescription(buildScopeDescription(initialProject, defaultAmount, invoices, defaultNote));
-      setSavedInvoiceNumber('');
-      setShowPreview(false);
-      setHistoricalInvoice(null);
-      setIsSaved(false);
+      if (loadedProjectIdRef.current !== initialProject.id) {
+        loadedProjectIdRef.current = initialProject.id;
+        loadedInvoiceIdRef.current = null;
+        setSelectedProject(initialProject);
+        const total = getProjectContractTotal(initialProject);
+        const defaultAmount = initialProject.balance;
+        setInvoiceAmount(defaultAmount);
+        const defaultPct = total > 0 ? Math.round(((defaultAmount / total) * 100) * 10) / 10 : 100;
+        setInvoicePercentInput(defaultPct.toString());
+        const defaultNote = 'Marine construction services and progress implementation.';
+        setWorkNote(defaultNote);
+        setInvoiceDescription(buildScopeDescription(initialProject, defaultAmount, invoices, defaultNote));
+        setSavedInvoiceNumber('');
+        setShowPreview(false);
+        setHistoricalInvoice(null);
+        setIsSaved(false);
+      }
+    } else {
+      loadedProjectIdRef.current = null;
+      loadedInvoiceIdRef.current = null;
     }
-  }, [initialInvoice, initialProject, projects]);
+  }, [initialInvoice?.id, initialProject?.id]);
 
   useEffect(() => {
     if (historicalInvoice) {
-      const project = projects.find(p => p.id === historicalInvoice.projectId);
-      if (project) {
-        setSelectedProject(project);
-        setInvoiceAmount(historicalInvoice.amount);
-        const total = getProjectContractTotal(project);
-        const pct = total > 0 ? Math.round(((historicalInvoice.amount / total) * 100) * 10) / 10 : 0;
-        setInvoicePercentInput(pct > 0 ? pct.toString() : '');
-        setInvoiceDescription(historicalInvoice.description || 'Marine construction services and progress implementation.');
-        setSavedInvoiceNumber(historicalInvoice.invoiceNumber);
-        setShowPreview(true);
-        setIsSaved(true);
+      if (loadedInvoiceIdRef.current !== historicalInvoice.id) {
+        loadedInvoiceIdRef.current = historicalInvoice.id;
+        const project = projects.find(p => p.id === historicalInvoice.projectId);
+        if (project) {
+          setSelectedProject(project);
+          setInvoiceAmount(historicalInvoice.amount);
+          const total = getProjectContractTotal(project);
+          const pct = total > 0 ? Math.round(((historicalInvoice.amount / total) * 100) * 10) / 10 : 0;
+          setInvoicePercentInput(pct > 0 ? pct.toString() : '');
+          setInvoiceDescription(historicalInvoice.description || 'Marine construction services and progress implementation.');
+          setSavedInvoiceNumber(historicalInvoice.invoiceNumber);
+          setShowPreview(true);
+          setIsSaved(true);
+        }
       }
     }
-  }, [historicalInvoice, projects]);
+  }, [historicalInvoice?.id]);
+
+  // Keep selectedProject metadata updated in background without clearing active user inputs
+  useEffect(() => {
+    if (selectedProject) {
+      const fresh = projects.find(p => p.id === selectedProject.id);
+      if (fresh && (fresh.balance !== selectedProject.balance || fresh.totalAmount !== selectedProject.totalAmount)) {
+        setSelectedProject(fresh);
+      }
+    }
+  }, [projects]);
 
   const handleAmountChange = (val: number) => {
     setInvoiceAmount(val);
@@ -535,7 +560,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
     return (
       <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
         <div className="flex justify-between items-center print:hidden bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
-          <button onClick={() => { setShowPreview(false); if (historicalInvoice && !initialProject) setHistoricalInvoice(null); if (onClose) onClose(); }} className="flex items-center gap-2 text-slate-400 font-black uppercase text-[10px] hover:text-[#0a192f] transition-all"><ArrowLeft className="w-4 h-4" /> Back</button>
+          <button onClick={() => { loadedProjectIdRef.current = null; loadedInvoiceIdRef.current = null; setShowPreview(false); if (historicalInvoice && !initialProject) setHistoricalInvoice(null); if (onClose) onClose(); }} className="flex items-center gap-2 text-slate-400 font-black uppercase text-[10px] hover:text-[#0a192f] transition-all"><ArrowLeft className="w-4 h-4" /> Back</button>
           <div className="flex gap-3">
             <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-slate-100 rounded-2xl font-black text-[10px] uppercase hover:bg-slate-200 transition-all"><Printer className="w-4 h-4" /> Print</button>
             <button onClick={downloadPDF} disabled={isGeneratingPDF} className="flex items-center gap-2 px-6 py-3 bg-[#0a192f] text-white rounded-2xl font-black text-[10px] uppercase hover:bg-slate-800 disabled:opacity-50 shadow-xl shadow-slate-900/10">
@@ -664,7 +689,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
             <h2 className="text-3xl font-black uppercase italic leading-none tracking-tighter">Draft Invoice</h2>
             <p className="text-cyan-400 text-[10px] font-black tracking-widest uppercase mt-3">{selectedProject?.name || 'Creation Tool'}</p>
           </div>
-          <button onClick={() => onClose?.()} className="text-white/20 hover:text-white transition-colors"><X className="w-8 h-8" /></button>
+          <button onClick={() => { loadedProjectIdRef.current = null; loadedInvoiceIdRef.current = null; onClose?.(); }} className="text-white/20 hover:text-white transition-colors"><X className="w-8 h-8" /></button>
         </div>
 
         <form onSubmit={handlePreview} className="p-8 md:p-12 space-y-8">
