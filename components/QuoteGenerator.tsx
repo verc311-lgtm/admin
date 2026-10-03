@@ -1,10 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Bot, FileText, Loader2, Settings, Plus, Trash2, Check, Layers, MessageSquare, Edit3, X, RotateCcw, DollarSign, Save, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Bot, FileText, Loader2, Settings, Plus, Trash2, Check, Layers, MessageSquare, Edit3, X, RotateCcw, DollarSign, Save, Sparkles, Camera, ImagePlus, ShieldCheck, Award } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { PricingItem, DEFAULT_CATALOG, getDefaultCatalog, calculateInteractivePrice } from '../utils/pricingCalculator';
 import { supabase } from '../src/supabaseClient';
 
 const DEFAULT_PROJECT_TYPES = ["Pier / Dock", "Floating Dock", "Bulkhead", "Boat Lift", "Rip-Rap / Erosion Control", "Other / Custom Project"];
+
+interface AttachedPhoto {
+    id: string;
+    dataUrl: string;
+    name: string;
+    caption: string;
+}
 
 interface QuoteSection {
     id: string;
@@ -90,6 +97,11 @@ const QuoteGenerator: React.FC = () => {
     // Manual mode: user types scope directly without AI
     const [manualMode, setManualMode] = useState(false);
     const [showProjectSummary, setShowProjectSummary] = useState(true);
+
+    // Attached Photos State
+    const [attachedPhotos, setAttachedPhotos] = useState<AttachedPhoto[]>([]);
+    const [isProcessingPhotos, setIsProcessingPhotos] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     // Fetch remote catalog and project types from Supabase on mount
     useEffect(() => {
@@ -336,6 +348,78 @@ const QuoteGenerator: React.FC = () => {
     const adjustments = parseFloat(otherWorkCost) || 0;
     const grandTotal = sectionsTotal + adjustments;
 
+    // Process image file via HTML5 canvas to cap max dimension at 1280px and compress as JPEG
+    const processImageFile = (file: File): Promise<AttachedPhoto> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const maxDim = 1280;
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) {
+                            h = Math.round((h * maxDim) / w);
+                            w = maxDim;
+                        } else {
+                            w = Math.round((w * maxDim) / h);
+                            h = maxDim;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        resolve({
+                            id: Math.random().toString(36).substring(2, 9),
+                            dataUrl: e.target?.result as string,
+                            name: file.name,
+                            caption: ''
+                        });
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    resolve({
+                        id: Math.random().toString(36).substring(2, 9),
+                        dataUrl: compressedDataUrl,
+                        name: file.name,
+                        caption: ''
+                    });
+                };
+                img.onerror = () => reject(new Error('Failed to load image'));
+                img.src = e.target?.result as string;
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const handlePhotoFiles = async (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        setIsProcessingPhotos(true);
+        try {
+            const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+            const processed = await Promise.all(validFiles.map(processImageFile));
+            setAttachedPhotos(prev => [...prev, ...processed]);
+        } catch (err) {
+            console.error('Error processing photos:', err);
+        } finally {
+            setIsProcessingPhotos(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const removePhoto = (id: string) => {
+        setAttachedPhotos(prev => prev.filter(p => p.id !== id));
+    };
+
+    const updatePhotoCaption = (id: string, caption: string) => {
+        setAttachedPhotos(prev => prev.map(p => p.id === id ? { ...p, caption } : p));
+    };
+
     // Activate manual mode: prefills textarea with a blank template and lets user write from scratch
     const activateManualMode = () => {
         setManualMode(true);
@@ -343,7 +427,7 @@ const QuoteGenerator: React.FC = () => {
         if (!scopeOfWork) {
             setScopeOfWork(
                 (projectTitle.trim() ? `PROJECT: ${projectTitle.trim().toUpperCase()}\n\n` : '') +
-                `SCOPE OF WORK:\nCoastal VA Marine Construction is pleased to present this proposal for marine construction and installation services.\n\n` +
+                `SCOPE OF WORK:\nCoastal VA Marine Construction (Commonwealth of Virginia Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) is pleased to present this proposal for marine construction and installation services.\n\n` +
                 sections.map((s, i) => `OPTION ${i + 1} - ${s.type.toUpperCase()}:\n- Quantity / Dimensions: ${s.dimensions} ${s.type.toLowerCase().includes('dock') ? 'SQF' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap')) ? 'Linear Feet' : 'Units'}\n- Description / Materials: ${s.description || 'Standard installation'}\n- Fasteners & Hardware: Marine-grade corrosion-resistant hardware\n`).join('\n') +
                 `\nSTANDARD EXCLUSIONS:\n- Permits, regulatory filings, and engineering drawings (unless specifically noted)\n- Geotechnical soil testing or environmental surveys\n- Hidden subsurface or underwater obstructions\n- Electrical service connection / high-voltage utility tie-ins beyond rough-in`
             );
@@ -442,7 +526,7 @@ const QuoteGenerator: React.FC = () => {
                 projectDesc += `Description: ${otherWorkDescription}\n`;
             }
 
-            const prompt = `You are a licensed master marine construction estimator preparing a comprehensive, highly professional construction proposal for "Coastal VA Marine Construction".
+            const prompt = `You are a licensed master marine construction estimator preparing a comprehensive, highly professional construction proposal for "Coastal VA Marine Construction", a Commonwealth of Virginia DPOR Class A Contractor (Lic #2705188660, Classifications: DRY, MCC) and 100% Fully Licensed & Insured marine contracting firm.
 
 Proposal Title: ${projectTitle.trim() ? projectTitle.trim() : '(None provided - please generate an accurate, professional project title)'}
 Client Name: ${clientName || 'Valued Client'}
@@ -467,7 +551,7 @@ CRITICAL PROPOSAL INSTRUCTIONS:
    - Do NOT give generic or brief one-liners. Detail the exact components being utilized based on the user's input.
 
 3. SCOPE OF WORK INTRODUCTION:
-   - Provide a 2 to 3 sentence introductory statement summarizing the project scope, coastal site preparation, and dedication to premium marine engineering and durability.
+   - Provide a 2 to 3 sentence introductory statement summarizing the project scope, coastal site preparation, and noting Coastal VA Marine Construction's standing as a Commonwealth of Virginia Class A licensed (#2705188660) and 100% fully insured marine contractor dedicated to superior marine craftsmanship.
 
 4. STANDARD EXCLUSIONS:
    - Include standard marine industry exclusions.
@@ -539,7 +623,7 @@ Return ONLY a valid JSON object matching this schema:
 
             // Introduction / Scope of Work header
             const intro = (parsed.introduction || parsed.intro || (typeof parsed.scopeOfWork === 'string' && !parsed.scopeOfWork.toUpperCase().includes('OPTION') && !parsed.scopeOfWork.toUpperCase().includes('SECTION') ? parsed.scopeOfWork : '') || '').trim();
-            fullScope += `SCOPE OF WORK:\n${intro || 'Coastal VA Marine Construction is pleased to present this comprehensive proposal. All work will be executed with premium marine-grade materials, proven craftsmanship, and strict adherence to coastal building standards.'}\n\n`;
+            fullScope += `SCOPE OF WORK:\n${intro || 'Coastal VA Marine Construction (Commonwealth of Virginia DPOR Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) is pleased to present this comprehensive proposal. All work will be executed with premium marine-grade materials, proven craftsmanship, and strict adherence to coastal building standards.'}\n\n`;
 
             // Render Options
             let renderedSectionsCount = 0;
@@ -668,6 +752,12 @@ Return ONLY a valid JSON object matching this schema:
             doc.setTextColor(148, 163, 184);
             doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), width - margin, 15, { align: 'right' });
 
+            // License & Insured tag under date on right
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7.5);
+            doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
+            doc.text("VA CLASS A LIC #2705188660 • 100% FULLY INSURED", width - margin, 22, { align: 'right' });
+
             // Reset
             doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
             doc.setFont("helvetica", "normal");
@@ -680,7 +770,7 @@ Return ONLY a valid JSON object matching this schema:
             doc.setFont("helvetica", "normal");
             doc.setFontSize(7);
             doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
-            doc.text("Coastal VA Marine Construction  •  Preliminary Proposal  •  Confidential", width / 2, height - 8, { align: 'center' });
+            doc.text("Coastal VA Marine Construction  •  VA Class A Lic #2705188660  •  100% Fully Licensed & Insured  •  Chesapeake, VA", width / 2, height - 8, { align: 'center' });
         };
 
         // ════════════════════════════════════
@@ -688,7 +778,9 @@ Return ONLY a valid JSON object matching this schema:
         // ════════════════════════════════════
         drawHeader();
 
-        // ── Client Info ──
+        const clientInfoStartY = y;
+
+        // ── Client Info (Left Column) ──
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
@@ -698,29 +790,75 @@ Return ONLY a valid JSON object matching this schema:
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
         doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-        doc.text(clientName || "Valued Client", margin, y);
-        y += 6;
+        const clientLines = doc.splitTextToSize(clientName || "Valued Client", 92);
+        doc.text(clientLines, margin, y);
+        y += (clientLines.length * 5) + 1;
 
         if (clientAddress) {
             doc.setFont("helvetica", "normal");
-            doc.setFontSize(9);
+            doc.setFontSize(8.5);
             doc.setTextColor(BODY[0], BODY[1], BODY[2]);
-            doc.text(clientAddress, margin, y);
-            y += 5;
+            const addrLines = doc.splitTextToSize(clientAddress, 92);
+            doc.text(addrLines, margin, y);
+            y += (addrLines.length * 4) + 1;
         }
 
         if (projectTitle.trim()) {
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(10);
+            doc.setFontSize(9.5);
             doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
-            const titleLines = doc.splitTextToSize(`PROJECT: ${projectTitle.trim().toUpperCase()}`, width - margin * 2);
+            const titleLines = doc.splitTextToSize(`PROJECT: ${projectTitle.trim().toUpperCase()}`, 92);
             doc.text(titleLines, margin, y + 1);
-            y += (titleLines.length * 4.5) + 3;
+            y += (titleLines.length * 4.2) + 2;
         } else {
-            y += 3;
+            y += 2;
         }
 
-        // Thin separator
+        // ── Official Credential Card (Right Column) ──
+        const cardX = 118;
+        const cardY = clientInfoStartY - 3;
+        const cardW = width - margin - cardX; // ~80mm
+        const cardH = 26;
+
+        // Clean light background + border
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+        doc.setLineWidth(0.4);
+        doc.roundedRect(cardX, cardY, cardW, cardH, 2, 2, 'FD');
+
+        // Cyan top indicator bar inside card
+        doc.setFillColor(CYAN[0], CYAN[1], CYAN[2]);
+        doc.roundedRect(cardX, cardY, cardW, 1.2, 1, 1, 'F');
+
+        // Header inside card
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+        doc.text("LICENSED & 100% FULLY INSURED", cardX + 4, cardY + 5.5);
+
+        // Commonwealth line
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.5);
+        doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+        doc.text("Commonwealth of Virginia — DPOR", cardX + 4, cardY + 10.5);
+
+        // License & Classifications
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+        doc.text("Class A Contractor Lic #2705188660", cardX + 4, cardY + 15);
+        doc.text("Classifications: DRY, MCC (Marine)", cardX + 4, cardY + 19);
+
+        // Insurance status
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.8);
+        doc.setTextColor(ACCENT_GREEN[0], ACCENT_GREEN[1], ACCENT_GREEN[2]);
+        doc.text("100% General Liability & Workers' Comp", cardX + 4, cardY + 23);
+
+        // Ensure y is below both the client info and the credential card
+        y = Math.max(y, cardY + cardH + 4);
+
+        // Thin separator across page
         doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
         doc.setLineWidth(0.3);
         doc.line(margin, y, width - margin, y);
@@ -985,7 +1123,175 @@ Return ONLY a valid JSON object matching this schema:
         doc.text("CLIENT SIGNATURE & DATE", sigLeftX, y);
         doc.text("COASTAL VA REPRESENTATIVE & DATE", sigRightX, y);
 
+        y += 8;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.8);
+        doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
+        doc.text("Coastal VA Marine Construction LLC is a licensed Class A Contractor in Virginia (DPOR Lic #2705188660) and maintains 100% Comprehensive General Liability and Workers' Compensation coverage on all projects.", width / 2, y, { align: 'center', maxWidth: width - margin * 2 });
+
         drawFooter();
+
+        // ════════════════════════════════════
+        //  PAGE 3+ - PROJECT SITE PHOTOS & ATTACHMENTS (if any)
+        // ════════════════════════════════════
+        if (attachedPhotos.length > 0) {
+            const isSingle = attachedPhotos.length === 1;
+
+            if (isSingle) {
+                // Single large photo display
+                doc.addPage();
+                drawHeader();
+
+                let py = 48;
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(12);
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                doc.text("PROJECT SITE PHOTOS & ATTACHMENTS", width / 2, py, { align: 'center' });
+                py += 3;
+
+                doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
+                doc.setLineWidth(0.6);
+                doc.line(width / 2 - 35, py, width / 2 + 35, py);
+                doc.setLineWidth(0.2);
+                py += 6;
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+                doc.text("Visual documentation, site conditions, and reference attachments.", width / 2, py, { align: 'center' });
+                py += 8;
+
+                const photo = attachedPhotos[0];
+                const cardW = 150;
+                const cardH = 130;
+                const imgH = 110;
+                const cardX = (width - cardW) / 2;
+                const cardY = py + 4;
+
+                doc.setFillColor(255, 255, 255);
+                doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+                doc.setLineWidth(0.3);
+                doc.roundedRect(cardX, cardY, cardW, cardH, 2, 2, 'FD');
+
+                const pad = 2;
+                const imgX = cardX + pad;
+                const imgY = cardY + pad;
+                const imgW = cardW - pad * 2;
+                const availableImgH = imgH - pad;
+
+                try {
+                    doc.addImage(photo.dataUrl, 'JPEG', imgX, imgY, imgW, availableImgH, undefined, 'FAST');
+                } catch (imgErr) {
+                    console.warn('Could not add image to PDF:', imgErr);
+                }
+
+                // Photo number badge
+                doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+                doc.roundedRect(imgX + 3, imgY + 3, 20, 5, 1, 1, 'F');
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(6.5);
+                doc.setTextColor(255, 255, 255);
+                doc.text("PHOTO 1", imgX + 10, imgY + 6.5, { align: 'center' });
+
+                // Caption divider
+                doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+                doc.line(cardX, cardY + imgH, cardX + cardW, cardY + imgH);
+
+                // Caption
+                const captionText = (photo.caption && photo.caption.trim()) ? photo.caption.trim() : (photo.name || 'Photo Attachment 1');
+                doc.setFont("helvetica", photo.caption ? "bold" : "normal");
+                doc.setFontSize(8.5);
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                const capLines = doc.splitTextToSize(captionText, cardW - 10);
+                doc.text(capLines.slice(0, 2), width / 2, cardY + imgH + 7, { align: 'center' });
+
+                drawFooter();
+            } else {
+                // Multi-photo grid: up to 4 per page (2 columns x 2 rows)
+                const photosPerPage = 4;
+                const totalPhotoPages = Math.ceil(attachedPhotos.length / photosPerPage);
+
+                for (let pageIdx = 0; pageIdx < totalPhotoPages; pageIdx++) {
+                    doc.addPage();
+                    drawHeader();
+
+                    let py = 48;
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(12);
+                    doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                    doc.text("PROJECT SITE PHOTOS & ATTACHMENTS", width / 2, py, { align: 'center' });
+                    py += 3;
+
+                    doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
+                    doc.setLineWidth(0.6);
+                    doc.line(width / 2 - 35, py, width / 2 + 35, py);
+                    doc.setLineWidth(0.2);
+                    py += 6;
+
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(8);
+                    doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+                    doc.text("Visual documentation, site conditions, and reference attachments.", width / 2, py, { align: 'center' });
+                    py += 8;
+
+                    const pagePhotos = attachedPhotos.slice(pageIdx * photosPerPage, (pageIdx + 1) * photosPerPage);
+
+                    const gridGapX = 8;
+                    const gridGapY = 8;
+                    const colW = (width - margin * 2 - gridGapX) / 2; // ~86mm
+                    const cardH = 88;
+                    const imgH = 70;
+
+                    pagePhotos.forEach((photo, idx) => {
+                        const globalIdx = pageIdx * photosPerPage + idx;
+                        const col = idx % 2;
+                        const row = Math.floor(idx / 2);
+                        const cardX = margin + col * (colW + gridGapX);
+                        const cardY = py + row * (cardH + gridGapY);
+
+                        // Card box
+                        doc.setFillColor(255, 255, 255);
+                        doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+                        doc.setLineWidth(0.3);
+                        doc.roundedRect(cardX, cardY, colW, cardH, 2, 2, 'FD');
+
+                        const pad = 2;
+                        const imgX = cardX + pad;
+                        const imgY = cardY + pad;
+                        const imgW = colW - pad * 2;
+                        const availableImgH = imgH - pad;
+
+                        try {
+                            doc.addImage(photo.dataUrl, 'JPEG', imgX, imgY, imgW, availableImgH, undefined, 'FAST');
+                        } catch (imgErr) {
+                            console.warn('Could not add image to PDF:', imgErr);
+                        }
+
+                        // Badge
+                        doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+                        doc.roundedRect(imgX + 2, imgY + 2, 17, 4.5, 1, 1, 'F');
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(6);
+                        doc.setTextColor(255, 255, 255);
+                        doc.text(`PHOTO ${globalIdx + 1}`, imgX + 8.5, imgY + 5.2, { align: 'center' });
+
+                        // Caption divider
+                        doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+                        doc.line(cardX, cardY + imgH, cardX + colW, cardY + imgH);
+
+                        // Caption text
+                        const captionText = (photo.caption && photo.caption.trim()) ? photo.caption.trim() : (photo.name || `Photo ${globalIdx + 1}`);
+                        doc.setFont("helvetica", photo.caption ? "bold" : "normal");
+                        doc.setFontSize(7.5);
+                        doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                        const capLines = doc.splitTextToSize(captionText, colW - 6);
+                        doc.text(capLines.slice(0, 2), cardX + colW / 2, cardY + imgH + 5.5, { align: 'center' });
+                    });
+
+                    drawFooter();
+                }
+            }
+        }
 
         const safeTitle = (projectTitle.trim() || clientName || 'Proposal').replace(/[^a-zA-Z0-9_-]/g, '_');
         doc.save(`Proposal_${safeTitle}_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -993,6 +1299,93 @@ Return ONLY a valid JSON object matching this schema:
 
     const currentLivePrice = Number(calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, undefined, customMaterialPrice, customLaborPrice)) || 0;
     const proposalReady = (scopeOfWork || '').trim().length > 0;
+
+    const renderPhotoSection = () => (
+        <div className="mt-2 pt-4 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-2.5">
+                <label className="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center gap-2">
+                    <Camera className="w-4 h-4 text-cyan-600" />
+                    Project Photos & Attachments
+                    {attachedPhotos.length > 0 && (
+                        <span className="bg-cyan-100 text-cyan-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                            {attachedPhotos.length} {attachedPhotos.length === 1 ? 'photo' : 'photos'}
+                        </span>
+                    )}
+                </label>
+                {attachedPhotos.length > 0 && (
+                    <button
+                        type="button"
+                        onClick={() => setAttachedPhotos([])}
+                        className="text-[10px] font-bold text-red-500 hover:text-red-700 uppercase tracking-wide transition-colors"
+                    >
+                        Clear All
+                    </button>
+                )}
+            </div>
+
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={e => handlePhotoFiles(e.target.files)}
+                accept="image/*"
+                multiple
+                className="hidden"
+            />
+
+            <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessingPhotos}
+                className="w-full py-3 px-4 border-2 border-dashed border-slate-200 hover:border-cyan-400 bg-slate-50 hover:bg-cyan-50/40 rounded-xl text-xs font-bold text-slate-600 hover:text-cyan-700 transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+            >
+                {isProcessingPhotos ? (
+                    <>
+                        <Loader2 className="w-4 h-4 animate-spin text-cyan-600" />
+                        <span>Optimizing images for PDF...</span>
+                    </>
+                ) : (
+                    <>
+                        <ImagePlus className="w-4 h-4 text-cyan-600" />
+                        <span>{attachedPhotos.length > 0 ? 'Add More Photos' : 'Upload Site Photos (Attached to PDF Annex)'}</span>
+                    </>
+                )}
+            </button>
+
+            {attachedPhotos.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 mt-3 max-h-64 overflow-y-auto pr-1">
+                    {attachedPhotos.map((photo, pIdx) => (
+                        <div key={photo.id} className="relative group bg-slate-50 rounded-xl p-2 border border-slate-200 flex flex-col gap-2">
+                            <div className="relative h-24 rounded-lg overflow-hidden bg-slate-200">
+                                <img
+                                    src={photo.dataUrl}
+                                    alt={photo.name}
+                                    className="w-full h-full object-cover"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => removePhoto(photo.id)}
+                                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md transition-all active:scale-90"
+                                    title="Remove photo"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                                <span className="absolute bottom-1 left-1 bg-slate-900/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                                    #{pIdx + 1}
+                                </span>
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Caption (e.g. Existing Bulkhead)"
+                                value={photo.caption}
+                                onChange={e => updatePhotoCaption(photo.id, e.target.value)}
+                                className="w-full text-[11px] bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-cyan-500 text-slate-700 font-medium"
+                            />
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in">
@@ -1005,9 +1398,15 @@ Return ONLY a valid JSON object matching this schema:
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Multi-Section AI Estimator</p>
                     </div>
                 </div>
-                <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                    <Settings className="w-5 h-5 text-slate-400" />
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="hidden md:flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200/60 px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                        <span>VA Class A Lic #2705188660 • 100% Fully Insured</span>
+                    </div>
+                    <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                        <Settings className="w-5 h-5 text-slate-400" />
+                    </button>
+                </div>
             </div>
 
             {showSettings && (
@@ -1280,6 +1679,12 @@ Return ONLY a valid JSON object matching this schema:
                                     <input type="checkbox" id="showSummary" checked={showProjectSummary} onChange={e => setShowProjectSummary(e.target.checked)} className="w-4 h-4 cursor-pointer" />
                                     <label htmlFor="showSummary" className="text-xs font-bold text-slate-400 uppercase cursor-pointer select-none">Include Itemized Summary in PDF</label>
                                 </div>
+
+                                {renderPhotoSection()}
+
+                                <button onClick={generatePDF} className="w-full py-3.5 bg-red-500 hover:bg-red-600 active:scale-[0.99] text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 transition-all">
+                                    <FileText className="w-4 h-4" /> Export PDF
+                                </button>
                             </div>
                         ) : manualMode ? (
                             <div className="flex flex-col gap-4">
@@ -1304,15 +1709,22 @@ Return ONLY a valid JSON object matching this schema:
                                     <input type="checkbox" id="showSummary2" checked={showProjectSummary} onChange={e => setShowProjectSummary(e.target.checked)} className="w-4 h-4 cursor-pointer" />
                                     <label htmlFor="showSummary2" className="text-xs font-bold text-slate-400 uppercase cursor-pointer select-none">Include Itemized Summary in PDF</label>
                                 </div>
+
+                                {renderPhotoSection()}
+
                                 <button onClick={generatePDF} disabled={scopeOfWork.trim().length < 10} className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shadow-lg transition-all">
                                     <FileText className="w-4 h-4" /> Export PDF
                                 </button>
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center text-center py-12 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
-                                <Layers className="w-12 h-12 text-slate-200 mb-4" />
-                                <p className="text-slate-400 font-bold text-sm">Ready to generate</p>
-                                <p className="text-slate-300 text-xs mt-1 px-6">Add sections then use AI or write manually</p>
+                            <div className="flex flex-col gap-4">
+                                <div className="flex flex-col items-center justify-center text-center py-10 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
+                                    <Layers className="w-12 h-12 text-slate-200 mb-4" />
+                                    <p className="text-slate-400 font-bold text-sm">Ready to generate</p>
+                                    <p className="text-slate-300 text-xs mt-1 px-6">Add sections then use AI or write manually</p>
+                                </div>
+
+                                {renderPhotoSection()}
                             </div>
                         )}
 
