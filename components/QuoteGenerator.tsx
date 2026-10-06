@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, FileText, Loader2, Settings, Plus, Trash2, Check, Layers, MessageSquare, Edit3, X, RotateCcw, DollarSign, Save, Sparkles, Camera, ImagePlus, ShieldCheck, Award } from 'lucide-react';
+import { Bot, FileText, FileCheck, Loader2, Settings, Plus, Trash2, Check, Layers, MessageSquare, Edit3, X, RotateCcw, DollarSign, Save, Sparkles, Camera, ImagePlus, ShieldCheck, Award } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { PricingItem, DEFAULT_CATALOG, getDefaultCatalog, calculateInteractivePrice } from '../utils/pricingCalculator';
 import { supabase } from '../src/supabaseClient';
@@ -102,6 +102,58 @@ const QuoteGenerator: React.FC = () => {
     const [attachedPhotos, setAttachedPhotos] = useState<AttachedPhoto[]>([]);
     const [isProcessingPhotos, setIsProcessingPhotos] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    // Document Type: Proposal vs Contract
+    const [docType, setDocType] = useState<'proposal' | 'contract'>('proposal');
+
+    // Number to English Words Helper for Contract Documents
+    const numberToEnglishWords = (amount: number): string => {
+        if (isNaN(amount) || amount === 0) return "Zero 00/100 Dollars";
+        const num = Math.floor(Math.abs(amount));
+        const cents = Math.round((Math.abs(amount) - num) * 100);
+        const centsStr = cents < 10 ? `0${cents}` : `${cents}`;
+
+        const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+        const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+        const convertChunk = (n: number): string => {
+            let chunk = "";
+            if (n >= 100) {
+                chunk += ones[Math.floor(n / 100)] + " Hundred ";
+                n %= 100;
+            }
+            if (n >= 20) {
+                chunk += tens[Math.floor(n / 10)];
+                if (n % 10 > 0) {
+                    chunk += "-" + ones[n % 10];
+                }
+                chunk += " ";
+            } else if (n > 0) {
+                chunk += ones[n] + " ";
+            }
+            return chunk.trim();
+        };
+
+        let words = "";
+        let temp = num;
+        let scaleIndex = 0;
+        const scales = ["", "Thousand", "Million", "Billion"];
+
+        while (temp > 0) {
+            const chunk = temp % 1000;
+            if (chunk > 0) {
+                const chunkWords = convertChunk(chunk);
+                const scale = scales[scaleIndex];
+                words = (scale ? `${chunkWords} ${scale} ` : `${chunkWords} `) + words;
+            }
+            temp = Math.floor(temp / 1000);
+            scaleIndex++;
+        }
+
+        words = words.trim();
+        if (!words) words = "Zero";
+        return `${words} ${centsStr}/100 Dollars`;
+    };
 
     // Fetch remote catalog and project types from Supabase on mount
     useEffect(() => {
@@ -425,10 +477,14 @@ const QuoteGenerator: React.FC = () => {
         setManualMode(true);
         setAiEstimatedTotal(grandTotal);
         if (!scopeOfWork) {
+            const isContr = docType === 'contract';
             setScopeOfWork(
                 (projectTitle.trim() ? `PROJECT: ${projectTitle.trim().toUpperCase()}\n\n` : '') +
-                `SCOPE OF WORK:\nCoastal VA Marine Construction (Commonwealth of Virginia Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) is pleased to present this proposal for marine construction and installation services.\n\n` +
-                sections.map((s, i) => `OPTION ${i + 1} - ${s.type.toUpperCase()}:\n- Quantity / Dimensions: ${s.dimensions} ${s.type.toLowerCase().includes('dock') ? 'SQF' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap')) ? 'Linear Feet' : 'Units'}\n- Description / Materials: ${s.description || 'Standard installation'}\n- Fasteners & Hardware: Marine-grade corrosion-resistant hardware\n`).join('\n') +
+                (isContr 
+                    ? `CONTRACT AGREEMENT & SCOPE OF WORK:\nThis Construction Agreement is entered into between Coastal VA Marine Construction LLC (Commonwealth of Virginia DPOR Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) and ${clientName || 'Client'}. All marine construction and installation work specified below shall be performed in a professional manner according to standard marine practices and engineering specifications.\n\n`
+                    : `SCOPE OF WORK:\nCoastal VA Marine Construction (Commonwealth of Virginia Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) is pleased to present this proposal for marine construction and installation services.\n\n`
+                ) +
+                sections.map((s, i) => `${isContr ? 'SECTION' : 'OPTION'} ${i + 1} - ${s.type.toUpperCase()}:\n- Quantity / Dimensions: ${s.dimensions} ${s.type.toLowerCase().includes('dock') ? 'SQF' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap')) ? 'Linear Feet' : 'Units'}\n- Description / Materials: ${s.description || 'Standard installation'}\n- Fasteners & Hardware: Marine-grade corrosion-resistant hardware\n`).join('\n') +
                 `\nSTANDARD EXCLUSIONS:\n- Permits, regulatory filings, and engineering drawings (unless specifically noted)\n- Geotechnical soil testing or environmental surveys\n- Hidden subsurface or underwater obstructions\n- Electrical service connection / high-voltage utility tie-ins beyond rough-in`
             );
         }
@@ -526,51 +582,54 @@ const QuoteGenerator: React.FC = () => {
                 projectDesc += `Description: ${otherWorkDescription}\n`;
             }
 
-            const prompt = `You are a licensed master marine construction estimator preparing a comprehensive, highly professional construction proposal for "Coastal VA Marine Construction", a Commonwealth of Virginia DPOR Class A Contractor (Lic #2705188660, Classifications: DRY, MCC) and 100% Fully Licensed & Insured marine contracting firm.
+            const isContractDoc = docType === 'contract';
+            const prompt = `You are a licensed master marine construction estimator and contract administrator preparing a comprehensive, highly professional ${isContractDoc ? 'CONSTRUCTION CONTRACT & AGREEMENT' : 'CONSTRUCTION PROPOSAL'} for "Coastal VA Marine Construction", a Commonwealth of Virginia DPOR Class A Contractor (Lic #2705188660, Classifications: DRY, MCC) and 100% Fully Licensed & Insured marine contracting firm.
 
-Proposal Title: ${projectTitle.trim() ? projectTitle.trim() : '(None provided - please generate an accurate, professional project title)'}
+Document Type: ${isContractDoc ? 'Legally Binding Construction Contract & Agreement' : 'Formal Construction Proposal'}
+Project Title: ${projectTitle.trim() ? projectTitle.trim() : (isContractDoc ? 'Marine Construction Contract & Agreement' : 'Marine Construction Proposal')}
 Client Name: ${clientName || 'Valued Client'}
 Project Address: ${clientAddress || 'Client Site Location'}
 
 PROJECT OPTIONS & SPECIFICATIONS:
 ${projectDesc}
 
-CRITICAL PROPOSAL INSTRUCTIONS:
+CRITICAL INSTRUCTIONS (MUST BE 100% IN ENGLISH):
 1. TITLE:
-   - If the user specified a Proposal Title ("${projectTitle.trim()}"), use it.
-   - If no title was specified, generate an accurate, formal, descriptive title based on the sections/options (e.g. "Bulkhead Wood, Vinyl or Rip Rap Installation").
+   - If the user specified a Title ("${projectTitle.trim()}"), use it.
+   - If no title was specified, generate an accurate, formal, descriptive title in English based on the specifications (e.g. "${isContractDoc ? 'Contract Agreement for Bulkhead & Pier Construction' : 'Bulkhead Wood, Vinyl or Rip Rap Installation'}").
 
-2. MANDATORY ITEMIZED OPTIONS BREAKDOWN (EXTREMELY IMPORTANT):
-   - You MUST generate an item in the "sections" array for EVERY SINGLE option listed above.
-   - Total options to generate: ${activeSections.length}. It is strictly forbidden to skip or omit any option.
-   - For EACH option listed, provide at least 3 to 4 comprehensive, technical bullet points specifying:
+2. MANDATORY ITEMIZED SPECIFICATIONS BREAKDOWN (EXTREMELY IMPORTANT):
+   - You MUST generate an item in the "sections" array for EVERY SINGLE section/option listed above.
+   - Total items to generate: ${activeSections.length}. It is strictly forbidden to skip or omit any section.
+   - For EACH item listed, provide at least 3 to 4 comprehensive, technical bullet points in English specifying:
      * Specific materials, models, equipment, decking, and kits according to the user's input (e.g. Bulkhead T&G Wood, TW-95 vinyl sheeting, Class I rip-rap, HydroPort Epic PWC, etc.).
      * Substructure framing, stringers, joists, pile specifications (e.g. 10" x 20' marine-treated pilings driven to refusal, 6x6x16 walers, tie rods), brackets, and marine-grade corrosion-resistant hardware.
      * Anchoring, erosion prevention, filter cloth, alignment, code-compliant spacing, safety features, non-skid surface treatments, and marine craftsmanship.
-   - Every single detail provided in "Specified Details / Materials / Hardware" and "Configured Components & Options" MUST be explicitly included in that option's bullet points.
+   - Every single detail provided in "Specified Details / Materials / Hardware" and "Configured Components & Options" MUST be explicitly included in that item's bullet points.
    - Do NOT give generic or brief one-liners. Detail the exact components being utilized based on the user's input.
 
-3. SCOPE OF WORK INTRODUCTION:
-   - Provide a 2 to 3 sentence introductory statement summarizing the project scope, coastal site preparation, and noting Coastal VA Marine Construction's standing as a Commonwealth of Virginia Class A licensed (#2705188660) and 100% fully insured marine contractor dedicated to superior marine craftsmanship.
+3. ${isContractDoc ? 'CONTRACT AGREEMENT & SCOPE INTRODUCTION' : 'SCOPE OF WORK INTRODUCTION'}:
+   - Provide a 2 to 3 sentence formal introductory statement in English summarizing the project scope, coastal site preparation, and noting Coastal VA Marine Construction's standing as a Commonwealth of Virginia Class A licensed (#2705188660) and 100% fully insured marine contractor dedicated to superior marine craftsmanship.
 
 4. STANDARD EXCLUSIONS:
-   - Include standard marine industry exclusions.
+   - Include standard marine industry exclusions in English.
 
 5. FORMATTING RULES (STRICT):
+   - ALL OUTPUT MUST BE 100% IN ENGLISH.
    - Output PLAIN TEXT ONLY within the JSON fields. NO markdown bolding (**), NO asterisks (*), NO markdown hashes (#), NO backticks.
-   - DO NOT mention dollar amounts or prices in the proposal text.
+   - DO NOT mention dollar amounts or prices in the scope bullet text.
 
 Return ONLY a valid JSON object matching this schema:
 {
-  "title": "Descriptive Project Title",
-  "introduction": "Professional 2-3 sentence introductory overview paragraph.",
+  "title": "Descriptive Project Title in English",
+  "introduction": "Professional 2-3 sentence introductory overview paragraph in English.",
   "sections": [
     {
-      "name": "OPTION TITLE (e.g. BULKHEAD - WOOD, BULKHEAD - VINYL, or RIP-RAP / EROSION CONTROL)",
+      "name": "${isContractDoc ? 'SECTION TITLE (e.g. BULKHEAD - WOOD)' : 'OPTION TITLE (e.g. BULKHEAD - WOOD)'}",
       "bullets": [
-        "Comprehensive bullet detailing materials, models, dimensions, and specifications...",
-        "Comprehensive bullet detailing structural framing, pilings, brackets, anchoring, and marine fasteners...",
-        "Comprehensive bullet detailing alignment, safety standards, non-skid finishing, and coastal durability..."
+        "Comprehensive bullet detailing materials, models, dimensions, and specifications in English...",
+        "Comprehensive bullet detailing structural framing, pilings, brackets, anchoring, and marine fasteners in English...",
+        "Comprehensive bullet detailing alignment, safety standards, non-skid finishing, and coastal durability in English..."
       ]
     }
   ],
@@ -623,13 +682,18 @@ Return ONLY a valid JSON object matching this schema:
 
             // Introduction / Scope of Work header
             const intro = (parsed.introduction || parsed.intro || (typeof parsed.scopeOfWork === 'string' && !parsed.scopeOfWork.toUpperCase().includes('OPTION') && !parsed.scopeOfWork.toUpperCase().includes('SECTION') ? parsed.scopeOfWork : '') || '').trim();
-            fullScope += `SCOPE OF WORK:\n${intro || 'Coastal VA Marine Construction (Commonwealth of Virginia DPOR Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) is pleased to present this comprehensive proposal. All work will be executed with premium marine-grade materials, proven craftsmanship, and strict adherence to coastal building standards.'}\n\n`;
+            if (isContractDoc) {
+                fullScope += `CONTRACT AGREEMENT & SCOPE OF WORK:\n${intro || 'This Construction Agreement and Contract is entered into between Coastal VA Marine Construction LLC (Commonwealth of Virginia DPOR Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) and the Client. All marine construction, materials, and installations described herein shall be performed in a professional manner according to standard marine practices and engineering specifications.'}\n\n`;
+            } else {
+                fullScope += `SCOPE OF WORK:\n${intro || 'Coastal VA Marine Construction (Commonwealth of Virginia DPOR Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) is pleased to present this comprehensive proposal. All work will be executed with premium marine-grade materials, proven craftsmanship, and strict adherence to coastal building standards.'}\n\n`;
+            }
 
-            // Render Options
+            // Render Sections / Options
             let renderedSectionsCount = 0;
+            const itemLabel = isContractDoc ? 'SECTION' : 'OPTION';
             if (Array.isArray(parsed.sections) && parsed.sections.length > 0) {
                 parsed.sections.forEach((sec: any, idx: number) => {
-                    const fallbackName = activeSections[idx] ? activeSections[idx].type : `Option ${idx + 1}`;
+                    const fallbackName = activeSections[idx] ? activeSections[idx].type : `${itemLabel} ${idx + 1}`;
                     const rawName = sec.name || sec.title || sec.heading || fallbackName;
                     const cleanName = rawName.replace(/^(OPTION|SECTION)\s*\d+\s*[-:]*\s*/i, '').trim();
 
@@ -644,7 +708,7 @@ Return ONLY a valid JSON object matching this schema:
                         .filter((b: string) => b.length > 0);
 
                     if (cleanBullets.length > 0) {
-                        fullScope += `OPTION ${idx + 1} - ${cleanName.toUpperCase()}:\n`;
+                        fullScope += `${itemLabel} ${idx + 1} - ${cleanName.toUpperCase()}:\n`;
                         cleanBullets.forEach(b => {
                             fullScope += `- ${b}\n`;
                         });
@@ -661,7 +725,10 @@ Return ONLY a valid JSON object matching this schema:
             if (renderedSectionsCount === 0) {
                 if (typeof parsed.scopeOfWork === 'string' && /(OPTION|SECTION)\s+\d+/i.test(parsed.scopeOfWork)) {
                     // OpenAI returned plain text with sections in scopeOfWork
-                    fullScope = parsed.scopeOfWork.trim().replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1');
+                    fullScope = parsed.scopeOfWork.trim();
+                    if (!isContractDoc) {
+                        fullScope = fullScope.replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1');
+                    }
                     if (resolvedTitle && !fullScope.toUpperCase().startsWith('PROJECT:')) {
                         fullScope = `PROJECT: ${resolvedTitle.toUpperCase()}\n\n` + fullScope;
                     }
@@ -702,8 +769,10 @@ Return ONLY a valid JSON object matching this schema:
                 }
             }
 
-            // Normalize any remaining SECTION to OPTION
-            fullScope = fullScope.replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1');
+            // Normalize SECTION to OPTION only if Proposal mode
+            if (!isContractDoc) {
+                fullScope = fullScope.replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1');
+            }
             setScopeOfWork(fullScope.trim());
         } catch (err: any) {
             setErrorMsg("Error: " + err.message);
@@ -712,8 +781,11 @@ Return ONLY a valid JSON object matching this schema:
         }
     };
 
-    // PDF Generation - Premium Modern Formal Design
-    const generatePDF = () => {
+    // PDF Generation - Premium Modern Formal Design (Supports Proposal & Contract)
+    const generatePDF = (overrideDocType?: 'proposal' | 'contract') => {
+        const activeDocType = overrideDocType || docType;
+        const isContract = activeDocType === 'contract';
+
         const doc = new jsPDF({ format: 'letter', unit: 'mm' });
         const width = doc.internal.pageSize.getWidth();
         const height = doc.internal.pageSize.getHeight();
@@ -745,7 +817,8 @@ Return ONLY a valid JSON object matching this schema:
             doc.setFont("helvetica", "normal");
             doc.setFontSize(8);
             doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
-            doc.text(projectTitle.trim() ? `CONSTRUCTION PROPOSAL • ${projectTitle.trim().toUpperCase().substring(0, 48)}` : "CONSTRUCTION PROPOSAL", margin, 22);
+            const headerDocSub = isContract ? "CONSTRUCTION CONTRACT & AGREEMENT" : "CONSTRUCTION PROPOSAL";
+            doc.text(projectTitle.trim() ? `${headerDocSub} • ${projectTitle.trim().toUpperCase().substring(0, 42)}` : headerDocSub, margin, 22);
 
             // Date on right
             doc.setFontSize(8);
@@ -770,7 +843,10 @@ Return ONLY a valid JSON object matching this schema:
             doc.setFont("helvetica", "normal");
             doc.setFontSize(7);
             doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
-            doc.text("Coastal VA Marine Construction  •  VA Class A Lic #2705188660  •  100% Fully Licensed & Insured  •  Chesapeake, VA", width / 2, height - 8, { align: 'center' });
+            const footerText = isContract
+                ? "Coastal VA Marine Construction LLC  •  Construction Contract  •  VA Class A Lic #2705188660  •  100% Fully Licensed & Insured"
+                : "Coastal VA Marine Construction  •  VA Class A Lic #2705188660  •  100% Fully Licensed & Insured  •  Chesapeake, VA";
+            doc.text(footerText, width / 2, height - 8, { align: 'center' });
         };
 
         // ════════════════════════════════════
@@ -864,16 +940,16 @@ Return ONLY a valid JSON object matching this schema:
         doc.line(margin, y, width - margin, y);
         y += 8;
 
-        // ── Scope of Work ──
+        // ── Scope of Work / Contract Scope ──
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
         doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-        doc.text("SCOPE OF WORK & SPECIFICATIONS", margin, y);
+        doc.text(isContract ? "CONTRACT SCOPE OF WORK & SPECIFICATIONS" : "SCOPE OF WORK & SPECIFICATIONS", margin, y);
         y += 3;
         // Cyan underline for section heading
         doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
         doc.setLineWidth(0.6);
-        doc.line(margin, y, margin + 60, y);
+        doc.line(margin, y, margin + (isContract ? 78 : 60), y);
         doc.setLineWidth(0.2);
         y += 7;
 
@@ -881,7 +957,9 @@ Return ONLY a valid JSON object matching this schema:
         doc.setFontSize(9);
         doc.setTextColor(BODY[0], BODY[1], BODY[2]);
 
-        const displayScope = (scopeOfWork || '').replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1');
+        const displayScope = isContract
+            ? (scopeOfWork || '').replace(/\bOPTION\s+(\d+)/gi, 'SECTION $1').replace(/^SCOPE OF WORK:/im, 'CONTRACT AGREEMENT & SCOPE OF WORK:')
+            : (scopeOfWork || '').replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1').replace(/^CONTRACT AGREEMENT & SCOPE OF WORK:/im, 'SCOPE OF WORK:');
         const lines = doc.splitTextToSize(displayScope, width - margin * 2);
         for (let i = 0; i < lines.length; i++) {
             if (y > height - 25) {
@@ -890,7 +968,7 @@ Return ONLY a valid JSON object matching this schema:
                 drawHeader();
             }
             const line = lines[i];
-            const isHeading = /^(PROJECT:|SCOPE OF WORK:|OPTION\s+\d+|SECTION\s+\d+|STANDARD EXCLUSIONS:)/i.test(line.trim());
+            const isHeading = /^(PROJECT:|SCOPE OF WORK:|CONTRACT AGREEMENT & SCOPE OF WORK:|OPTION\s+\d+|SECTION\s+\d+|STANDARD EXCLUSIONS:|PAYMENT TERMS:)/i.test(line.trim());
             if (isHeading) {
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9);
@@ -907,229 +985,445 @@ Return ONLY a valid JSON object matching this schema:
         drawFooter();
 
         // ════════════════════════════════════
-        //  PAGE 2 - INVESTMENT SUMMARY
+        //  PAGE 2 - FINANCIALS & TERMS
         // ════════════════════════════════════
-        doc.addPage();
-        drawHeader();
-        doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+        if (isContract) {
+            // ── CONTRACT MODE ──
+            doc.addPage();
+            drawHeader();
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
 
-        // Center title
-        y = 54;
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-        doc.text("INVESTMENT SUMMARY", width / 2, y, { align: 'center' });
-        y += 4;
-        doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
-        doc.setLineWidth(0.6);
-        doc.line(width / 2 - 30, y, width / 2 + 30, y);
-        doc.setLineWidth(0.2);
-        y += 12;
-
-        // ── Itemized breakdown (conditional) ──
-        if (showProjectSummary && sections.length > 0) {
-            const cbSize = 6; // mm square checkbox
-            const cbX = width - margin - cbSize; // right-aligned at margin
-            const amountRight = cbX - 4; // price right-aligned with 4mm gap before checkbox
-
-            // Table header
+            y = 50;
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(7.5);
-            doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
-            doc.text("OPTION / DESCRIPTION", margin, y);
-            doc.text("AMOUNT", amountRight, y, { align: 'right' });
-            y += 3;
-            doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
-            doc.line(margin, y, width - margin, y);
-            y += 6;
+            doc.setFontSize(12);
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+            doc.text("CONTRACT TERMS & AGREEMENT", width / 2, y, { align: 'center' });
+            y += 4;
+            doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
+            doc.setLineWidth(0.6);
+            doc.line(width / 2 - 35, y, width / 2 + 35, y);
+            doc.setLineWidth(0.2);
+            y += 10;
 
-            // Rows with Option title, detailed description, amount, and checkbox
-            sections.forEach((s, idx) => {
+            const contractTotal = (aiEstimatedTotal > 0 ? aiEstimatedTotal : grandTotal) || 0;
+            const retainageAmount = contractTotal * 0.10;
+            const wordsTotal = numberToEnglishWords(contractTotal);
+
+            // Optional Itemized Breakdown
+            if (showProjectSummary && sections.length > 0) {
                 doc.setFont("helvetica", "bold");
-                doc.setFontSize(9.5);
-                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text(`Option ${idx + 1}: ${s.type}`, margin, y);
+                doc.setFontSize(8);
+                doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
+                doc.text("ITEMIZED WORK SPECIFICATIONS", margin, y);
+                doc.text("AMOUNT", width - margin, y, { align: 'right' });
+                y += 3;
+                doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+                doc.line(margin, y, width - margin, y);
+                y += 5;
 
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(9.5);
-                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text(`$${(Number(s.price) || 0).toLocaleString()}`, amountRight, y, { align: 'right' });
+                sections.forEach((s, idx) => {
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(9);
+                    doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                    doc.text(`Section ${idx + 1}: ${s.type}`, margin, y);
+                    doc.text(`$${(Number(s.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, width - margin, y, { align: 'right' });
 
-                // Checkbox box next to amount
-                doc.setDrawColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.setLineWidth(0.6);
-                doc.rect(cbX, y - 4.5, cbSize, cbSize);
-                doc.setLineWidth(0.2);
-
-                // Construct detailed subtitle so user knows what this option corresponds to
-                const unitLabel = s.type.toLowerCase().includes('dock') 
-                    ? 'SQF' 
-                    : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap') || s.type.toLowerCase().includes('handrail')) 
-                        ? 'LF' 
-                        : 'Units';
-                const rawDims = (s.dimensions || '').trim();
-                let dimsStr = '';
-                if (rawDims) {
-                    const lowerDims = rawDims.toLowerCase();
-                    const lowerUnit = unitLabel.toLowerCase();
-                    if (lowerDims.includes(lowerUnit) || lowerDims.includes('sqf') || lowerDims.includes('sq ft') || lowerDims.includes('lf') || lowerDims.includes('feet') || lowerDims.includes('unit') || lowerDims.includes('qty')) {
-                        dimsStr = rawDims;
-                    } else {
-                        dimsStr = `${rawDims} ${unitLabel}`;
+                    const unitLabel = s.type.toLowerCase().includes('dock') 
+                        ? 'SQF' 
+                        : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap') || s.type.toLowerCase().includes('handrail')) 
+                            ? 'LF' 
+                            : 'Units';
+                    const rawDims = (s.dimensions || '').trim();
+                    let dimsStr = '';
+                    if (rawDims) {
+                        const lowerDims = rawDims.toLowerCase();
+                        const lowerUnit = unitLabel.toLowerCase();
+                        if (lowerDims.includes(lowerUnit) || lowerDims.includes('sqf') || lowerDims.includes('sq ft') || lowerDims.includes('lf') || lowerDims.includes('feet') || lowerDims.includes('unit') || lowerDims.includes('qty')) {
+                            dimsStr = rawDims;
+                        } else {
+                            dimsStr = `${rawDims} ${unitLabel}`;
+                        }
                     }
-                }
-                let detailStr = '';
-
-                if (s.description && s.description.trim()) {
-                    detailStr = dimsStr ? `${dimsStr} — ${s.description.trim()}` : s.description.trim();
-                } else {
-                    const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
-                    if (items.length > 0) {
-                        detailStr = dimsStr ? `${dimsStr} — ${items.slice(0, 3).join(', ')}` : items.slice(0, 3).join(', ');
+                    let detailStr = '';
+                    if (s.description && s.description.trim()) {
+                        detailStr = dimsStr ? `${dimsStr} — ${s.description.trim()}` : s.description.trim();
                     } else {
-                        detailStr = dimsStr;
+                        const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
+                        if (items.length > 0) {
+                            detailStr = dimsStr ? `${dimsStr} — ${items.slice(0, 3).join(', ')}` : items.slice(0, 3).join(', ');
+                        } else {
+                            detailStr = dimsStr;
+                        }
                     }
+
+                    if (detailStr) {
+                        y += 4;
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(7.5);
+                        doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+                        const linesDesc = doc.splitTextToSize(detailStr, width - margin * 2 - 35);
+                        doc.text(linesDesc, margin + 2, y);
+                        y += (linesDesc.length * 3.5) + 3;
+                    } else {
+                        y += 6;
+                    }
+                });
+
+                if (adjustments > 0) {
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(9);
+                    doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                    doc.text("Additional Work / Adjustments", margin, y);
+                    doc.text(`$${adjustments.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, width - margin, y, { align: 'right' });
+                    y += 6;
                 }
 
-                if (detailStr) {
-                    y += 4.5;
-                    doc.setFont("helvetica", "normal");
-                    doc.setFontSize(8);
-                    doc.setTextColor(BODY[0], BODY[1], BODY[2]);
-                    const descLines = doc.splitTextToSize(detailStr, width - margin * 2 - 40);
-                    doc.text(descLines, margin + 3, y);
-                    y += (descLines.length * 3.8) + 4.5;
-                } else {
-                    y += 7.5;
-                }
-            });
-
-            if (adjustments > 0) {
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(9.5);
-                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text("Additional Work / Adjustments", margin, y);
-
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(9.5);
-                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text(`$${adjustments.toLocaleString()}`, amountRight, y, { align: 'right' });
-
-                doc.setDrawColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.setLineWidth(0.6);
-                doc.rect(cbX, y - 4.5, cbSize, cbSize);
+                y += 2;
+                doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+                doc.setLineWidth(0.4);
+                doc.line(margin, y, width - margin, y);
                 doc.setLineWidth(0.2);
-
-                if (otherWorkDescription && otherWorkDescription.trim()) {
-                    y += 4.5;
-                    doc.setFont("helvetica", "normal");
-                    doc.setFontSize(8);
-                    doc.setTextColor(BODY[0], BODY[1], BODY[2]);
-                    const otherLines = doc.splitTextToSize(otherWorkDescription.trim(), width - margin * 2 - 40);
-                    doc.text(otherLines, margin + 3, y);
-                    y += (otherLines.length * 3.8) + 4.5;
-                } else {
-                    y += 7.5;
-                }
+                y += 7;
             }
 
-            // Solid divider line below options
-            y += 2;
-            doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
-            doc.setLineWidth(0.6);
-            doc.line(margin, y, width - margin, y);
-            doc.setLineWidth(0.2);
-            y += 18;
+            // Check if there is enough space on this page for Payment Terms and the Contract Table (~112mm)
+            if (y + 112 > height - 25) {
+                drawFooter();
+                doc.addPage();
+                drawHeader();
+                y = 50;
+            }
 
-            // Selected Option Total line with handwritten line
-            const totalLineEnd = width - margin;
-            const totalLineStart = width / 2 - 2;
-            const dollarX = totalLineStart - 8;
-            const labelX = dollarX - 8;
-
+            // ── PAYMENT TERMS SECTION ──
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(11.5);
+            doc.setFontSize(9.5);
+            doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+            doc.text("Payment Terms:", margin, y);
+            y += 4.5;
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8.5);
+            doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+            const pLines1 = doc.splitTextToSize("Payments will be made progressively based on the percentage of work completed. Invoices will be issued every Thursday, with payment due on Friday.", width - margin * 2);
+            doc.text(pLines1, margin, y);
+            y += (pLines1.length * 4.2) + 2;
+
+            const pLines2 = doc.splitTextToSize(`A 10% retainage ($${retainageAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) will be withheld from all progressive payments and will be paid upon completion of a final inspection and when the Client is 100% satisfied with the work.`, width - margin * 2);
+            doc.text(pLines2, margin, y);
+            y += (pLines2.length * 4.2) + 6;
+
+            // ── FORMAL CONTRACT AGREEMENT TABLE (Exact layout from Image 2) ──
+            const tblX = margin;
+            const tblW = width - margin * 2;
+            const curStartY = y;
+
+            const row1H = 9;
+            const row2H = 9;
+
+            const legalText = "According to the specifications submitted, all work will be completed in a professional manner, by standard practices. Any alteration or deviation from the above specifications involving extra costs will be executed only upon written change orders and will become an additional charge over and above the proposed bid. According to this agreement, if either party commences legal action to enforce its rights, the prevailing party in said legal action shall be entitled to recover its reasonable attorney's fees and the costs of litigation relating to said legal action, as determined by a court of competent jurisdiction.";
+            const legalLines = doc.splitTextToSize(legalText, tblW - 8);
+            const row3H = (legalLines.length * 3.8) + 6;
+
+            const retainageClauseText = `Retainage Terms: A ten percent (10%) retainage of the total contract price ($${retainageAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) shall be withheld and will become due and payable upon final inspection and when the Client is 100% satisfied.`;
+            const retainageLines = doc.splitTextToSize(retainageClauseText, tblW - 8);
+            const row4H = (retainageLines.length * 3.8) + 6;
+
+            const row5H = 20; // Signatures
+            const row6H = 10; // Dates
+
+            const totalTblH = row1H + row2H + row3H + row4H + row5H + row6H;
+
+            // Draw outer border
+            doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+            doc.setLineWidth(0.4);
+            doc.rect(tblX, curStartY, tblW, totalTblH);
+
+            let rowY = curStartY;
+
+            // Row 1: The Client agrees to pay...
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
             doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-            doc.text("SELECTED OPTION TOTAL", labelX, y, { align: 'right' });
-            doc.text("$", dollarX, y);
+            doc.text(`The Client agrees to pay the total sum of $${contractTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} for the completion of the work described in this agreement.`, tblX + 4, rowY + 6);
+            rowY += row1H;
+            doc.line(tblX, rowY, tblX + tblW, rowY);
 
-            doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
-            doc.setLineWidth(0.7);
-            doc.line(totalLineStart, y + 1, totalLineEnd, y + 1);
-            doc.setLineWidth(0.2);
+            // Row 2: Words (shaded gray background)
+            doc.setFillColor(241, 245, 249);
+            doc.rect(tblX, rowY, tblW, row2H, 'F');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+            doc.text(wordsTotal, tblX + 4, rowY + 6);
+            rowY += row2H;
+            doc.line(tblX, rowY, tblX + tblW, rowY);
 
-            y += 22;
-        } else {
-            // ── Total Box — shown when proposal is lump sum (not itemized options) ──
-            const boxW = 130;
-            const boxH = 52;
-            const boxX = (width - boxW) / 2;
+            // Row 3: Legal Clause
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7.5);
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+            doc.text(legalLines, tblX + 4, rowY + 4.5);
+            rowY += row3H;
+            doc.line(tblX, rowY, tblX + tblW, rowY);
 
-            // Navy background
-            doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
-            doc.roundedRect(boxX, y, boxW, boxH, 4, 4, 'F');
+            // Row 4: Retainage Clause
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7.5);
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+            doc.text(retainageLines, tblX + 4, rowY + 4.5);
+            rowY += row4H;
+            doc.line(tblX, rowY, tblX + tblW, rowY);
 
-            // Cyan accent line at top
-            doc.setFillColor(CYAN[0], CYAN[1], CYAN[2]);
-            doc.roundedRect(boxX, y, boxW, 2, 4, 4, 'F');
-            // Cover bottom rounding of accent
-            doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
-            doc.rect(boxX, y + 1.5, boxW, 3, 'F');
+            // Row 5: Signatures (2 columns)
+            const halfW = tblW / 2;
+            doc.line(tblX + halfW, rowY, tblX + halfW, rowY + row5H + row6H);
 
-            // Label
             doc.setFont("helvetica", "bold");
             doc.setFontSize(8);
-            doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
-            doc.text("TOTAL PROPOSED INVESTMENT", width / 2, y + 16, { align: 'center' });
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+            doc.text("Signature", tblX + 4, rowY + 5.5);
 
-            // Amount
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(32);
-            doc.setTextColor(255, 255, 255);
-            doc.text(`$${aiEstimatedTotal.toLocaleString()}`, width / 2, y + 35, { align: 'center' });
-
-            // Small note under amount
+            doc.text("Signature", tblX + halfW + 4, rowY + 5.5);
             doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+            doc.text("*Coastal VA Marine Construction", tblX + tblW - 6, rowY + 16, { align: 'right' });
+
+            rowY += row5H;
+            doc.line(tblX, rowY, tblX + tblW, rowY);
+
+            // Row 6: Dates (2 columns)
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8);
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+            doc.text("Date:", tblX + 4, rowY + 6.5);
+            doc.text("Date:", tblX + halfW + 4, rowY + 6.5);
+
+            y = curStartY + totalTblH + 8;
+            drawFooter();
+        } else {
+            // ── PROPOSAL MODE ──
+            doc.addPage();
+            drawHeader();
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+
+            // Center title
+            y = 54;
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(12);
+            doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+            doc.text("INVESTMENT SUMMARY", width / 2, y, { align: 'center' });
+            y += 4;
+            doc.setDrawColor(CYAN[0], CYAN[1], CYAN[2]);
+            doc.setLineWidth(0.6);
+            doc.line(width / 2 - 30, y, width / 2 + 30, y);
+            doc.setLineWidth(0.2);
+            y += 12;
+
+            // ── Itemized breakdown (conditional) ──
+            if (showProjectSummary && sections.length > 0) {
+                const cbSize = 6;
+                const cbX = width - margin - cbSize;
+                const amountRight = cbX - 4;
+
+                // Table header
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(7.5);
+                doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
+                doc.text("OPTION / DESCRIPTION", margin, y);
+                doc.text("AMOUNT", amountRight, y, { align: 'right' });
+                y += 3;
+                doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+                doc.line(margin, y, width - margin, y);
+                y += 6;
+
+                // Rows with Option title, detailed description, amount, and checkbox
+                sections.forEach((s, idx) => {
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(9.5);
+                    doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                    doc.text(`Option ${idx + 1}: ${s.type}`, margin, y);
+
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(9.5);
+                    doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                    doc.text(`$${(Number(s.price) || 0).toLocaleString()}`, amountRight, y, { align: 'right' });
+
+                    // Checkbox box next to amount
+                    doc.setDrawColor(BLACK[0], BLACK[1], BLACK[2]);
+                    doc.setLineWidth(0.6);
+                    doc.rect(cbX, y - 4.5, cbSize, cbSize);
+                    doc.setLineWidth(0.2);
+
+                    const unitLabel = s.type.toLowerCase().includes('dock') 
+                        ? 'SQF' 
+                        : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap') || s.type.toLowerCase().includes('handrail')) 
+                            ? 'LF' 
+                            : 'Units';
+                    const rawDims = (s.dimensions || '').trim();
+                    let dimsStr = '';
+                    if (rawDims) {
+                        const lowerDims = rawDims.toLowerCase();
+                        const lowerUnit = unitLabel.toLowerCase();
+                        if (lowerDims.includes(lowerUnit) || lowerDims.includes('sqf') || lowerDims.includes('sq ft') || lowerDims.includes('lf') || lowerDims.includes('feet') || lowerDims.includes('unit') || lowerDims.includes('qty')) {
+                            dimsStr = rawDims;
+                        } else {
+                            dimsStr = `${rawDims} ${unitLabel}`;
+                        }
+                    }
+                    let detailStr = '';
+
+                    if (s.description && s.description.trim()) {
+                        detailStr = dimsStr ? `${dimsStr} — ${s.description.trim()}` : s.description.trim();
+                    } else {
+                        const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
+                        if (items.length > 0) {
+                            detailStr = dimsStr ? `${dimsStr} — ${items.slice(0, 3).join(', ')}` : items.slice(0, 3).join(', ');
+                        } else {
+                            detailStr = dimsStr;
+                        }
+                    }
+
+                    if (detailStr) {
+                        y += 4.5;
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(8);
+                        doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+                        const descLines = doc.splitTextToSize(detailStr, width - margin * 2 - 40);
+                        doc.text(descLines, margin + 3, y);
+                        y += (descLines.length * 3.8) + 4.5;
+                    } else {
+                        y += 7.5;
+                    }
+                });
+
+                if (adjustments > 0) {
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(9.5);
+                    doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                    doc.text("Additional Work / Adjustments", margin, y);
+
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(9.5);
+                    doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                    doc.text(`$${adjustments.toLocaleString()}`, amountRight, y, { align: 'right' });
+
+                    doc.setDrawColor(BLACK[0], BLACK[1], BLACK[2]);
+                    doc.setLineWidth(0.6);
+                    doc.rect(cbX, y - 4.5, cbSize, cbSize);
+                    doc.setLineWidth(0.2);
+
+                    if (otherWorkDescription && otherWorkDescription.trim()) {
+                        y += 4.5;
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(8);
+                        doc.setTextColor(BODY[0], BODY[1], BODY[2]);
+                        const otherLines = doc.splitTextToSize(otherWorkDescription.trim(), width - margin * 2 - 40);
+                        doc.text(otherLines, margin + 3, y);
+                        y += (otherLines.length * 3.8) + 4.5;
+                    } else {
+                        y += 7.5;
+                    }
+                }
+
+                // Solid divider line below options
+                y += 2;
+                doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+                doc.setLineWidth(0.6);
+                doc.line(margin, y, width - margin, y);
+                doc.setLineWidth(0.2);
+                y += 18;
+
+                // Selected Option Total line with handwritten line
+                const totalLineEnd = width - margin;
+                const totalLineStart = width / 2 - 2;
+                const dollarX = totalLineStart - 8;
+                const labelX = dollarX - 8;
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(11.5);
+                doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
+                doc.text("SELECTED OPTION TOTAL", labelX, y, { align: 'right' });
+                doc.text("$", dollarX, y);
+
+                doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+                doc.setLineWidth(0.7);
+                doc.line(totalLineStart, y + 1, totalLineEnd, y + 1);
+                doc.setLineWidth(0.2);
+
+                y += 22;
+            } else {
+                // ── Total Box — shown when proposal is lump sum (not itemized options) ──
+                const boxW = 130;
+                const boxH = 52;
+                const boxX = (width - boxW) / 2;
+
+                // Navy background
+                doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+                doc.roundedRect(boxX, y, boxW, boxH, 4, 4, 'F');
+
+                // Cyan accent line at top
+                doc.setFillColor(CYAN[0], CYAN[1], CYAN[2]);
+                doc.roundedRect(boxX, y, boxW, 2, 4, 4, 'F');
+                // Cover bottom rounding of accent
+                doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+                doc.rect(boxX, y + 1.5, boxW, 3, 'F');
+
+                // Label
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8);
+                doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
+                doc.text("TOTAL PROPOSED INVESTMENT", width / 2, y + 16, { align: 'center' });
+
+                // Amount
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(32);
+                doc.setTextColor(255, 255, 255);
+                doc.text(`$${aiEstimatedTotal.toLocaleString()}`, width / 2, y + 35, { align: 'center' });
+
+                // Small note under amount
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7);
+                doc.setTextColor(148, 163, 184);
+                doc.text("All materials, labor & equipment included", width / 2, y + 43, { align: 'center' });
+
+                y += boxH + 16;
+            }
+
+            // ── Validity ──
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
+            doc.text("This proposal is valid for 30 days from the date of issue.", width / 2, y, { align: 'center' });
+            y += 6;
+            doc.text("Prices are subject to change based on material availability and site conditions.", width / 2, y, { align: 'center' });
+            y += 20;
+
+            // ── Signature Block ──
+            const sigLineLen = 72;
+            const sigLeftX = margin + 5;
+            const sigRightX = width - margin - sigLineLen - 5;
+
+            doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+            doc.setLineWidth(0.4);
+            doc.line(sigLeftX, y, sigLeftX + sigLineLen, y);
+            doc.line(sigRightX, y, sigRightX + sigLineLen, y);
+            y += 5;
+
+            doc.setFont("helvetica", "bold");
             doc.setFontSize(7);
-            doc.setTextColor(148, 163, 184);
-            doc.text("All materials, labor & equipment included", width / 2, y + 43, { align: 'center' });
+            doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
+            doc.text("CLIENT SIGNATURE & DATE", sigLeftX, y);
+            doc.text("COASTAL VA REPRESENTATIVE & DATE", sigRightX, y);
 
-            y += boxH + 16;
+            y += 8;
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(6.8);
+            doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
+            doc.text("Coastal VA Marine Construction LLC is a licensed Class A Contractor in Virginia (DPOR Lic #2705188660) and maintains 100% Comprehensive General Liability and Workers' Compensation coverage on all projects.", width / 2, y, { align: 'center', maxWidth: width - margin * 2 });
+
+            drawFooter();
         }
-
-        // ── Validity ──
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
-        doc.text("This proposal is valid for 30 days from the date of issue.", width / 2, y, { align: 'center' });
-        y += 6;
-        doc.text("Prices are subject to change based on material availability and site conditions.", width / 2, y, { align: 'center' });
-        y += 20;
-
-        // ── Signature Block ──
-        const sigLineLen = 72;
-        const sigLeftX = margin + 5;
-        const sigRightX = width - margin - sigLineLen - 5;
-
-        doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
-        doc.setLineWidth(0.4);
-        doc.line(sigLeftX, y, sigLeftX + sigLineLen, y);
-        doc.line(sigRightX, y, sigRightX + sigLineLen, y);
-        y += 5;
-
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(7);
-        doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
-        doc.text("CLIENT SIGNATURE & DATE", sigLeftX, y);
-        doc.text("COASTAL VA REPRESENTATIVE & DATE", sigRightX, y);
-
-        y += 8;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.8);
-        doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
-        doc.text("Coastal VA Marine Construction LLC is a licensed Class A Contractor in Virginia (DPOR Lic #2705188660) and maintains 100% Comprehensive General Liability and Workers' Compensation coverage on all projects.", width / 2, y, { align: 'center', maxWidth: width - margin * 2 });
-
-        drawFooter();
 
         // ════════════════════════════════════
         //  PAGE 3+ - PROJECT SITE PHOTOS & ATTACHMENTS (if any)
@@ -1293,8 +1587,11 @@ Return ONLY a valid JSON object matching this schema:
             }
         }
 
-        const safeTitle = (projectTitle.trim() || clientName || 'Proposal').replace(/[^a-zA-Z0-9_-]/g, '_');
-        doc.save(`Proposal_${safeTitle}_${new Date().toISOString().split('T')[0]}.pdf`);
+        const safeTitle = (projectTitle.trim() || clientName || (isContract ? 'Contract' : 'Proposal')).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const pdfFileName = isContract
+            ? `Contract_${safeTitle}_${new Date().toISOString().split('T')[0]}.pdf`
+            : `Proposal_${safeTitle}_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(pdfFileName);
     };
 
     const currentLivePrice = Number(calculateSectionPrice(currentType, currentDimensions, currentSelectedItems, undefined, customMaterialPrice, customLaborPrice)) || 0;
@@ -1631,13 +1928,83 @@ Return ONLY a valid JSON object matching this schema:
                     <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col relative">
                         <div className="absolute -top-3 left-6 bg-cyan-100 text-cyan-800 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Step 2: Scope & Export</div>
 
-                        <div className="flex justify-between items-center mb-5 mt-4">
+                        {/* Document Type Selector (Proposal vs Contract) */}
+                        <div className="mb-4 mt-2">
+                            <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1.5">
+                                Document Type (Tipo de Documento)
+                            </label>
+                            <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                                <button
+                                    type="button"
+                                    onClick={() => setDocType('proposal')}
+                                    className={`py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                                        docType === 'proposal'
+                                            ? 'bg-white text-slate-800 shadow-md border border-slate-200/80 scale-[1.01]'
+                                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                                    }`}
+                                >
+                                    <FileText className={`w-4 h-4 ${docType === 'proposal' ? 'text-cyan-600' : 'text-slate-400'}`} />
+                                    <span>Proposal</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setDocType('contract')}
+                                    className={`py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                                        docType === 'contract'
+                                            ? 'bg-[#0a192f] text-cyan-400 shadow-md border border-slate-800 scale-[1.01]'
+                                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                                    }`}
+                                >
+                                    <FileCheck className={`w-4 h-4 ${docType === 'contract' ? 'text-cyan-400' : 'text-slate-400'}`} />
+                                    <span>Contract</span>
+                                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${docType === 'contract' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/30' : 'bg-slate-200 text-slate-500'}`}>
+                                        10% Ret.
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Contract Notice Banner */}
+                        {docType === 'contract' && (
+                            <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-3.5 mb-4 text-xs text-emerald-950 flex items-start gap-2.5 shadow-sm">
+                                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                <div className="space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-extrabold text-[11px] text-emerald-900 uppercase tracking-wide">
+                                            Contract Mode Active
+                                        </span>
+                                        <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded uppercase">
+                                            10% Retainage
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-emerald-800 leading-snug">
+                                        Generates a formal Construction Contract & Agreement with Progressive Invoicing (Thursday / Friday) and a 10% retainage (${(((aiEstimatedTotal || grandTotal) || 0) * 0.10).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) withheld until final inspection and 100% satisfaction.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-between items-center mb-4">
                             <h3 className="font-black text-slate-700 uppercase tracking-widest text-sm flex items-center gap-2">
-                                <Bot className="w-4 h-4 text-cyan-600" /> Proposal Scope
+                                {docType === 'contract' ? (
+                                    <>
+                                        <FileCheck className="w-4 h-4 text-cyan-600" />
+                                        <span>Contract Scope & Terms</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Bot className="w-4 h-4 text-cyan-600" />
+                                        <span>Proposal Scope</span>
+                                    </>
+                                )}
                             </h3>
                             {proposalReady && (
-                                <button onClick={generatePDF} className="bg-red-500 hover:bg-red-600 active:scale-95 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase flex items-center gap-2 shadow-lg shadow-red-500/20 transition-all">
-                                    <FileText className="w-4 h-4" /> Export PDF
+                                <button 
+                                    onClick={() => generatePDF(docType)} 
+                                    className="bg-red-500 hover:bg-red-600 active:scale-95 text-white px-3.5 py-1.5 rounded-lg font-bold text-xs uppercase flex items-center gap-1.5 shadow-lg shadow-red-500/20 transition-all"
+                                >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    <span>{docType === 'contract' ? 'Export Contract' : 'Export Proposal'}</span>
                                 </button>
                             )}
                         </div>
@@ -1682,9 +2049,25 @@ Return ONLY a valid JSON object matching this schema:
 
                                 {renderPhotoSection()}
 
-                                <button onClick={generatePDF} className="w-full py-3.5 bg-red-500 hover:bg-red-600 active:scale-[0.99] text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 transition-all">
-                                    <FileText className="w-4 h-4" /> Export PDF
-                                </button>
+                                <div className="space-y-2 pt-1">
+                                    <button 
+                                        onClick={() => generatePDF(docType)} 
+                                        className="w-full py-3.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 active:scale-[0.99] text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 transition-all"
+                                    >
+                                        <FileText className="w-4 h-4" /> 
+                                        <span>{docType === 'contract' ? 'Export Contract PDF (with 10% Retainage)' : 'Export Proposal PDF'}</span>
+                                    </button>
+                                    <div className="flex justify-between items-center px-1 text-[11px]">
+                                        <span className="text-slate-400 font-medium">Also available:</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => generatePDF(docType === 'contract' ? 'proposal' : 'contract')}
+                                            className="text-cyan-600 hover:text-cyan-700 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                                        >
+                                            {docType === 'contract' ? 'Export as Proposal PDF instead' : 'Export as Contract PDF instead'} →
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         ) : manualMode ? (
                             <div className="flex flex-col gap-4">
@@ -1693,7 +2076,10 @@ Return ONLY a valid JSON object matching this schema:
                                     value={scopeOfWork}
                                     onChange={e => setScopeOfWork(e.target.value)}
                                     rows={16}
-                                    placeholder={"SCOPE OF WORK:\n\nSection 1: Pier Construction\n- Install treated wood piling, 12\" diameter\n- Frame with 2x10 stringers\n...\n\nSTANDARD EXCLUSIONS:\nPermits, Engineering..."}
+                                    placeholder={docType === 'contract'
+                                        ? "CONTRACT AGREEMENT & SCOPE OF WORK:\n\nSECTION 1 - PIER CONSTRUCTION:\n- Install treated wood piling, 12\" diameter\n- Frame with 2x10 stringers\n...\n\nSTANDARD EXCLUSIONS:\nPermits, Engineering..."
+                                        : "SCOPE OF WORK:\n\nOption 1 - Pier Construction:\n- Install treated wood piling, 12\" diameter\n- Frame with 2x10 stringers\n...\n\nSTANDARD EXCLUSIONS:\nPermits, Engineering..."
+                                    }
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed font-mono shadow-inner"
                                 />
                                 <div>
@@ -1712,15 +2098,35 @@ Return ONLY a valid JSON object matching this schema:
 
                                 {renderPhotoSection()}
 
-                                <button onClick={generatePDF} disabled={scopeOfWork.trim().length < 10} className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shadow-lg transition-all">
-                                    <FileText className="w-4 h-4" /> Export PDF
-                                </button>
+                                <div className="space-y-2 pt-1">
+                                    <button 
+                                        onClick={() => generatePDF(docType)} 
+                                        disabled={scopeOfWork.trim().length < 10} 
+                                        className="w-full py-3.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 shadow-lg transition-all"
+                                    >
+                                        <FileText className="w-4 h-4" /> 
+                                        <span>{docType === 'contract' ? 'Export Contract PDF (with 10% Retainage)' : 'Export Proposal PDF'}</span>
+                                    </button>
+                                    <div className="flex justify-between items-center px-1 text-[11px]">
+                                        <span className="text-slate-400 font-medium">Also available:</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => generatePDF(docType === 'contract' ? 'proposal' : 'contract')}
+                                            disabled={scopeOfWork.trim().length < 10}
+                                            className="text-cyan-600 hover:text-cyan-700 disabled:opacity-40 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                                        >
+                                            {docType === 'contract' ? 'Export as Proposal PDF instead' : 'Export as Contract PDF instead'} →
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         ) : (
                             <div className="flex flex-col gap-4">
                                 <div className="flex flex-col items-center justify-center text-center py-10 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
                                     <Layers className="w-12 h-12 text-slate-200 mb-4" />
-                                    <p className="text-slate-400 font-bold text-sm">Ready to generate</p>
+                                    <p className="text-slate-400 font-bold text-sm">
+                                        Ready to generate {docType === 'contract' ? 'Contract' : 'Proposal'}
+                                    </p>
                                     <p className="text-slate-300 text-xs mt-1 px-6">Add sections then use AI or write manually</p>
                                 </div>
 
@@ -1734,8 +2140,10 @@ Return ONLY a valid JSON object matching this schema:
                                 disabled={isGenerating || (sections.length === 0 && (!currentDimensions || parseFloat(currentDimensions) === 0))}
                                 className="w-full mt-5 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-cyan-600/20 transition-all active:scale-[0.98]"
                             >
-                                {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bot className="w-5 h-5" />}
-                                {isGenerating ? 'Drafting Proposal...' : 'Generate with AI'}
+                                {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : (docType === 'contract' ? <FileCheck className="w-5 h-5" /> : <Bot className="w-5 h-5" />)}
+                                {isGenerating
+                                    ? (docType === 'contract' ? 'Drafting Contract...' : 'Drafting Proposal...')
+                                    : (docType === 'contract' ? 'Generate Contract with AI' : 'Generate with AI')}
                             </button>
                         )}
 
