@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Search, TrendingUp, X, FileText, Printer, FilePlus, DollarSign, Wallet, ChevronRight, Anchor, Save, Download } from 'lucide-react';
+import { Search, TrendingUp, X, FileText, Printer, FilePlus, DollarSign, Wallet, ChevronRight, Anchor, Save, Download, Trash2 } from 'lucide-react';
 import { Project, Invoice, ExpenseCategory } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -14,6 +14,7 @@ interface ProjectSearchProps {
   onPrintInvoice: (invoice: Invoice) => void;
   onViewDetails: (project: Project) => void;
   onGenerateNewInvoice: (project: Project) => void;
+  onDeleteInvoice?: (invoiceId: string) => void;
 }
 
 const getProjectAddress = (p: Project | null): string => {
@@ -33,7 +34,7 @@ const getProjectAddress = (p: Project | null): string => {
   }
 };
 
-const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAddPayment, onAddExpense, onChangeOrder, onPrintInvoice, onViewDetails, onGenerateNewInvoice }) => {
+const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAddPayment, onAddExpense, onChangeOrder, onPrintInvoice, onViewDetails, onGenerateNewInvoice, onDeleteInvoice }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expenseModal, setExpenseModal] = useState<{ show: boolean, projectId: string, projectName: string, currentTotal: number }>({ show: false, projectId: '', projectName: '', currentTotal: 0 });
   const [changeOrderModal, setChangeOrderModal] = useState<{ show: boolean, projectId: string, projectName: string }>({ show: false, projectId: '', projectName: '' });
@@ -399,9 +400,18 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
                         <td className="px-8 py-6 text-sm font-bold text-slate-500">{inv.date}</td>
                         <td className="px-8 py-6 font-black text-[#0a192f]">{inv.invoiceNumber}</td>
                         <td className="px-8 py-6 font-black text-blue-600">${inv.amount.toLocaleString()}</td>
-                        <td className="px-8 py-6 text-right flex justify-end gap-3">
-                          <button onClick={() => handleGenerateInvoicePDF(inv)} className="p-3 text-slate-400 hover:text-cyan-600 bg-white rounded-xl shadow-sm border"><Download className="w-4 h-4" /></button>
-                          {inv.status !== 'Paid' && <button onClick={() => { setDetailsModal({ show: false, project: null }); onAddPayment(inv.projectId, inv.id); }} className="bg-cyan-600 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-cyan-600/20">Pay</button>}
+                        <td className="px-8 py-6 text-right flex justify-end items-center gap-2">
+                          <button onClick={() => handleGenerateInvoicePDF(inv)} title="Download PDF" className="p-3 text-slate-400 hover:text-cyan-600 bg-white rounded-xl shadow-sm border hover:border-cyan-200 cursor-pointer"><Download className="w-4 h-4" /></button>
+                          {inv.status !== 'Paid' && <button onClick={() => { setDetailsModal({ show: false, project: null }); onAddPayment(inv.projectId, inv.id); }} className="bg-cyan-600 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-cyan-600/20 cursor-pointer">Pay</button>}
+                          {onDeleteInvoice && (
+                            <button 
+                              onClick={() => onDeleteInvoice(inv.id)} 
+                              title="Delete Invoice" 
+                              className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 bg-white rounded-xl shadow-sm border hover:border-rose-200 transition-all cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

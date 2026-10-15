@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, ArrowLeft, Printer, Anchor, X, FileDown, Loader2, Save, CheckCircle2, Search, DollarSign, Clock, AlertCircle, Percent, RotateCcw } from 'lucide-react';
+import { FileText, ArrowLeft, Printer, Anchor, X, FileDown, Loader2, Save, CheckCircle2, Search, DollarSign, Clock, AlertCircle, Percent, RotateCcw, Trash2 } from 'lucide-react';
 import { Project, Invoice } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -67,10 +67,11 @@ interface InvoiceViewProps {
   initialProject?: Project | null;
   onGenerateInvoice: (invoice: Omit<Invoice, 'id'>) => void;
   onAddPayment: (projectId: string, invoiceId: string) => void;
+  onDeleteInvoice?: (invoiceId: string) => void;
   onClose?: () => void;
 }
 
-const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialInvoice, initialProject, onGenerateInvoice, onAddPayment, onClose }) => {
+const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialInvoice, initialProject, onGenerateInvoice, onAddPayment, onDeleteInvoice, onClose }) => {
   const [selectedProject, setSelectedProject] = useState<Project | null>(initialProject || null);
   const [invoiceAmount, setInvoiceAmount] = useState<number>(initialProject ? initialProject.balance : 0);
   const [invoicePercentInput, setInvoicePercentInput] = useState<string>('');
@@ -513,14 +514,32 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
                     </td>
                     <td className="px-10 py-8 text-right font-black text-[#0a192f] text-xl tracking-tighter">${inv.amount.toLocaleString()}</td>
                     <td className="px-10 py-8 text-right">
-                      <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => setHistoricalInvoice(inv)} className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:text-cyan-600"><FileText className="w-4 h-4" /></button>
+                      <div className="flex justify-end items-center gap-2">
+                        <button 
+                          onClick={() => setHistoricalInvoice(inv)} 
+                          title="View / Print Invoice"
+                          className="p-3 bg-white border border-slate-200/80 rounded-xl shadow-sm text-slate-500 hover:text-cyan-600 hover:border-cyan-300 hover:bg-cyan-50/50 transition-all cursor-pointer"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
                         {inv.status !== 'Paid' && (
                           <button
                             onClick={() => onAddPayment(inv.projectId, inv.id)}
-                            className="bg-cyan-600 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-cyan-600/20"
+                            className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-cyan-600/20 transition-all cursor-pointer whitespace-nowrap"
                           >
                             Receive Payment
+                          </button>
+                        )}
+                        {onDeleteInvoice && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteInvoice(inv.id);
+                            }}
+                            title="Delete Invoice"
+                            className="p-3 bg-white border border-slate-200/80 rounded-xl shadow-sm text-slate-400 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50 transition-all cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         )}
                       </div>
@@ -564,9 +583,25 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
         <div className="flex justify-between items-center print:hidden bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
           <button onClick={() => { loadedProjectIdRef.current = null; loadedInvoiceIdRef.current = null; setShowPreview(false); if (historicalInvoice && !initialProject) setHistoricalInvoice(null); if (onClose) onClose(); }} className="flex items-center gap-2 text-slate-400 font-black uppercase text-[10px] hover:text-[#0a192f] transition-all"><ArrowLeft className="w-4 h-4" /> Back</button>
-          <div className="flex gap-3">
-            <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-slate-100 rounded-2xl font-black text-[10px] uppercase hover:bg-slate-200 transition-all"><Printer className="w-4 h-4" /> Print</button>
-            <button onClick={downloadPDF} disabled={isGeneratingPDF} className="flex items-center gap-2 px-6 py-3 bg-[#0a192f] text-white rounded-2xl font-black text-[10px] uppercase hover:bg-slate-800 disabled:opacity-50 shadow-xl shadow-slate-900/10">
+          <div className="flex items-center gap-3">
+            {historicalInvoice && onDeleteInvoice && (
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteInvoice(historicalInvoice.id);
+                  loadedProjectIdRef.current = null;
+                  loadedInvoiceIdRef.current = null;
+                  setShowPreview(false);
+                  setHistoricalInvoice(null);
+                  if (onClose) onClose();
+                }}
+                className="flex items-center gap-2 px-5 py-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-2xl font-black text-[10px] uppercase hover:bg-rose-100 transition-all cursor-pointer shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" /> Delete Invoice
+              </button>
+            )}
+            <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-slate-100 rounded-2xl font-black text-[10px] uppercase hover:bg-slate-200 transition-all cursor-pointer"><Printer className="w-4 h-4" /> Print</button>
+            <button onClick={downloadPDF} disabled={isGeneratingPDF} className="flex items-center gap-2 px-6 py-3 bg-[#0a192f] text-white rounded-2xl font-black text-[10px] uppercase hover:bg-slate-800 disabled:opacity-50 shadow-xl shadow-slate-900/10 cursor-pointer">
               {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />} {isSaved ? 'Export PDF' : 'Save & Export PDF'}
             </button>
           </div>

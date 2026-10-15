@@ -366,6 +366,33 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    const inv = invoices.find(i => i.id === invoiceId);
+    const confirmMsg = inv
+      ? `Are you sure you want to delete invoice ${inv.invoiceNumber} ($${inv.amount.toLocaleString()}) for "${inv.projectName}"?`
+      : `Are you sure you want to permanently delete this invoice?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsSyncing(true);
+    try {
+      // Unlink any payments referencing this invoice
+      await supabase.from('cva_payments').update({ invoiceId: null }).eq('invoiceId', invoiceId);
+
+      // Delete the invoice from Supabase
+      const { error } = await supabase.from('cva_invoices').delete().eq('id', invoiceId);
+      if (error) throw error;
+
+      await fetchData();
+    } catch (err: any) {
+      console.error("Error deleting invoice:", err);
+      alert("Error deleting invoice: " + (err.message || JSON.stringify(err)));
+      setSyncError(true);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleSaveNewContract = async (project: Project) => {
     setIsSyncing(true);
     const newProject = {
@@ -639,6 +666,7 @@ const App: React.FC = () => {
                   const p = projects.find(proj => proj.id === pid);
                   if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
                 }}
+                onDeleteInvoice={handleDeleteInvoice}
                 onClose={() => {
                   setSelectedInvoiceForView(null);
                   setSelectedProjectForInvoice(null);
@@ -660,6 +688,7 @@ const App: React.FC = () => {
                 onPrintInvoice={(inv) => navigateToInvoice(undefined, inv)}
                 onViewDetails={() => { }}
                 onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
+                onDeleteInvoice={handleDeleteInvoice}
               />
             )}
 
