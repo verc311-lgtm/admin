@@ -332,7 +332,10 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
       doc.setTextColor(51, 65, 85); // slate-700
       doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
-      const dateText = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const invoiceDateObj = historicalInvoice?.date 
+        ? new Date(historicalInvoice.date.includes('T') ? historicalInvoice.date : `${historicalInvoice.date}T12:00:00`)
+        : new Date();
+      const dateText = invoiceDateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
       doc.text(dateText, pageWidth - 20, 53, { align: 'right' });
 
       // --- BILL TO ACCENT SECTION ---
@@ -588,7 +591,11 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
               <p className="text-[10px] font-black uppercase text-slate-400">Invoice #</p>
               <p className="text-2xl font-black text-[#0a192f] italic">{historicalInvoice?.invoiceNumber || savedInvoiceNumber || (isSaved ? 'REGISTERED' : 'DRAFT')}</p>
               <p className="text-[10px] font-black uppercase text-slate-400 pt-3">Date</p>
-              <p className="text-sm font-bold">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              <p className="text-sm font-bold">
+                {historicalInvoice?.date 
+                  ? new Date(historicalInvoice.date.includes('T') ? historicalInvoice.date : `${historicalInvoice.date}T12:00:00`).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                  : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
             </div>
           </div>
 
