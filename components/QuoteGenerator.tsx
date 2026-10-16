@@ -484,14 +484,15 @@ const QuoteGenerator: React.FC = () => {
                     ? `CONTRACT AGREEMENT & SCOPE OF WORK:\nThis Construction Agreement is entered into between Coastal VA Marine Construction LLC (Commonwealth of Virginia DPOR Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) and ${clientName || 'Client'}. All marine construction and installation work specified below shall be performed in a professional manner according to standard marine practices and engineering specifications.\n\n`
                     : `SCOPE OF WORK:\nCoastal VA Marine Construction (Commonwealth of Virginia Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) is pleased to present this proposal for marine construction and installation services.\n\n`
                 ) +
-                sections.map((s, i) => `${isContr ? 'SECTION' : 'OPTION'} ${i + 1} - ${s.type.toUpperCase()}:\n- Quantity / Dimensions: ${s.dimensions} ${s.type.toLowerCase().includes('dock') ? 'SQF' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap')) ? 'Linear Feet' : 'Units'}\n- Description / Materials: ${s.description || 'Standard installation'}\n- Fasteners & Hardware: Marine-grade corrosion-resistant hardware\n`).join('\n') +
+                sections.map((s, i) => `${isContr ? `SECTION ${i + 1}` : `${i + 1}`} - ${s.type.toUpperCase()}:\n- Quantity / Dimensions: ${s.dimensions} ${s.type.toLowerCase().includes('dock') ? 'SQF' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap')) ? 'Linear Feet' : 'Units'}\n- Description / Materials: ${s.description || 'Standard installation'}\n- Fasteners & Hardware: Marine-grade corrosion-resistant hardware\n`).join('\n') +
                 `\nSTANDARD EXCLUSIONS:\n- Permits, regulatory filings, and engineering drawings (unless specifically noted)\n- Geotechnical soil testing or environmental surveys\n- Hidden subsurface or underwater obstructions\n- Electrical service connection / high-voltage utility tie-ins beyond rough-in`
             );
         }
     };
 
     // Helper to build robust fallback bullets for a section if AI omits it
-    const buildFallbackSection = (s: QuoteSection, idx: number): string => {
+    const buildFallbackSection = (s: QuoteSection, idx: number, isContractMode?: boolean): string => {
+        const isContr = isContractMode ?? (docType === 'contract');
         const items = getItemsForType(s.type).filter(i => s.selectedItems.includes(i.id)).map(i => i.label);
         const unitLabel = s.type.toLowerCase().includes('dock') ? 'SQF' : (s.type.toLowerCase().includes('bulkhead') || s.type.toLowerCase().includes('rip-rap') || s.type.toLowerCase().includes('handrail')) ? 'Linear Feet' : 'Units';
         const bullets: string[] = [];
@@ -531,7 +532,8 @@ const QuoteGenerator: React.FC = () => {
             bullets.push(`Precision alignment, clean finished detailing, and rigorous final inspection adhering to coastal marine building standards.`);
         }
 
-        return `OPTION ${idx + 1} - ${s.type.toUpperCase()}:\n` + bullets.map(b => `- ${b}`).join('\n');
+        const prefix = isContr ? `SECTION ${idx + 1}` : `${idx + 1}`;
+        return `${prefix} - ${s.type.toUpperCase()}:\n` + bullets.map(b => `- ${b}`).join('\n');
     };
 
     const handleGenerateQuote = async () => {
@@ -681,7 +683,7 @@ Return ONLY a valid JSON object matching this schema:
             }
 
             // Introduction / Scope of Work header
-            const intro = (parsed.introduction || parsed.intro || (typeof parsed.scopeOfWork === 'string' && !parsed.scopeOfWork.toUpperCase().includes('OPTION') && !parsed.scopeOfWork.toUpperCase().includes('SECTION') ? parsed.scopeOfWork : '') || '').trim();
+            const intro = (parsed.introduction || parsed.intro || (typeof parsed.scopeOfWork === 'string' && !parsed.scopeOfWork.toUpperCase().includes('OPTION') && !parsed.scopeOfWork.toUpperCase().includes('SECTION') && !parsed.scopeOfWork.match(/\b\d+\s*-\s*[A-Z]/) ? parsed.scopeOfWork : '') || '').trim();
             if (isContractDoc) {
                 fullScope += `CONTRACT AGREEMENT & SCOPE OF WORK:\n${intro || 'This Construction Agreement and Contract is entered into between Coastal VA Marine Construction LLC (Commonwealth of Virginia DPOR Class A Contractor Lic #2705188660, 100% Fully Licensed & Insured) and the Client. All marine construction, materials, and installations described herein shall be performed in a professional manner according to standard marine practices and engineering specifications.'}\n\n`;
             } else {
@@ -690,12 +692,12 @@ Return ONLY a valid JSON object matching this schema:
 
             // Render Sections / Options
             let renderedSectionsCount = 0;
-            const itemLabel = isContractDoc ? 'SECTION' : 'OPTION';
+            const itemLabel = isContractDoc ? 'SECTION' : '';
             if (Array.isArray(parsed.sections) && parsed.sections.length > 0) {
                 parsed.sections.forEach((sec: any, idx: number) => {
-                    const fallbackName = activeSections[idx] ? activeSections[idx].type : `${itemLabel} ${idx + 1}`;
+                    const fallbackName = activeSections[idx] ? activeSections[idx].type : (isContractDoc ? `SECTION ${idx + 1}` : `${idx + 1}`);
                     const rawName = sec.name || sec.title || sec.heading || fallbackName;
-                    const cleanName = rawName.replace(/^(OPTION|SECTION)\s*\d+\s*[-:]*\s*/i, '').trim();
+                    const cleanName = rawName.replace(/^(OPTION|SECTION|\d+)\s*[-:.]*\s*/i, '').trim();
 
                     let bullets: string[] = [];
                     if (Array.isArray(sec.bullets)) bullets = sec.bullets;
@@ -708,14 +710,15 @@ Return ONLY a valid JSON object matching this schema:
                         .filter((b: string) => b.length > 0);
 
                     if (cleanBullets.length > 0) {
-                        fullScope += `${itemLabel} ${idx + 1} - ${cleanName.toUpperCase()}:\n`;
+                        const headingPrefix = isContractDoc ? `SECTION ${idx + 1} - ` : `${idx + 1} - `;
+                        fullScope += `${headingPrefix}${cleanName.toUpperCase()}:\n`;
                         cleanBullets.forEach(b => {
                             fullScope += `- ${b}\n`;
                         });
                         fullScope += '\n';
                         renderedSectionsCount++;
                     } else if (activeSections[idx]) {
-                        fullScope += buildFallbackSection(activeSections[idx], idx) + '\n\n';
+                        fullScope += buildFallbackSection(activeSections[idx], idx, isContractDoc) + '\n\n';
                         renderedSectionsCount++;
                     }
                 });
@@ -723,11 +726,13 @@ Return ONLY a valid JSON object matching this schema:
 
             // If parsed.sections didn't render or was missing sections completely:
             if (renderedSectionsCount === 0) {
-                if (typeof parsed.scopeOfWork === 'string' && /(OPTION|SECTION)\s+\d+/i.test(parsed.scopeOfWork)) {
+                if (typeof parsed.scopeOfWork === 'string' && /(OPTION|SECTION|\b\d+\s*[-:])\s+/i.test(parsed.scopeOfWork)) {
                     // OpenAI returned plain text with sections in scopeOfWork
                     fullScope = parsed.scopeOfWork.trim();
                     if (!isContractDoc) {
-                        fullScope = fullScope.replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1');
+                        fullScope = fullScope.replace(/\b(?:OPTION|SECTION)\s+(\d+)\s*[-:]*\s*/gi, '$1 - ');
+                    } else {
+                        fullScope = fullScope.replace(/\bOPTION\s+(\d+)\s*[-:]*\s*/gi, 'SECTION $1 - ');
                     }
                     if (resolvedTitle && !fullScope.toUpperCase().startsWith('PROJECT:')) {
                         fullScope = `PROJECT: ${resolvedTitle.toUpperCase()}\n\n` + fullScope;
@@ -735,7 +740,7 @@ Return ONLY a valid JSON object matching this schema:
                 } else {
                     // Fallback to activeSections
                     activeSections.forEach((s, idx) => {
-                        fullScope += buildFallbackSection(s, idx) + '\n\n';
+                        fullScope += buildFallbackSection(s, idx, isContractDoc) + '\n\n';
                     });
                 }
             }
@@ -769,9 +774,11 @@ Return ONLY a valid JSON object matching this schema:
                 }
             }
 
-            // Normalize SECTION to OPTION only if Proposal mode
+            // Normalize numbering: 1, 2, 3 in Proposal mode, or SECTION 1 in Contract mode
             if (!isContractDoc) {
-                fullScope = fullScope.replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1');
+                fullScope = fullScope.replace(/\b(?:OPTION|SECTION)\s+(\d+)\s*[-:]*\s*/gi, '$1 - ');
+            } else {
+                fullScope = fullScope.replace(/\bOPTION\s+(\d+)\s*[-:]*\s*/gi, 'SECTION $1 - ');
             }
             setScopeOfWork(fullScope.trim());
         } catch (err: any) {
@@ -814,22 +821,46 @@ Return ONLY a valid JSON object matching this schema:
             doc.setTextColor(255, 255, 255);
             doc.text("COASTAL VA MARINE CONSTRUCTION", margin, 15);
 
+            // Subtitle on left & License on right (with safe margin to prevent collision)
+            const rightEdge = width - margin;
+            const licenseText = "VA CLASS A LIC #2705188660 • 100% FULLY INSURED";
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7.5);
+            const licenseWidth = doc.getTextWidth(licenseText);
+            const licenseStartX = rightEdge - licenseWidth;
+
+            // Date on right (top line)
             doc.setFont("helvetica", "normal");
             doc.setFontSize(8);
-            doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
-            const headerDocSub = isContract ? "CONSTRUCTION CONTRACT & AGREEMENT" : "CONSTRUCTION PROPOSAL";
-            doc.text(projectTitle.trim() ? `${headerDocSub} • ${projectTitle.trim().toUpperCase().substring(0, 42)}` : headerDocSub, margin, 22);
-
-            // Date on right
-            doc.setFontSize(8);
             doc.setTextColor(148, 163, 184);
-            doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), width - margin, 15, { align: 'right' });
+            doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), rightEdge, 15, { align: 'right' });
 
-            // License & Insured tag under date on right
+            // License & Insured tag under date on right (bottom line)
             doc.setFont("helvetica", "bold");
             doc.setFontSize(7.5);
             doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
-            doc.text("VA CLASS A LIC #2705188660 • 100% FULLY INSURED", width - margin, 22, { align: 'right' });
+            doc.text(licenseText, rightEdge, 22, { align: 'right' });
+
+            // Document Subtitle on left (bottom line)
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(CYAN[0], CYAN[1], CYAN[2]);
+
+            // Ensure at least 10mm clear margin between left subtitle and right license tag
+            const maxSubWidth = Math.max(30, licenseStartX - margin - 10);
+            const prefix = isContract ? "CONTRACT" : "PROPOSAL";
+            const fullSub = projectTitle.trim()
+                ? `${prefix} • ${projectTitle.trim().toUpperCase()}`
+                : (isContract ? "CONSTRUCTION CONTRACT & AGREEMENT" : "CONSTRUCTION PROPOSAL");
+
+            let subText = fullSub;
+            if (doc.getTextWidth(subText) > maxSubWidth) {
+                while (subText.length > 0 && doc.getTextWidth(subText + "...") > maxSubWidth) {
+                    subText = subText.slice(0, -1).trimEnd();
+                }
+                subText += "...";
+            }
+            doc.text(subText, margin, 22);
 
             // Reset
             doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
@@ -958,8 +989,12 @@ Return ONLY a valid JSON object matching this schema:
         doc.setTextColor(BODY[0], BODY[1], BODY[2]);
 
         const displayScope = isContract
-            ? (scopeOfWork || '').replace(/\bOPTION\s+(\d+)/gi, 'SECTION $1').replace(/^SCOPE OF WORK:/im, 'CONTRACT AGREEMENT & SCOPE OF WORK:')
-            : (scopeOfWork || '').replace(/\bSECTION\s+(\d+)/gi, 'OPTION $1').replace(/^CONTRACT AGREEMENT & SCOPE OF WORK:/im, 'SCOPE OF WORK:');
+            ? (scopeOfWork || '')
+                .replace(/\bOPTION\s+(\d+)\s*[-:]*\s*/gi, 'SECTION $1 - ')
+                .replace(/^SCOPE OF WORK:/im, 'CONTRACT AGREEMENT & SCOPE OF WORK:')
+            : (scopeOfWork || '')
+                .replace(/\b(?:OPTION|SECTION)\s+(\d+)\s*[-:]*\s*/gi, '$1 - ')
+                .replace(/^CONTRACT AGREEMENT & SCOPE OF WORK:/im, 'SCOPE OF WORK:');
         const lines = doc.splitTextToSize(displayScope, width - margin * 2);
         for (let i = 0; i < lines.length; i++) {
             if (y > height - 25) {
@@ -968,7 +1003,7 @@ Return ONLY a valid JSON object matching this schema:
                 drawHeader();
             }
             const line = lines[i];
-            const isHeading = /^(PROJECT:|SCOPE OF WORK:|CONTRACT AGREEMENT & SCOPE OF WORK:|OPTION\s+\d+|SECTION\s+\d+|STANDARD EXCLUSIONS:|PAYMENT TERMS:)/i.test(line.trim());
+            const isHeading = /^(PROJECT:|SCOPE OF WORK:|CONTRACT AGREEMENT & SCOPE OF WORK:|OPTION\s+\d+|SECTION\s+\d+|\d+\s*[-.:]\s+[A-Z]|STANDARD EXCLUSIONS:|PAYMENT TERMS:)/i.test(line.trim());
             if (isHeading) {
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9);
@@ -1230,19 +1265,19 @@ Return ONLY a valid JSON object matching this schema:
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(7.5);
                 doc.setTextColor(LABEL[0], LABEL[1], LABEL[2]);
-                doc.text("OPTION / DESCRIPTION", margin, y);
+                doc.text("# / DESCRIPTION", margin, y);
                 doc.text("AMOUNT", amountRight, y, { align: 'right' });
                 y += 3;
                 doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
                 doc.line(margin, y, width - margin, y);
                 y += 6;
 
-                // Rows with Option title, detailed description, amount, and checkbox
+                // Rows with numbered title, detailed description, amount, and checkbox
                 sections.forEach((s, idx) => {
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(9.5);
                     doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                    doc.text(`Option ${idx + 1}: ${s.type}`, margin, y);
+                    doc.text(`${idx + 1}. ${s.type}`, margin, y);
 
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(9.5);
@@ -1343,7 +1378,7 @@ Return ONLY a valid JSON object matching this schema:
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(11.5);
                 doc.setTextColor(BLACK[0], BLACK[1], BLACK[2]);
-                doc.text("SELECTED OPTION TOTAL", labelX, y, { align: 'right' });
+                doc.text("SELECTED TOTAL", labelX, y, { align: 'right' });
                 doc.text("$", dollarX, y);
 
                 doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
@@ -1791,10 +1826,10 @@ Return ONLY a valid JSON object matching this schema:
                                 <div key={s.id || idx} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-cyan-200 transition-all">
                                     <div className="flex gap-4 items-center">
                                         <div className="bg-cyan-50 text-cyan-700 font-black px-2.5 h-8 flex items-center justify-center rounded-lg text-xs whitespace-nowrap">
-                                            Opt {idx + 1}
+                                            #{idx + 1}
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-slate-700">Option {idx + 1}: {s.type}</h4>
+                                            <h4 className="font-bold text-slate-700">#{idx + 1} - {s.type}</h4>
                                             <p className="text-xs text-slate-400">{s.dimensions} units{s.description ? ` · ${s.description}` : ''}</p>
                                         </div>
                                     </div>
@@ -2078,7 +2113,7 @@ Return ONLY a valid JSON object matching this schema:
                                     rows={16}
                                     placeholder={docType === 'contract'
                                         ? "CONTRACT AGREEMENT & SCOPE OF WORK:\n\nSECTION 1 - PIER CONSTRUCTION:\n- Install treated wood piling, 12\" diameter\n- Frame with 2x10 stringers\n...\n\nSTANDARD EXCLUSIONS:\nPermits, Engineering..."
-                                        : "SCOPE OF WORK:\n\nOption 1 - Pier Construction:\n- Install treated wood piling, 12\" diameter\n- Frame with 2x10 stringers\n...\n\nSTANDARD EXCLUSIONS:\nPermits, Engineering..."
+                                        : "SCOPE OF WORK:\n\n1 - Pier Construction:\n- Install treated wood piling, 12\" diameter\n- Frame with 2x10 stringers\n...\n\nSTANDARD EXCLUSIONS:\nPermits, Engineering..."
                                     }
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600 outline-none focus:border-cyan-400 resize-none leading-relaxed font-mono shadow-inner"
                                 />
