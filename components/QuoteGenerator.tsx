@@ -1622,10 +1622,28 @@ Return ONLY a valid JSON object matching this schema:
             }
         }
 
-        const safeTitle = (projectTitle.trim() || clientName || (isContract ? 'Contract' : 'Proposal')).replace(/[^a-zA-Z0-9_-]/g, '_');
-        const pdfFileName = isContract
-            ? `Contract_${safeTitle}_${new Date().toISOString().split('T')[0]}.pdf`
-            : `Proposal_${safeTitle}_${new Date().toISOString().split('T')[0]}.pdf`;
+        // Sanitize filename to avoid invalid OS characters
+        const cleanFileName = (str: string): string => {
+            return (str || '')
+                .replace(/[\\/:*?"<>|]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        };
+
+        // When exporting proposals -> name with Project Address
+        // When exporting contracts -> name with Project Name (Title)
+        let baseName = '';
+        if (isContract) {
+            baseName = cleanFileName(projectTitle) || cleanFileName(clientAddress) || cleanFileName(clientName) || 'Contract';
+        } else {
+            baseName = cleanFileName(clientAddress) || cleanFileName(projectTitle) || cleanFileName(clientName) || 'Proposal';
+        }
+
+        if (baseName.length > 120) {
+            baseName = baseName.substring(0, 120).trim();
+        }
+
+        const pdfFileName = `${baseName}.pdf`;
         doc.save(pdfFileName);
     };
 
