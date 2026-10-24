@@ -14,6 +14,24 @@ interface ActiveProjectsProps {
   onGenerateNewInvoice?: (project: Project) => void;
 }
 
+const getProjectAddress = (p: Project | null): string => {
+  if (!p) return '';
+  if (p.pm_data) {
+    try {
+      const pm = typeof p.pm_data === 'string' ? JSON.parse(p.pm_data) : p.pm_data;
+      if (pm && typeof pm === 'object') {
+        const addr = pm.address;
+        if (typeof addr === 'string' && addr.trim()) return addr.trim();
+        if (typeof addr === 'object' && addr) {
+          const formatted = addr.formatted || addr.street;
+          if (typeof formatted === 'string' && formatted.trim()) return formatted.trim();
+        }
+      }
+    } catch (e) {}
+  }
+  return p.name || '';
+};
+
 const ActiveProjects: React.FC<ActiveProjectsProps> = ({ 
   projects, 
   invoices, 
@@ -29,10 +47,13 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
   // Active Projects filter: Received first payment (paidAmount > 0) AND has outstanding balance (balance > 0)
   const activeProjectsList = projects
     .filter(p => p.status !== 'Finished' && p.paidAmount > 0 && p.balance > 0)
-    .filter(p =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.client.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    .filter(p => {
+      const term = searchTerm.toLowerCase();
+      const addr = getProjectAddress(p).toLowerCase();
+      const name = (p.name || '').toLowerCase();
+      const client = (p.client || '').toLowerCase();
+      return addr.includes(term) || name.includes(term) || client.includes(term);
+    });
 
   const getLastPayment = (projectId: string) => {
     const projectPayments = payments.filter(pay => pay.projectId === projectId && pay.method !== 'Discount');
@@ -74,7 +95,7 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0);
-    doc.text(`Project: ${project.name}`, 20, 45);
+    doc.text(`Project: ${getProjectAddress(project)}`, 20, 45);
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -127,7 +148,8 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
       });
     }
 
-    doc.save(`Active_${project.name.replace(/\s+/g, '_')}.pdf`);
+    const safeProj = getProjectAddress(project).replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_') || 'Project';
+    doc.save(`Active_${safeProj}.pdf`);
   };
 
   const handleExportListPDF = () => {
@@ -165,7 +187,7 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
     const tableData = activeProjectsList.map(project => {
       const profitPercent = getProfitPercent(project);
       return [
-        project.name,
+        getProjectAddress(project),
         project.client,
         `$${project.totalAmount.toLocaleString()}`,
         `$${project.paidAmount.toLocaleString()}`,
@@ -215,7 +237,7 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
             <div className="bg-white rounded-[2rem] md:rounded-[3rem] w-full max-w-4xl p-8 md:p-12 shadow-2xl relative max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-start mb-8 md:mb-10 border-b pb-6">
                 <div>
-                  <h3 className="text-2xl md:text-3xl font-black text-[#0a192f] tracking-tighter uppercase italic">{p.name}</h3>
+                  <h3 className="text-2xl md:text-3xl font-black text-[#0a192f] tracking-tighter uppercase italic">{getProjectAddress(p)}</h3>
                   <p className="text-cyan-600 font-bold uppercase tracking-widest text-[10px] mt-1">Active Project — {p.client}</p>
                 </div>
                 <div className="flex gap-3">
@@ -383,7 +405,7 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
                   <div className="p-4">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1 min-w-0 pr-2">
-                        <p className="font-black text-[#0a192f] uppercase italic text-sm leading-tight truncate">{project.name}</p>
+                        <p className="font-black text-[#0a192f] uppercase italic text-sm leading-tight truncate" title={getProjectAddress(project)}>{getProjectAddress(project)}</p>
                         <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{project.client}</p>
                       </div>
                       <span className="bg-cyan-100 text-cyan-700 text-[8px] font-black uppercase px-2.5 py-1 rounded-full tracking-wider flex-shrink-0">Active</span>
@@ -442,7 +464,7 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-3">
                           <div className="w-2 h-2 rounded-full bg-cyan-500 flex-shrink-0"></div>
-                          <p className="text-sm font-black text-[#0a192f] uppercase italic truncate">{project.name}</p>
+                          <p className="text-sm font-black text-[#0a192f] uppercase italic truncate" title={getProjectAddress(project)}>{getProjectAddress(project)}</p>
                         </div>
                       </td>
                       <td className="px-6 py-5 text-sm font-bold text-slate-600">{project.client}</td>

@@ -10,6 +10,24 @@ interface DashboardProps {
   invoices: Invoice[];
 }
 
+const getProjectAddress = (p: Project | null): string => {
+  if (!p) return '';
+  if (p.pm_data) {
+    try {
+      const pm = typeof p.pm_data === 'string' ? JSON.parse(p.pm_data) : p.pm_data;
+      if (pm && typeof pm === 'object') {
+        const addr = pm.address;
+        if (typeof addr === 'string' && addr.trim()) return addr.trim();
+        if (typeof addr === 'object' && addr) {
+          const formatted = addr.formatted || addr.street;
+          if (typeof formatted === 'string' && formatted.trim()) return formatted.trim();
+        }
+      }
+    } catch (e) {}
+  }
+  return p.name || '';
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ projects, payments, invoices }) => {
   const totalRevenue = projects.reduce((acc, p) => acc + p.totalAmount, 0);
   const totalPaid = projects.reduce((acc, p) => acc + p.paidAmount, 0);
@@ -23,12 +41,15 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, payments, invoices }) =
 
   const finishedProjects = projects.filter(p => p.status === 'Finished');
 
-  const chartData = projects.slice(0, 6).map(p => ({
-    name: p.name.length > 12 ? p.name.substring(0, 10) + '..' : p.name,
-    paid: p.paidAmount,
-    expenses: p.totalExpenses || 0,
-    profit: Math.max(0, p.paidAmount - (p.totalExpenses || 0))
-  }));
+  const chartData = projects.slice(0, 6).map(p => {
+    const displayName = getProjectAddress(p) || p.name;
+    return {
+      name: displayName.length > 12 ? displayName.substring(0, 10) + '..' : displayName,
+      paid: p.paidAmount,
+      expenses: p.totalExpenses || 0,
+      profit: Math.max(0, p.paidAmount - (p.totalExpenses || 0))
+    };
+  });
 
   const stats = [
     { label: 'Total Contracted', value: `$${totalRevenue.toLocaleString()}`, icon: Briefcase, color: 'text-cyan-600', bg: 'bg-cyan-50', border: 'border-cyan-100' },
@@ -112,7 +133,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, payments, invoices }) =
             {finishedProjects.length > 0 ? finishedProjects.map(project => (
               <div key={project.id} className="p-8 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 flex flex-col hover:bg-white/10 transition-all group">
                 <div className="flex justify-between items-start mb-4">
-                  <h4 className="font-black text-white text-base italic uppercase tracking-tighter leading-tight group-hover:text-cyan-400 transition-colors">{project.name}</h4>
+                  <h4 className="font-black text-white text-base italic uppercase tracking-tighter leading-tight group-hover:text-cyan-400 transition-colors">{getProjectAddress(project)}</h4>
                   <CheckCircle className="w-6 h-6 text-emerald-400 flex-shrink-0" />
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-[10px] font-bold uppercase tracking-widest mb-6">

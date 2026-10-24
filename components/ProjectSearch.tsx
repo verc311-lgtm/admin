@@ -110,7 +110,7 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0);
-    doc.text(`Project: ${project.name}`, 20, 45);
+    doc.text(`Project: ${getProjectAddress(project) || project.name}`, 20, 45);
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -192,7 +192,7 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
       });
     }
 
-    doc.save(`Report_${project.name.replace(/\s+/g, '_')}.pdf`);
+    doc.save(`Report_${(getProjectAddress(project) || project.name).replace(/\s+/g, '_')}.pdf`);
   };
 
   const handleGenerateInvoicePDF = (invoice: Invoice) => {
@@ -239,14 +239,14 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
 
     doc.setFontSize(10);
     doc.setTextColor(150);
-    doc.text(`Project: ${project.name}`, 14, 75);
+    doc.text(`Project: ${getProjectAddress(project) || project.name}`, 14, 75);
 
     // 4. Line Items Table
     autoTable(doc, {
       startY: 90,
       head: [['Description', 'Amount']],
       body: [
-        [`Marine Construction Services - ${project.name}\n(Progress Payment / Contract Services)`, `$${invoice.amount.toLocaleString()}`]
+        [`Marine Construction Services - ${getProjectAddress(project) || project.name}\n(Progress Payment / Contract Services)`, `$${invoice.amount.toLocaleString()}`]
       ],
       theme: 'striped',
       headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' },

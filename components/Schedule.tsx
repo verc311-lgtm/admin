@@ -531,7 +531,7 @@ const Schedule: React.FC<ScheduleProps> = ({
             
             const dbProject = {
                 id: nextId,
-                name: `${finalProjectType} for ${newLeadForm.customerName}`,
+                name: newLeadForm.address.trim() ? newLeadForm.address.trim() : `${finalProjectType} for ${newLeadForm.customerName}`,
                 client: newLeadForm.customerName,
                 totalAmount: 0.00,
                 balance: 0.00,
@@ -650,7 +650,7 @@ const Schedule: React.FC<ScheduleProps> = ({
                 newPmDataStr,
                 {
                     client: editLeadForm.customerName,
-                    name: `${editLeadForm.projectType} for ${editLeadForm.customerName}`
+                    name: editLeadForm.address.trim() ? editLeadForm.address.trim() : `${editLeadForm.projectType} for ${editLeadForm.customerName}`
                 }
             );
 
@@ -658,7 +658,7 @@ const Schedule: React.FC<ScheduleProps> = ({
             setSelectedProject(prev => prev ? {
                 ...prev,
                 client: editLeadForm.customerName,
-                name: `${editLeadForm.projectType} for ${editLeadForm.customerName}`,
+                name: editLeadForm.address.trim() ? editLeadForm.address.trim() : `${editLeadForm.projectType} for ${editLeadForm.customerName}`,
                 pm_data: newPmDataStr
             } : null);
 
