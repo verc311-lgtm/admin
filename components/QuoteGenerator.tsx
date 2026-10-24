@@ -1630,11 +1630,12 @@ Return ONLY a valid JSON object matching this schema:
                 .trim();
         };
 
-        // When exporting proposals -> name with Project Address
-        // When exporting contracts -> name with Project Name (Title)
+        // When exporting proposals -> name with Project Address (e.g. 123 Ocean Dr.pdf)
+        // When exporting contracts -> name with Contract and Project Address (e.g. Contract - 123 Ocean Dr.pdf)
         let baseName = '';
         if (isContract) {
-            baseName = cleanFileName(projectTitle) || cleanFileName(clientAddress) || cleanFileName(clientName) || 'Contract';
+            const addr = cleanFileName(clientAddress) || cleanFileName(projectTitle) || cleanFileName(clientName);
+            baseName = addr ? `Contract - ${addr}` : 'Contract';
         } else {
             baseName = cleanFileName(clientAddress) || cleanFileName(projectTitle) || cleanFileName(clientName) || 'Proposal';
         }
