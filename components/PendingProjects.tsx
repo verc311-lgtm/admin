@@ -32,6 +32,31 @@ const getProjectAddress = (p: Project | null): string => {
   return p.name || '';
 };
 
+const isSignedContract = (p: Project | null): boolean => {
+  if (!p) return false;
+  // Exclude completed projects
+  if (p.status === 'Finished') return false;
+  // Must have pending balance / awaiting first payment (paidAmount === 0)
+  if ((p.paidAmount || 0) > 0) return false;
+  // Must have a contract value greater than 0 (no $0 contracts)
+  if (!p.totalAmount || p.totalAmount <= 0) return false;
+
+  // Check if contract was explicitly marked signed or proposal accepted in pm_data
+  if (p.pm_data) {
+    try {
+      const pm = typeof p.pm_data === 'string' ? JSON.parse(p.pm_data) : p.pm_data;
+      if (pm && typeof pm === 'object') {
+        if (pm.checklist?.signContract === true || pm.proposal?.status === 'Accepted') {
+          return true;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Include in-progress contracts with registered contract value > 0 (exclude Drafts)
+  return p.status !== 'Draft';
+};
+
 const PendingProjects: React.FC<PendingProjectsProps> = ({ 
   projects, 
   invoices, 
@@ -44,9 +69,9 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [detailsModal, setDetailsModal] = useState<{ show: boolean; project: Project | null }>({ show: false, project: null });
 
-  // Pending Projects filter: No payments registered (paidAmount === 0)
+  // Pending Projects filter: Only contracts that are signed/confirmed with value > 0 (excluding $0 / drafts)
   const pendingProjectsList = projects
-    .filter(p => p.status !== 'Finished' && p.paidAmount === 0)
+    .filter(isSignedContract)
     .filter(p => {
       const term = searchTerm.toLowerCase();
       const addr = getProjectAddress(p).toLowerCase();
@@ -359,7 +384,7 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
       {pendingProjectsList.length === 0 ? (
         <div className="bg-white rounded-[2.5rem] shadow-sm border p-16 text-center">
           <p className="text-slate-300 text-lg font-bold">No pending projects found</p>
-          <p className="text-slate-400 text-sm mt-2">Projects without any registered payment will appear here.</p>
+          <p className="text-slate-400 text-sm mt-2">Signed contracts awaiting initial payment will appear here.</p>
         </div>
       ) : (
         <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
