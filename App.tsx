@@ -392,6 +392,67 @@ const App: React.FC = () => {
     }
   };
 
+  const handleMoveToActive = async (projectId: string) => {
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase
+        .from('cva_projects')
+        .update({ 
+          status: 'In Progress',
+          pipelineStage: 'IN PROGRESS'
+        })
+        .eq('id', projectId);
+
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error moving project to Active: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
+  };
+
+  const handleMoveToSigned = async (projectId: string) => {
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase
+        .from('cva_projects')
+        .update({ 
+          status: 'Signed',
+          pipelineStage: 'APPROVED'
+        })
+        .eq('id', projectId);
+
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error moving project to Signed: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
+  };
+
+  const handleMoveToFinished = async (projectId: string) => {
+    if (!window.confirm("Are you sure you want to mark this project as Completed?")) return;
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase
+        .from('cva_projects')
+        .update({ 
+          status: 'Finished',
+          pipelineStage: 'PAID / CLOSED'
+        })
+        .eq('id', projectId);
+
+      if (error) throw error;
+      await fetchData();
+    } catch (err: any) {
+      alert("Error completing project: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
+  };
+
   const handleChangeOrder = async (projectId: string, amount: number) => {
     setIsSyncing(true);
     const project = projects.find(p => p.id === projectId);
@@ -786,10 +847,12 @@ const App: React.FC = () => {
                 onDeleteExpense={handleDeleteExpense}
                 onChangeOrder={handleChangeOrder}
                 onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
+                onMoveToSigned={handleMoveToSigned}
+                onMoveToFinished={handleMoveToFinished}
               />
             )}
 
-            {activeView === 'Pending Projects' && (
+            {(activeView === 'Sign Contracts' || activeView === 'Pending Projects') && (
               <PendingProjects
                 projects={projects}
                 invoices={invoices}
@@ -803,6 +866,7 @@ const App: React.FC = () => {
                 onDeleteExpense={handleDeleteExpense}
                 onChangeOrder={handleChangeOrder}
                 onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
+                onMoveToActive={handleMoveToActive}
               />
             )}
 

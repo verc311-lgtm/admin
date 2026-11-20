@@ -686,7 +686,15 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({
                     </h3>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{project.client}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${project.status === 'Finished' ? 'bg-emerald-100 text-emerald-700' : 'bg-cyan-100 text-cyan-700'}`}>{project.status}</span>
+                  <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                    project.status === 'Finished' 
+                      ? 'bg-emerald-100 text-emerald-700' 
+                      : (project.status === 'In Progress' || project.status === 'Active')
+                        ? 'bg-cyan-100 text-cyan-700'
+                        : project.status === 'Signed'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-slate-100 text-slate-700'
+                  }`}>{project.status}</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-8">

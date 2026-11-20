@@ -8,7 +8,7 @@ const NewContract = ({ onSave, onCancel }) => {
     client: '',
     totalAmount: 0,
     startDate: new Date().toISOString().split('T')[0],
-    status: 'In Progress'
+    status: 'Signed'
   });
 
   const handleSubmit = (e) => {

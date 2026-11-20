@@ -16,7 +16,8 @@ import {
   CalendarDays,
   CheckCircle,
   TrendingUp,
-  Clock
+  Clock,
+  FileCheck
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -41,7 +42,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, u
     { id: 'Invoices', label: 'Invoices', icon: FileText },
     { id: 'Payments Made', label: 'Payment History', icon: ArrowUpCircle },
     { id: 'Active Projects', label: 'Active Projects', icon: TrendingUp },
-    { id: 'Pending Projects', label: 'Pending Projects', icon: Clock },
+    { id: 'Sign Contracts', label: 'Sign Contracts', icon: FileCheck },
     { id: 'Completed Projects', label: 'Completed Projects', icon: CheckCircle },
     { id: 'Schedule', label: 'Schedule', icon: CalendarDays },
   ].filter(item => !isRestrictedUser || item.id === 'Schedule');
@@ -92,19 +93,22 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, onLogout, u
 
         <nav className="flex-1 px-4 space-y-1">
           <div className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] px-4 mb-2">Main Menu</div>
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => { onViewChange(item.id); onClose(); }}
-              className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 ${activeView === item.id
-                ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/20'
-                : 'text-gray-400 hover:bg-white/5 hover:text-cyan-400'
-                }`}
-            >
-              <item.icon className={`w-5 h-5 ${activeView === item.id ? 'text-white' : 'text-gray-400'}`} />
-              <span className="font-medium text-sm">{item.label}</span>
-            </button>
-          ))}
+          {menuItems.map((item) => {
+            const isActive = activeView === item.id || (item.id === 'Sign Contracts' && activeView === 'Pending Projects');
+            return (
+              <button
+                key={item.id}
+                onClick={() => { onViewChange(item.id); onClose(); }}
+                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 ${isActive
+                  ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/20'
+                  : 'text-gray-400 hover:bg-white/5 hover:text-cyan-400'
+                  }`}
+              >
+                <item.icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                <span className="font-medium text-sm">{item.label}</span>
+              </button>
+            );
+          })}
 
           {!isRestrictedUser && (
             <div className="pt-8 pb-2">

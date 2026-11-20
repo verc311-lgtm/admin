@@ -56,7 +56,7 @@ export interface Project {
   profit: number;          // totalAmount - totalExpenses
   startDate: string;
   estimatedEndDate?: string;
-  status: 'Draft' | 'In Progress' | 'Finished';
+  status: 'Draft' | 'Signed' | 'In Progress' | 'Active' | 'Finished';
   pipelineStage?: string;
   pm_data?: string;
 }
@@ -77,4 +77,5 @@ export interface Assignment {
   status: 'Pending' | 'Completed';
 }
 
-export type View = 'Home' | 'Quotes' | 'Invoices' | 'Payments Made' | 'New Contract' | 'Project Search' | 'User Management' | 'Schedule' | 'Completed Projects' | 'Active Projects' | 'Pending Projects';
+export type View = 'Home' | 'Quotes' | 'Invoices' | 'Payments Made' | 'New Contract' | 'Project Search' | 'User Management' | 'Schedule' | 'Completed Projects' | 'Active Projects' | 'Pending Projects' | 'Sign Contracts';
+

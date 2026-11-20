@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ChevronRight, Download, X, FileText, FilePlus, Wallet, Anchor, Clock, DollarSign, Printer, Edit2, Trash2, Plus, Save } from 'lucide-react';
+import { Search, ChevronRight, Download, X, FileText, FilePlus, Wallet, Anchor, Clock, DollarSign, Printer, Edit2, Trash2, Plus, Save, TrendingUp, FileCheck } from 'lucide-react';
 import { Project, Invoice, Payment, Expense, ExpenseCategory } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -14,6 +14,7 @@ interface PendingProjectsProps {
   onGenerateNewInvoice?: (project: Project) => void;
   onUpdateExpense?: (projectId: string, expenseId: string, expense: { category: ExpenseCategory, amount: number, note: string, date?: string }) => void;
   onDeleteExpense?: (projectId: string, expenseId: string) => void;
+  onMoveToActive?: (projectId: string) => void;
 }
 
 const getProjectAddress = (p: Project | null): string => {
@@ -38,25 +39,14 @@ const isSignedContract = (p: Project | null): boolean => {
   if (!p) return false;
   // Exclude completed projects
   if (p.status === 'Finished') return false;
-  // Must have pending balance / awaiting first payment (paidAmount === 0)
-  if ((p.paidAmount || 0) > 0) return false;
-  // Must have a contract value greater than 0 (no $0 contracts)
+  // Exclude draft projects
+  if (p.status === 'Draft') return false;
+  // Exclude projects already in active execution
+  if (p.status === 'In Progress' || p.status === 'Active') return false;
+  // Must have numeric contract value greater than 0 (no $0 / draft contracts)
   if (!p.totalAmount || p.totalAmount <= 0) return false;
 
-  // Check if contract was explicitly marked signed or proposal accepted in pm_data
-  if (p.pm_data) {
-    try {
-      const pm = typeof p.pm_data === 'string' ? JSON.parse(p.pm_data) : p.pm_data;
-      if (pm && typeof pm === 'object') {
-        if (pm.checklist?.signContract === true || pm.proposal?.status === 'Accepted') {
-          return true;
-        }
-      }
-    } catch (e) {}
-  }
-
-  // Include in-progress contracts with registered contract value > 0 (exclude Drafts)
-  return p.status !== 'Draft';
+  return true;
 };
 
 const PendingProjects: React.FC<PendingProjectsProps> = ({ 
@@ -68,7 +58,8 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
   onChangeOrder,
   onGenerateNewInvoice,
   onUpdateExpense,
-  onDeleteExpense
+  onDeleteExpense,
+  onMoveToActive
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [detailsModal, setDetailsModal] = useState<{ show: boolean; project: Project | null }>({ show: false, project: null });
@@ -388,9 +379,20 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
               <div className="flex justify-between items-start mb-8 md:mb-10 border-b pb-6">
                 <div>
                   <h3 className="text-2xl md:text-3xl font-black text-[#0a192f] tracking-tighter uppercase italic">{getProjectAddress(p)}</h3>
-                  <p className="text-amber-600 font-bold uppercase tracking-widest text-[10px] mt-1">Pending Project — {p.client}</p>
+                  <p className="text-amber-600 font-bold uppercase tracking-widest text-[10px] mt-1">Signed Contract — {p.client}</p>
                 </div>
                 <div className="flex gap-3">
+                  {onMoveToActive && (
+                    <button 
+                      onClick={() => {
+                        onMoveToActive(p.id);
+                        setDetailsModal({ show: false, project: null });
+                      }} 
+                      className="bg-[#0a192f] hover:bg-cyan-600 text-white transition-all flex items-center gap-2 font-bold uppercase text-[10px] tracking-widest shadow-lg px-5 py-2.5 rounded-xl cursor-pointer"
+                    >
+                      <TrendingUp className="w-4 h-4 text-cyan-400" /> Send to Active
+                    </button>
+                  )}
                   <button onClick={() => handleGeneratePDF(p)} className="bg-red-600 hover:bg-red-500 text-white transition-all flex items-center gap-2 font-bold uppercase text-[10px] tracking-widest shadow-lg px-5 py-2.5 rounded-xl"><Download className="w-4 h-4" /> PDF</button>
                   <button onClick={() => setDetailsModal({ show: false, project: null })} className="text-slate-300 hover:text-red-500 transition-colors"><X className="w-8 h-8" /></button>
                 </div>
@@ -417,18 +419,21 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
               </div>
 
               {/* Action Info */}
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-8 text-amber-800">
-                <h5 className="font-black text-xs uppercase tracking-widest mb-1">Pending Invoice / Payment Required</h5>
-                <p className="text-sm">This project has no registered payments. To transition this project into Active state, you must issue an invoice and record a first payment.</p>
-                {onAddPayment && (
+              <div className="bg-cyan-50 border border-cyan-200 rounded-2xl p-6 mb-8 text-cyan-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div>
+                  <h5 className="font-black text-xs uppercase tracking-widest mb-1 text-cyan-800">Ready for Execution?</h5>
+                  <p className="text-sm text-cyan-700">Send this signed contract to Active Projects when field operations or construction begins.</p>
+                </div>
+                {onMoveToActive && (
                   <button 
                     onClick={() => { 
+                      onMoveToActive(p.id);
                       setDetailsModal({ show: false, project: null }); 
-                      onAddPayment(p.id); 
-                    }} 
-                    className="mt-4 bg-amber-600 hover:bg-amber-500 text-white font-bold uppercase text-[9px] tracking-widest px-4 py-2.5 rounded-xl transition-all"
+                    }}
+                    className="px-6 py-3.5 bg-[#0a192f] hover:bg-cyan-600 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 flex-shrink-0 cursor-pointer"
                   >
-                    Record First Payment
+                    <TrendingUp className="w-4 h-4 text-cyan-400" />
+                    Send to Active Projects
                   </button>
                 )}
               </div>
@@ -537,11 +542,11 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
       <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 sticky top-0 z-10">
         <div className="flex items-center gap-4 flex-shrink-0">
           <div className="bg-amber-100 p-3 rounded-2xl">
-            <Clock className="w-6 h-6 text-amber-600" />
+            <FileCheck className="w-6 h-6 text-amber-600" />
           </div>
           <div>
-            <h2 className="text-xl md:text-2xl font-black text-[#0a192f] uppercase tracking-tighter italic leading-none">Pending Projects</h2>
-            <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mt-0.5">{pendingProjectsList.length} pending project{pendingProjectsList.length !== 1 ? 's' : ''}</p>
+            <h2 className="text-xl md:text-2xl font-black text-[#0a192f] uppercase tracking-tighter italic leading-none">Sign Contracts</h2>
+            <p className="text-amber-600 text-[10px] font-bold uppercase tracking-widest mt-0.5">{pendingProjectsList.length} signed contract{pendingProjectsList.length !== 1 ? 's' : ''}</p>
           </div>
         </div>
         <div className="relative flex-1 w-full flex flex-col md:flex-row gap-4 items-center">
@@ -549,7 +554,7 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-amber-500 w-5 h-5" />
             <input 
               type="text" 
-              placeholder="Search by pending project or client..." 
+              placeholder="Search by signed contract or client..." 
               className="w-full pl-14 pr-6 py-4 rounded-2xl bg-slate-50 outline-none font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-amber-50 transition-all text-sm" 
               value={searchTerm} 
               onChange={(e) => setSearchTerm(e.target.value)} 
@@ -557,7 +562,7 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
           </div>
           <button 
             onClick={handleExportListPDF} 
-            className="bg-red-600 hover:bg-red-500 text-white transition-all flex items-center justify-center gap-2 font-bold uppercase text-[10px] tracking-widest shadow-lg px-6 py-4 rounded-2xl h-full flex-shrink-0 w-full md:w-auto"
+            className="bg-red-600 hover:bg-red-500 text-white transition-all flex items-center justify-center gap-2 font-bold uppercase text-[10px] tracking-widest shadow-lg px-6 py-4 rounded-2xl h-full flex-shrink-0 w-full md:w-auto cursor-pointer"
           >
             <Printer className="w-4 h-4" /> Print List
           </button>
@@ -567,15 +572,15 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-gradient-to-br from-[#0a192f] to-slate-800 p-6 rounded-[2rem] text-white">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400 mb-2">Pending Contract Value</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400 mb-2">Signed Contracts Value</p>
           <p className="text-3xl font-black">${totalContract.toLocaleString()}</p>
         </div>
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-6 rounded-[2rem] text-white">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-amber-100 mb-2">Average Project Value</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-amber-100 mb-2">Average Contract Value</p>
           <p className="text-3xl font-black">${avgContract.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
         </div>
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-[2rem] text-white">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-100 mb-2">Total Projects</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-100 mb-2">Total Signed Contracts</p>
           <p className="text-3xl font-black">{projectCount}</p>
         </div>
       </div>
@@ -583,8 +588,8 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
       {/* Main Table / Cards */}
       {pendingProjectsList.length === 0 ? (
         <div className="bg-white rounded-[2.5rem] shadow-sm border p-16 text-center">
-          <p className="text-slate-300 text-lg font-bold">No pending projects found</p>
-          <p className="text-slate-400 text-sm mt-2">Signed contracts awaiting initial payment will appear here.</p>
+          <p className="text-slate-300 text-lg font-bold">No signed contracts found</p>
+          <p className="text-slate-400 text-sm mt-2">Signed proposals and contracts ready for execution will appear here.</p>
         </div>
       ) : (
         <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
@@ -605,7 +610,7 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
                         <p className="font-black text-[#0a192f] uppercase italic text-sm leading-tight truncate" title={getProjectAddress(project)}>{getProjectAddress(project)}</p>
                         <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{project.client}</p>
                       </div>
-                      <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-2.5 py-1 rounded-full tracking-wider flex-shrink-0">Pending</span>
+                      <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-2.5 py-1 rounded-full tracking-wider flex-shrink-0">Signed</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       <div className="bg-slate-50 p-2.5 rounded-xl">
@@ -617,6 +622,19 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
                         <p className="text-xs font-bold text-blue-700">{project.startDate || 'Not Set'}</p>
                       </div>
                     </div>
+                    {onMoveToActive && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMoveToActive(project.id);
+                        }}
+                        className="w-full py-2.5 bg-[#0a192f] hover:bg-cyan-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 mt-2 shadow-sm cursor-pointer"
+                      >
+                        <TrendingUp className="w-3.5 h-3.5 text-cyan-400" />
+                        Send to Active Projects
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -634,7 +652,7 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
                   <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Start Date</th>
                   <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Est. End Date</th>
                   <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                  <th className="px-6 py-5"></th>
+                  <th className="px-6 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -657,13 +675,29 @@ const PendingProjects: React.FC<PendingProjectsProps> = ({
                         </span>
                       </td>
                       <td className="px-6 py-5 text-right">
-                        <button
-                          onClick={() => setDetailsModal({ show: true, project })}
-                          className="p-2 text-slate-300 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100"
-                          title="View Details"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          {onMoveToActive && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMoveToActive(project.id);
+                              }}
+                              className="px-3.5 py-2 bg-[#0a192f] hover:bg-cyan-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm hover:shadow-cyan-600/30 cursor-pointer"
+                              title="Send to Active Projects"
+                            >
+                              <TrendingUp className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Send to Active</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setDetailsModal({ show: true, project })}
+                            className="p-2 text-slate-300 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100 cursor-pointer"
+                            title="View Details"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

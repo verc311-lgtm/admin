@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ChevronRight, Download, X, FileText, FilePlus, Wallet, Anchor, TrendingUp, DollarSign, Printer, Edit2, Trash2, Plus, Save } from 'lucide-react';
+import { Search, ChevronRight, Download, X, FileText, FilePlus, Wallet, Anchor, TrendingUp, DollarSign, Printer, Edit2, Trash2, Plus, Save, CheckCircle } from 'lucide-react';
 import { Project, Invoice, Payment, Expense, ExpenseCategory } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -14,6 +14,8 @@ interface ActiveProjectsProps {
   onGenerateNewInvoice?: (project: Project) => void;
   onUpdateExpense?: (projectId: string, expenseId: string, expense: { category: ExpenseCategory, amount: number, note: string, date?: string }) => void;
   onDeleteExpense?: (projectId: string, expenseId: string) => void;
+  onMoveToSigned?: (projectId: string) => void;
+  onMoveToFinished?: (projectId: string) => void;
 }
 
 const getProjectAddress = (p: Project | null): string => {
@@ -43,7 +45,9 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
   onChangeOrder,
   onGenerateNewInvoice,
   onUpdateExpense,
-  onDeleteExpense
+  onDeleteExpense,
+  onMoveToSigned,
+  onMoveToFinished
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [detailsModal, setDetailsModal] = useState<{ show: boolean; project: Project | null }>({ show: false, project: null });
@@ -114,9 +118,9 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
     }
   };
 
-  // Active Projects filter: Received first payment (paidAmount > 0) AND has outstanding balance (balance > 0)
+  // Active Projects filter: Projects currently in active execution (status 'In Progress' or 'Active')
   const activeProjectsList = projects
-    .filter(p => p.status !== 'Finished' && p.paidAmount > 0 && p.balance > 0)
+    .filter(p => (p.status === 'In Progress' || p.status === 'Active') && p.status !== 'Finished')
     .filter(p => {
       const term = searchTerm.toLowerCase();
       const addr = getProjectAddress(p).toLowerCase();
@@ -402,6 +406,30 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
                   <p className="text-cyan-600 font-bold uppercase tracking-widest text-[10px] mt-1">Active Project — {p.client}</p>
                 </div>
                 <div className="flex gap-3">
+                  {onMoveToFinished && (
+                    <button 
+                      onClick={() => {
+                        onMoveToFinished(p.id);
+                        setDetailsModal({ show: false, project: null });
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center gap-2 font-bold uppercase text-[10px] tracking-widest shadow-lg px-4 py-2.5 rounded-xl cursor-pointer"
+                      title="Mark project as completed"
+                    >
+                      <CheckCircle className="w-4 h-4" /> Complete
+                    </button>
+                  )}
+                  {onMoveToSigned && (
+                    <button 
+                      onClick={() => {
+                        onMoveToSigned(p.id);
+                        setDetailsModal({ show: false, project: null });
+                      }}
+                      className="bg-slate-700 hover:bg-slate-600 text-white transition-all flex items-center gap-2 font-bold uppercase text-[10px] tracking-widest shadow-lg px-4 py-2.5 rounded-xl cursor-pointer"
+                      title="Move back to Sign Contracts"
+                    >
+                      Return to Signed
+                    </button>
+                  )}
                   <button onClick={() => handleGeneratePDF(p)} className="bg-red-600 hover:bg-red-500 text-white transition-all flex items-center gap-2 font-bold uppercase text-[10px] tracking-widest shadow-lg px-5 py-2.5 rounded-xl"><Download className="w-4 h-4" /> PDF</button>
                   <button onClick={() => setDetailsModal({ show: false, project: null })} className="text-slate-300 hover:text-red-500 transition-colors"><X className="w-8 h-8" /></button>
                 </div>
@@ -583,8 +611,8 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
       {/* Main Table / Cards */}
       {activeProjectsList.length === 0 ? (
         <div className="bg-white rounded-[2.5rem] shadow-sm border p-16 text-center">
-          <p className="text-slate-300 text-lg font-bold">No active projects found</p>
-          <p className="text-slate-400 text-sm mt-2">Projects that received a first payment and have an outstanding balance will appear here.</p>
+          <p className="text-slate-300 text-lg font-bold">No active projects in execution</p>
+          <p className="text-slate-400 text-sm mt-2">Projects in execution will appear here once moved from the Sign Contracts tab.</p>
         </div>
       ) : (
         <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
@@ -687,13 +715,29 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
                         )}
                       </td>
                       <td className="px-6 py-5 text-right">
-                        <button
-                          onClick={() => setDetailsModal({ show: true, project })}
-                          className="p-2 text-slate-300 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100"
-                          title="View Details"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          {onMoveToFinished && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMoveToFinished(project.id);
+                              }}
+                              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
+                              title="Mark project as completed"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Complete</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setDetailsModal({ show: true, project })}
+                            className="p-2 text-slate-300 hover:text-[#0a192f] transition-colors border rounded-lg hover:bg-slate-100 cursor-pointer"
+                            title="View Details"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
