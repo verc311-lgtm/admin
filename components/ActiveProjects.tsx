@@ -118,9 +118,8 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
     }
   };
 
-  // Active Projects filter: Projects currently in active execution (status 'In Progress' or 'Active')
   const activeProjectsList = projects
-    .filter(p => (p.status === 'In Progress' || p.status === 'Active') && p.status !== 'Finished')
+    .filter(p => p.status === 'In Progress' || p.status === 'Active')
     .filter(p => {
       const term = searchTerm.toLowerCase();
       const addr = getProjectAddress(p).toLowerCase();

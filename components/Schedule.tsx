@@ -17,6 +17,8 @@ interface ScheduleProps {
     onUpdateDates: (projectId: string, startDate: string, endDate: string | undefined) => void;
     onAddAssignment: (assignment: Omit<Assignment, 'id'>) => void;
     onDeleteAssignment: (id: string) => void;
+    onClearAllAssignments?: () => Promise<void> | void;
+    onAddCrew?: (name: string) => Promise<void> | void;
     onCreatePMProject?: (projectData: any) => Promise<void>;
     onUpdateProjectPM?: (projectId: string, stage: string, pmData: string, extraFields?: any) => Promise<void>;
     onDeleteProject?: (projectId: string) => Promise<void>;
@@ -128,6 +130,14 @@ interface ProjectPMData {
         signature?: string;
         depositRequired?: number;
         depositReceived?: boolean;
+    };
+
+    contract?: {
+        number?: string;
+        date?: string;
+        amount?: number;
+        signed?: boolean;
+        notes?: string;
     };
     
     checklist?: {
@@ -291,8 +301,14 @@ const Schedule: React.FC<ScheduleProps> = ({
         duration: '', paymentTerms: '', exclusions: '', warranty: '', notes: ''
     });
 
-    const [proposalSentForm, setProposalSentForm] = useState({
-        sentDate: '', recipient: '', amount: 0, version: 1, status: 'Sent' as const
+    const [proposalSentForm, setProposalSentForm] = useState<{
+        sentDate: string;
+        recipient: string;
+        amount: number;
+        version: number;
+        status: 'Sent' | 'Follow Up' | 'Accepted' | 'Declined';
+    }>({
+        sentDate: '', recipient: '', amount: 0, version: 1, status: 'Sent'
     });
 
     const [approvalForm, setApprovalForm] = useState({

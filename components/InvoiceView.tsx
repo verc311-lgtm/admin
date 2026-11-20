@@ -601,7 +601,7 @@ const InvoiceView: React.FC<InvoiceViewProps> = ({ projects, invoices, initialIn
               </button>
             )}
             <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-slate-100 rounded-2xl font-black text-[10px] uppercase hover:bg-slate-200 transition-all cursor-pointer"><Printer className="w-4 h-4" /> Print</button>
-            <button onClick={downloadPDF} disabled={isGeneratingPDF} className="flex items-center gap-2 px-6 py-3 bg-[#0a192f] text-white rounded-2xl font-black text-[10px] uppercase hover:bg-slate-800 disabled:opacity-50 shadow-xl shadow-slate-900/10 cursor-pointer">
+            <button onClick={() => downloadPDF()} disabled={isGeneratingPDF} className="flex items-center gap-2 px-6 py-3 bg-[#0a192f] text-white rounded-2xl font-black text-[10px] uppercase hover:bg-slate-800 disabled:opacity-50 shadow-xl shadow-slate-900/10 cursor-pointer">
               {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />} {isSaved ? 'Export PDF' : 'Save & Export PDF'}
             </button>
           </div>
