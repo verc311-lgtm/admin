@@ -324,6 +324,74 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateExpense = async (
+    projectId: string,
+    expenseId: string,
+    expenseData: { category: ExpenseCategory; amount: number; note: string; date?: string }
+  ) => {
+    setIsSyncing(true);
+    try {
+      const { error: expError } = await supabase
+        .from('cva_expenses')
+        .update({
+          category: expenseData.category,
+          amount: expenseData.amount,
+          note: expenseData.note,
+          ...(expenseData.date ? { date: expenseData.date } : {})
+        })
+        .eq('id', expenseId);
+
+      if (expError) throw expError;
+
+      // Recalculate totalExpenses and profit for the project
+      const { data: projExpenses } = await supabase.from('cva_expenses').select('amount').eq('projectId', projectId);
+      const newTotalExpenses = (projExpenses || []).reduce((sum: number, e: any) => sum + parseFloat(e.amount || 0), 0);
+      const project = projects.find(p => p.id === projectId);
+      const newProfit = (project ? project.totalAmount : 0) - newTotalExpenses;
+
+      await supabase.from('cva_projects').update({
+        totalExpenses: newTotalExpenses,
+        profit: newProfit
+      }).eq('id', projectId);
+
+      await fetchData();
+    } catch (err: any) {
+      alert("Error updating expense: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDeleteExpense = async (projectId: string, expenseId: string) => {
+    if (!window.confirm("Are you sure you want to delete this expense?")) return;
+    setIsSyncing(true);
+    try {
+      const { error: expError } = await supabase
+        .from('cva_expenses')
+        .delete()
+        .eq('id', expenseId);
+
+      if (expError) throw expError;
+
+      // Recalculate totalExpenses and profit for the project
+      const { data: projExpenses } = await supabase.from('cva_expenses').select('amount').eq('projectId', projectId);
+      const newTotalExpenses = (projExpenses || []).reduce((sum: number, e: any) => sum + parseFloat(e.amount || 0), 0);
+      const project = projects.find(p => p.id === projectId);
+      const newProfit = (project ? project.totalAmount : 0) - newTotalExpenses;
+
+      await supabase.from('cva_projects').update({
+        totalExpenses: newTotalExpenses,
+        profit: newProfit
+      }).eq('id', projectId);
+
+      await fetchData();
+    } catch (err: any) {
+      alert("Error deleting expense: " + err.message);
+      setSyncError(true);
+      setIsSyncing(false);
+    }
+  };
+
   const handleChangeOrder = async (projectId: string, amount: number) => {
     setIsSyncing(true);
     const project = projects.find(p => p.id === projectId);
@@ -684,6 +752,8 @@ const App: React.FC = () => {
                   if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
                 }}
                 onAddExpense={handleAddExpense}
+                onUpdateExpense={handleUpdateExpense}
+                onDeleteExpense={handleDeleteExpense}
                 onChangeOrder={handleChangeOrder}
                 onPrintInvoice={(inv) => navigateToInvoice(undefined, inv)}
                 onViewDetails={() => { }}
@@ -697,6 +767,8 @@ const App: React.FC = () => {
                 projects={projects}
                 invoices={invoices}
                 payments={payments}
+                onUpdateExpense={handleUpdateExpense}
+                onDeleteExpense={handleDeleteExpense}
               />
             )}
 
@@ -710,6 +782,8 @@ const App: React.FC = () => {
                   if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
                 }}
                 onAddExpense={handleAddExpense}
+                onUpdateExpense={handleUpdateExpense}
+                onDeleteExpense={handleDeleteExpense}
                 onChangeOrder={handleChangeOrder}
                 onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
               />
@@ -725,6 +799,8 @@ const App: React.FC = () => {
                   if (p) setSelectedProjectForPayment({ project: p, invoiceId: invId });
                 }}
                 onAddExpense={handleAddExpense}
+                onUpdateExpense={handleUpdateExpense}
+                onDeleteExpense={handleDeleteExpense}
                 onChangeOrder={handleChangeOrder}
                 onGenerateNewInvoice={(p) => navigateToInvoice(p, undefined)}
               />

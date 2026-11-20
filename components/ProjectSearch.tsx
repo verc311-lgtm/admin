@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import { Search, TrendingUp, X, FileText, Printer, FilePlus, DollarSign, Wallet, ChevronRight, Anchor, Save, Download, Trash2 } from 'lucide-react';
-import { Project, Invoice, ExpenseCategory } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Search, TrendingUp, X, FileText, Printer, FilePlus, DollarSign, Wallet, ChevronRight, Anchor, Save, Download, Trash2, Edit2, Plus } from 'lucide-react';
+import { Project, Invoice, Expense, ExpenseCategory } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -15,6 +15,8 @@ interface ProjectSearchProps {
   onViewDetails: (project: Project) => void;
   onGenerateNewInvoice: (project: Project) => void;
   onDeleteInvoice?: (invoiceId: string) => void;
+  onUpdateExpense?: (projectId: string, expenseId: string, expense: { category: ExpenseCategory, amount: number, note: string, date?: string }) => void;
+  onDeleteExpense?: (projectId: string, expenseId: string) => void;
 }
 
 const getProjectAddress = (p: Project | null): string => {
@@ -34,11 +36,42 @@ const getProjectAddress = (p: Project | null): string => {
   }
 };
 
-const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAddPayment, onAddExpense, onChangeOrder, onPrintInvoice, onViewDetails, onGenerateNewInvoice, onDeleteInvoice }) => {
+const ProjectSearch: React.FC<ProjectSearchProps> = ({ 
+  projects, 
+  invoices, 
+  onAddPayment, 
+  onAddExpense, 
+  onChangeOrder, 
+  onPrintInvoice, 
+  onViewDetails, 
+  onGenerateNewInvoice, 
+  onDeleteInvoice,
+  onUpdateExpense,
+  onDeleteExpense
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expenseModal, setExpenseModal] = useState<{ show: boolean, projectId: string, projectName: string, currentTotal: number }>({ show: false, projectId: '', projectName: '', currentTotal: 0 });
   const [changeOrderModal, setChangeOrderModal] = useState<{ show: boolean, projectId: string, projectName: string }>({ show: false, projectId: '', projectName: '' });
   const [detailsModal, setDetailsModal] = useState<{ show: boolean, project: Project | null }>({ show: false, project: null });
+
+  // Edit Expense State
+  const [editExpenseModal, setEditExpenseModal] = useState<{
+    show: boolean;
+    projectId: string;
+    expenseId: string;
+    category: ExpenseCategory;
+    amount: number;
+    note: string;
+    date: string;
+  }>({
+    show: false,
+    projectId: '',
+    expenseId: '',
+    category: 'Miscellaneous',
+    amount: 0,
+    note: '',
+    date: ''
+  });
 
   // Expense Form State
   const [tempAmount, setTempAmount] = useState<number>(0);
@@ -79,6 +112,53 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
     setTempAmount(0);
     setExpenseCategory('Miscellaneous');
     setExpenseNote('');
+  };
+
+  // Sync detailsModal with updated projects data
+  useEffect(() => {
+    if (detailsModal.show && detailsModal.project) {
+      const updated = projects.find(p => p.id === detailsModal.project!.id);
+      if (updated) {
+        setDetailsModal(prev => ({ ...prev, project: updated }));
+      }
+    }
+  }, [projects]);
+
+  const handleOpenEditExpense = (projectId: string, exp: Expense) => {
+    setEditExpenseModal({
+      show: true,
+      projectId,
+      expenseId: exp.id,
+      category: exp.category,
+      amount: exp.amount,
+      note: exp.note || '',
+      date: exp.date || new Date().toISOString().split('T')[0]
+    });
+  };
+
+  const handleSaveEditExpense = async () => {
+    if (editExpenseModal.amount <= 0) {
+      alert("Expense amount must be greater than 0");
+      return;
+    }
+    if (onUpdateExpense) {
+      await onUpdateExpense(editExpenseModal.projectId, editExpenseModal.expenseId, {
+        category: editExpenseModal.category,
+        amount: editExpenseModal.amount,
+        note: editExpenseModal.note,
+        date: editExpenseModal.date
+      });
+    }
+    setEditExpenseModal(prev => ({ ...prev, show: false }));
+  };
+
+  const handleDeleteExpenseClick = async (projectId: string, expenseId: string) => {
+    if (onDeleteExpense) {
+      await onDeleteExpense(projectId, expenseId);
+      if (editExpenseModal.show && editExpenseModal.expenseId === expenseId) {
+        setEditExpenseModal(prev => ({ ...prev, show: false }));
+      }
+    }
   };
 
   const handleChangeOrderSave = () => {
@@ -356,6 +436,97 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
         </div>
       )}
 
+      {/* Modal Edit Expense */}
+      {editExpenseModal.show && (
+        <div className="fixed inset-0 bg-[#0a192f]/80 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-3">
+                <div className="bg-orange-100 p-2.5 rounded-2xl">
+                  <Edit2 className="w-5 h-5 text-orange-600" />
+                </div>
+                <h3 className="text-2xl font-black text-[#0a192f] uppercase italic">Edit Expense</h3>
+              </div>
+              <button 
+                onClick={() => setEditExpenseModal(prev => ({ ...prev, show: false }))} 
+                className="text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
+              >
+                <X className="w-8 h-8" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Category</label>
+                <select
+                  className="w-full px-6 py-4 bg-slate-50 border-2 rounded-2xl font-bold text-slate-700 outline-none focus:border-cyan-400"
+                  value={editExpenseModal.category}
+                  onChange={(e) => setEditExpenseModal(prev => ({ ...prev, category: e.target.value as ExpenseCategory }))}
+                >
+                  {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-orange-600 text-xl">$</span>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    className="w-full pl-10 pr-6 py-5 bg-slate-50 border-2 rounded-2xl text-2xl font-black text-[#0a192f] outline-none focus:border-cyan-400" 
+                    placeholder="0.00" 
+                    value={editExpenseModal.amount || ''} 
+                    onChange={e => setEditExpenseModal(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))} 
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Date</label>
+                <input 
+                  type="date" 
+                  className="w-full px-6 py-4 bg-slate-50 border-2 rounded-2xl font-bold text-slate-700 outline-none focus:border-cyan-400" 
+                  value={editExpenseModal.date} 
+                  onChange={e => setEditExpenseModal(prev => ({ ...prev, date: e.target.value }))} 
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Note / Description</label>
+                <input 
+                  type="text" 
+                  className="w-full px-6 py-4 bg-slate-50 border-2 rounded-2xl font-bold text-slate-700 outline-none focus:border-cyan-400" 
+                  placeholder="e.g. Employee hours, store receipt, notes..." 
+                  value={editExpenseModal.note} 
+                  onChange={e => setEditExpenseModal(prev => ({ ...prev, note: e.target.value }))} 
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                {onDeleteExpense && (
+                  <button 
+                    type="button"
+                    onClick={() => handleDeleteExpenseClick(editExpenseModal.projectId, editExpenseModal.expenseId)} 
+                    className="px-5 py-5 border-2 border-red-100 text-red-600 hover:bg-red-50 rounded-2xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    title="Delete Expense"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+                <button 
+                  type="button"
+                  onClick={handleSaveEditExpense} 
+                  className="flex-1 py-5 bg-[#0a192f] text-white rounded-2xl font-black uppercase shadow-xl hover:bg-slate-800 transition-all flex justify-center items-center gap-2 cursor-pointer"
+                >
+                  <Save className="w-5 h-5" /> Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Details Modal */}
       {detailsModal.show && detailsModal.project && (
         <div className="fixed inset-0 bg-[#0a192f]/95 backdrop-blur-md z-[100] flex items-center justify-center p-6">
@@ -421,7 +592,20 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
 
               {/* Expenses List Section */}
               <div className="pt-8 border-t">
-                <h4 className="text-xl font-black uppercase italic flex items-center gap-3 mb-6"><Wallet className="w-6 h-6 text-orange-500" /> Project Expenses</h4>
+                <div className="flex justify-between items-center mb-6">
+                  <h4 className="text-xl font-black uppercase italic flex items-center gap-3"><Wallet className="w-6 h-6 text-orange-500" /> Project Expenses</h4>
+                  <button
+                    onClick={() => setExpenseModal({
+                      show: true,
+                      projectId: detailsModal.project!.id,
+                      projectName: getProjectAddress(detailsModal.project) || detailsModal.project!.name,
+                      currentTotal: detailsModal.project!.totalExpenses
+                    })}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 text-orange-600 hover:bg-orange-100 font-black rounded-xl text-xs uppercase tracking-wider transition-all border border-orange-200 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" /> Add Expense
+                  </button>
+                </div>
 
                 {/* Grouped Expenses Summary */}
                 {detailsModal.project.expensesList && detailsModal.project.expensesList.length > 0 && (
@@ -438,12 +622,31 @@ const ProjectSearch: React.FC<ProjectSearchProps> = ({ projects, invoices, onAdd
                 <div className="space-y-3">
                   {detailsModal.project.expensesList && detailsModal.project.expensesList.length > 0 ? (
                     detailsModal.project.expensesList.map(exp => (
-                      <div key={exp.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                        <div>
+                      <div key={exp.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm hover:border-slate-200 transition-all">
+                        <div className="flex-1 pr-4">
                           <p className="font-bold text-[#0a192f]">{exp.category}</p>
                           <p className="text-xs text-slate-400">{exp.note} • {exp.date}</p>
                         </div>
-                        <p className="font-black text-orange-600">-${exp.amount.toLocaleString()}</p>
+                        <div className="flex items-center gap-2.5 flex-shrink-0">
+                          <p className="font-black text-orange-600">-${exp.amount.toLocaleString()}</p>
+                          <button
+                            onClick={() => handleOpenEditExpense(detailsModal.project!.id, exp)}
+                            className="px-3 py-2 text-slate-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all border border-slate-100 hover:border-cyan-200 cursor-pointer flex items-center gap-1.5 text-xs font-black uppercase tracking-wider"
+                            title="Edit Expense"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                          {onDeleteExpense && (
+                            <button
+                              onClick={() => handleDeleteExpenseClick(detailsModal.project!.id, exp.id)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-slate-100 hover:border-red-200 cursor-pointer"
+                              title="Delete Expense"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))
                   ) : (

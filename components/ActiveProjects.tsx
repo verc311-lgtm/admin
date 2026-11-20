@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Search, ChevronRight, Download, X, FileText, FilePlus, Wallet, Anchor, TrendingUp, DollarSign, Printer } from 'lucide-react';
-import { Project, Invoice, Payment, ExpenseCategory } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Search, ChevronRight, Download, X, FileText, FilePlus, Wallet, Anchor, TrendingUp, DollarSign, Printer, Edit2, Trash2, Plus, Save } from 'lucide-react';
+import { Project, Invoice, Payment, Expense, ExpenseCategory } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -12,6 +12,8 @@ interface ActiveProjectsProps {
   onAddExpense?: (projectId: string, expense: { category: ExpenseCategory, amount: number, note: string }) => void;
   onChangeOrder?: (projectId: string, amount: number) => void;
   onGenerateNewInvoice?: (project: Project) => void;
+  onUpdateExpense?: (projectId: string, expenseId: string, expense: { category: ExpenseCategory, amount: number, note: string, date?: string }) => void;
+  onDeleteExpense?: (projectId: string, expenseId: string) => void;
 }
 
 const getProjectAddress = (p: Project | null): string => {
@@ -39,10 +41,78 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
   onAddPayment,
   onAddExpense,
   onChangeOrder,
-  onGenerateNewInvoice
+  onGenerateNewInvoice,
+  onUpdateExpense,
+  onDeleteExpense
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [detailsModal, setDetailsModal] = useState<{ show: boolean; project: Project | null }>({ show: false, project: null });
+
+  // Edit Expense State
+  const [editExpenseModal, setEditExpenseModal] = useState<{
+    show: boolean;
+    projectId: string;
+    expenseId: string;
+    category: ExpenseCategory;
+    amount: number;
+    note: string;
+    date: string;
+  }>({
+    show: false,
+    projectId: '',
+    expenseId: '',
+    category: 'Miscellaneous',
+    amount: 0,
+    note: '',
+    date: ''
+  });
+
+  // Sync detailsModal with updated projects data
+  useEffect(() => {
+    if (detailsModal.show && detailsModal.project) {
+      const updated = projects.find(p => p.id === detailsModal.project!.id);
+      if (updated) {
+        setDetailsModal(prev => ({ ...prev, project: updated }));
+      }
+    }
+  }, [projects]);
+
+  const handleOpenEditExpense = (projectId: string, exp: Expense) => {
+    setEditExpenseModal({
+      show: true,
+      projectId,
+      expenseId: exp.id,
+      category: exp.category,
+      amount: exp.amount,
+      note: exp.note || '',
+      date: exp.date || new Date().toISOString().split('T')[0]
+    });
+  };
+
+  const handleSaveEditExpense = async () => {
+    if (editExpenseModal.amount <= 0) {
+      alert("Expense amount must be greater than 0");
+      return;
+    }
+    if (onUpdateExpense) {
+      await onUpdateExpense(editExpenseModal.projectId, editExpenseModal.expenseId, {
+        category: editExpenseModal.category,
+        amount: editExpenseModal.amount,
+        note: editExpenseModal.note,
+        date: editExpenseModal.date
+      });
+    }
+    setEditExpenseModal(prev => ({ ...prev, show: false }));
+  };
+
+  const handleDeleteExpenseClick = async (projectId: string, expenseId: string) => {
+    if (onDeleteExpense) {
+      await onDeleteExpense(projectId, expenseId);
+      if (editExpenseModal.show && editExpenseModal.expenseId === expenseId) {
+        setEditExpenseModal(prev => ({ ...prev, show: false }));
+      }
+    }
+  };
 
   // Active Projects filter: Received first payment (paidAmount > 0) AND has outstanding balance (balance > 0)
   const activeProjectsList = projects
@@ -224,6 +294,97 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       
+      {/* Modal Edit Expense */}
+      {editExpenseModal.show && (
+        <div className="fixed inset-0 bg-[#0a192f]/80 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-3">
+                <div className="bg-orange-100 p-2.5 rounded-2xl">
+                  <Edit2 className="w-5 h-5 text-orange-600" />
+                </div>
+                <h3 className="text-2xl font-black text-[#0a192f] uppercase italic">Edit Expense</h3>
+              </div>
+              <button 
+                onClick={() => setEditExpenseModal(prev => ({ ...prev, show: false }))} 
+                className="text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
+              >
+                <X className="w-8 h-8" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Category</label>
+                <select
+                  className="w-full px-6 py-4 bg-slate-50 border-2 rounded-2xl font-bold text-slate-700 outline-none focus:border-cyan-400"
+                  value={editExpenseModal.category}
+                  onChange={(e) => setEditExpenseModal(prev => ({ ...prev, category: e.target.value as ExpenseCategory }))}
+                >
+                  {(['Staff Hour', 'Insurance', 'Gas/Fuel', 'Tools', 'Equipment', 'Materials', 'Miscellaneous'] as ExpenseCategory[]).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-orange-600 text-xl">$</span>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    className="w-full pl-10 pr-6 py-5 bg-slate-50 border-2 rounded-2xl text-2xl font-black text-[#0a192f] outline-none focus:border-cyan-400" 
+                    placeholder="0.00" 
+                    value={editExpenseModal.amount || ''} 
+                    onChange={e => setEditExpenseModal(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))} 
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Date</label>
+                <input 
+                  type="date" 
+                  className="w-full px-6 py-4 bg-slate-50 border-2 rounded-2xl font-bold text-slate-700 outline-none focus:border-cyan-400" 
+                  value={editExpenseModal.date} 
+                  onChange={e => setEditExpenseModal(prev => ({ ...prev, date: e.target.value }))} 
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Note / Description</label>
+                <input 
+                  type="text" 
+                  className="w-full px-6 py-4 bg-slate-50 border-2 rounded-2xl font-bold text-slate-700 outline-none focus:border-cyan-400" 
+                  placeholder="e.g. Employee hours, receipts, notes..." 
+                  value={editExpenseModal.note} 
+                  onChange={e => setEditExpenseModal(prev => ({ ...prev, note: e.target.value }))} 
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                {onDeleteExpense && (
+                  <button 
+                    type="button"
+                    onClick={() => handleDeleteExpenseClick(editExpenseModal.projectId, editExpenseModal.expenseId)} 
+                    className="px-5 py-5 border-2 border-red-100 text-red-600 hover:bg-red-50 rounded-2xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    title="Delete Expense"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+                <button 
+                  type="button"
+                  onClick={handleSaveEditExpense} 
+                  className="flex-1 py-5 bg-[#0a192f] text-white rounded-2xl font-black uppercase shadow-xl hover:bg-slate-800 transition-all flex justify-center items-center gap-2 cursor-pointer"
+                >
+                  <Save className="w-5 h-5" /> Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Details Modal */}
       {detailsModal.show && detailsModal.project && (() => {
         const p = detailsModal.project;
@@ -278,7 +439,7 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
                       }} 
                       className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
                     >
-                      Record Payment
+                      Receive Payment
                     </button>
                   )}
                 </div>
@@ -315,10 +476,13 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
               </div>
 
               {/* Expenses Breakdown */}
-              {expensesByCategory.length > 0 && (
-                <div>
-                  <h4 className="text-lg font-black uppercase italic flex items-center gap-2 mb-4"><Wallet className="w-5 h-5 text-orange-500" /> Expenses Breakdown</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="pt-6 border-t border-slate-100">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-lg font-black uppercase italic flex items-center gap-2"><Wallet className="w-5 h-5 text-orange-500" /> Project Expenses</h4>
+                </div>
+
+                {expensesByCategory.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                     {expensesByCategory.map(cat => (
                       <div key={cat.category} className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
                         <p className="text-[8px] font-black uppercase text-orange-400 tracking-widest mb-1">{cat.category}</p>
@@ -326,8 +490,44 @@ const ActiveProjects: React.FC<ActiveProjectsProps> = ({
                       </div>
                     ))}
                   </div>
+                )}
+
+                {/* Individual Expenses List with Edit/Delete */}
+                <div className="space-y-2.5">
+                  {p.expensesList && p.expensesList.length > 0 ? (
+                    p.expensesList.map(exp => (
+                      <div key={exp.id} className="flex justify-between items-center bg-slate-50 p-3.5 rounded-xl border border-slate-100 hover:border-slate-200 transition-all">
+                        <div className="flex-1 pr-4">
+                          <p className="font-bold text-xs text-[#0a192f]">{exp.category}</p>
+                          <p className="text-[11px] text-slate-400">{exp.note} • {exp.date}</p>
+                        </div>
+                        <div className="flex items-center gap-2.5 flex-shrink-0">
+                          <p className="font-black text-xs text-orange-600">-${exp.amount.toLocaleString()}</p>
+                          <button
+                            onClick={() => handleOpenEditExpense(p.id, exp)}
+                            className="px-2.5 py-1.5 text-slate-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-all border border-slate-200 hover:border-cyan-200 cursor-pointer flex items-center gap-1 text-[10px] font-black uppercase"
+                            title="Edit Expense"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            <span>Edit</span>
+                          </button>
+                          {onDeleteExpense && (
+                            <button
+                              onClick={() => handleDeleteExpenseClick(p.id, exp.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all border border-slate-200 hover:border-red-200 cursor-pointer"
+                              title="Delete Expense"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-400 italic text-xs bg-slate-50 p-4 rounded-xl border">No expenses recorded yet.</p>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         );
